@@ -1,0 +1,30 @@
+name: publish
+on:
+  schedule:
+    - cron: "7,37 * * * *" # every 30 min (UTC), off the busy top of the hour
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: Show what would happen; change nothing
+        type: boolean
+        default: true
+concurrency:
+  group: postpilot-publish # never two runs at once: the claim logic relies on it
+  cancel-in-progress: false
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v5
+      - uses: astral-sh/setup-uv@v6
+      - run: uv sync --frozen --no-dev
+      - run: uv run --no-dev postpilot publish ${{ inputs.dry_run && '--dry-run' || '' }}
+        env:
+          GOOGLE_SERVICE_ACCOUNT_JSON: ${{ secrets.GOOGLE_SERVICE_ACCOUNT_JSON }}
+          GOOGLE_SHEET_ID: ${{ secrets.GOOGLE_SHEET_ID }}
+          META_GRAPH_VERSION: ${{ vars.META_GRAPH_VERSION }}
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          # One line per account; the name must match Accounts.token_env.
+          META_TOKEN_MAIN: ${{ secrets.META_TOKEN_MAIN }}
