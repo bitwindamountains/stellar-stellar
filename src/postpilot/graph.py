@@ -73,3 +73,11 @@ class GraphClient:
             if attempt < self.attempts:
                 self.sleep(2**attempt)
         raise error
+
+
+def fetch_permalink(graph: GraphClient, object_id: str, field: str) -> str:
+    # The post is already live here; losing its ID over a permalink hiccup would cause a repost.
+    try:
+        return graph.get(object_id, fields=field).get(field, "")
+    except PlatformError:
+        return ""
