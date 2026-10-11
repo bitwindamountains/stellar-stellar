@@ -29,3 +29,20 @@ export function utcToZoned(iso: string, timeZone: string): string {
   const pad = (n: number) => String(n).padStart(2, '0')
   return `${p.y}-${pad(p.mo)}-${pad(p.d)}T${pad(p.h)}:${pad(p.mi)}`
 }
+
+function addDays(local: string, days: number): string {
+  const [y, mo, d] = local.slice(0, 10).split('-').map(Number)
+  return new Date(Date.UTC(y, mo - 1, d + days)).toISOString().slice(0, 10)
+}
+
+/** One-tap schedule times as wall-clock values in `timeZone`: in 1 hour, tonight 7 pm, tomorrow 9 am. */
+export function quickTimes(timeZone: string, now = new Date()): { label: string; value: string }[] {
+  const local = utcToZoned(now.toISOString(), timeZone)
+  const today = local.slice(0, 10)
+  const tonight = local < `${today}T19:00` ? `${today}T19:00` : `${addDays(today, 1)}T19:00`
+  return [
+    { label: 'In 1 hour', value: utcToZoned(new Date(now.getTime() + 3_600_000).toISOString(), timeZone) },
+    { label: local < `${today}T19:00` ? 'Tonight 7 pm' : 'Tomorrow 7 pm', value: tonight },
+    { label: 'Tomorrow 9 am', value: `${addDays(today, 1)}T09:00` },
+  ]
+}
