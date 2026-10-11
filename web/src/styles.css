@@ -128,7 +128,7 @@ textarea.input { min-height: 140px; line-height: 1.55; resize: vertical; }
 .r-thumb { grid-area: thumb; }
 .r-body { grid-area: body; min-width: 0; display: flex; flex-direction: column; gap: 10px; }
 .r-pill { grid-area: pill; }
-.filters { display: flex; gap: 4px; padding: 4px; border-radius: 999px; background: #e6e6e0; }
+.filters { display: flex; gap: 4px; padding: 4px; border-radius: 999px; background: #e6e6e0; overflow-x: auto; scrollbar-width: thin; }
 .filters button {
   min-height: 40px; padding: 0 16px; border: 0; border-radius: 999px; background: transparent; color: var(--ink-2);
   font-size: 13px; font-weight: 500; white-space: nowrap; cursor: pointer;
@@ -212,7 +212,7 @@ textarea.input { min-height: 140px; line-height: 1.55; resize: vertical; }
   .island .brand, .island .desktop-only { display: none; }
   .island a { flex: 1; justify-content: center; padding: 0 10px; }
   .island .btn.primary { flex: 1.4; padding-right: 4px; }
-  .filters { overflow-x: auto; scrollbar-width: none; align-self: stretch; }
+  .filters { scrollbar-width: none; align-self: stretch; }
   .row {
     grid-template-columns: 56px minmax(0, 1fr); grid-template-areas: 'thumb time' 'thumb body' 'pill pill';
     row-gap: 8px; column-gap: 14px; align-items: start;

@@ -22,8 +22,9 @@ Original blueprint: 04_PostPilot_Blueprint.md (where it disagrees with the plan,
 - Write each platform's ID back immediately after it succeeds.
 - Claim posts with `repo.claim()`: Supabase only claims rows still scheduled/partial, and the runner publishes the
   row as stored after the claim (re-validated), never its stale in-memory copy.
-- Publishing calls are never retried; unclear outcomes (`unknown`) and stale `posting` rows become `failed` for a
-  human check. One-tap Retry is only offered when the post certainly didn't go out (`canRetry`).
+- No call is repeated within a run. Retryable failures become `partial` and a later run retries them (up to
+  `max_attempts`, skipping done platforms); unclear outcomes (`unknown`) and stale `posting` rows become `failed`
+  for a human check. One-tap Retry is only offered when the post certainly didn't go out (`canRetry`).
 - Runner must not know Graph API details; adapters must not know about the store.
 - Web edits/deletes must not touch a post in `posting` (`.neq('status','posting')` + check for zero rows).
 - Keep mirrors in step: `web/src/validation.ts` ↔ `validation.py`, `web/src/content.ts` ↔ `Post.text_for`.
