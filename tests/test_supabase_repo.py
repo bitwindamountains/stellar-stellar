@@ -150,3 +150,14 @@ def test_variants_object_loads_as_json_text():
     r, _ = repo(handler)
     posts, _ = r.load()
     assert posts[0].title_for("youtube") == "Latte art"
+
+
+def test_count_live_between_filters_window_and_status():
+    from datetime import UTC, datetime
+
+    r, calls = repo(lambda req: httpx.Response(200, json=[{"num": 1}, {"num": 2}]))
+    n = r.count_live_between(datetime(2026, 10, 4, 16, tzinfo=UTC), datetime(2026, 10, 5, 16, tzinfo=UTC))
+    assert n == 2
+    q = calls[0].url.params
+    assert q.get_list("publish_at") == ["gte.2026-10-04T16:00:00+00:00", "lt.2026-10-05T16:00:00+00:00"]
+    assert q["status"] == "not.in.(failed,missed)"

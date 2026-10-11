@@ -50,6 +50,10 @@ def send_assist(
     return str(first_id)
 
 
+def send_text(http: httpx.Client, token: str, chat_id: str, text: str) -> None:
+    _call(http, token, "sendMessage", chat_id=chat_id, text=text)
+
+
 def bot_name(http: httpx.Client, token: str) -> str:
     return _call(http, token, "getMe")["username"]
 

@@ -123,4 +123,4 @@ Decision (2026-10-11): replace the Google Sheet with Supabase; free-tier stack.
 - [x] 11.5 Sticky defaults, draft autosave, paste/drag media
 - [x] 11.6 Post again, one-tap Retry/Reschedule, Open post links
 - [x] 11.7 Android share target
-- [ ] 11.8 7-day strip on the Queue; Telegram nudge on empty days
+- [x] 11.8 7-day strip on the Queue; Telegram nudge on empty days
