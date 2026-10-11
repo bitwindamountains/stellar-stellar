@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { canRetry, chips, groupByDay, needsYou, statusLabel } from './postView'
+import { canRetry, chips, groupByDay, needsYou, statusLabel, weekStrip } from './postView'
 import type { Post } from './types'
 
 function post(over: Partial<Post>): Post {
@@ -58,5 +58,22 @@ describe('canRetry', () => {
     expect(canRetry(post({ status: 'failed', last_error: 'No clear answer from Meta while publishing: check if it posted' }))).toBe(false)
     expect(canRetry(post({ status: 'failed', last_error: 'Run stopped while posting. Check instagram' }))).toBe(false)
     expect(canRetry(post({ status: 'scheduled' }))).toBe(false)
+  })
+})
+
+describe('weekStrip', () => {
+  it('counts live posts per day for 7 days and flags empty days', () => {
+    const now = new Date(2026, 9, 5, 12, 0)
+    const at = (d: number, h: number) => new Date(2026, 9, d, h, 0).toISOString()
+    const strip = weekStrip([
+      post({ num: 1, publish_at: at(5, 9), status: 'posted' }),
+      post({ num: 2, publish_at: at(5, 18) }),
+      post({ num: 3, publish_at: at(6, 9), status: 'failed' }),
+      post({ num: 4, publish_at: at(11, 23) }),
+      post({ num: 5, publish_at: at(12, 9) }), // day 8: outside the strip
+    ], now)
+    expect(strip.map((d) => d.count)).toEqual([2, 0, 0, 0, 0, 0, 1])
+    expect(strip[0].label).toBe('Today')
+    expect(strip.map((d) => d.date)).toEqual([5, 6, 7, 8, 9, 10, 11])
   })
 })

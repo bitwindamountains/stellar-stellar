@@ -226,3 +226,16 @@ textarea.input { min-height: 140px; line-height: 1.55; resize: vertical; }
 
 .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
 .chip[aria-pressed='true'] { background: var(--ink); color: #fff; box-shadow: none; }
+
+/* 7-day strip: empty days stand out and open a new post. */
+.week { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 8px; margin-top: -32px; }
+.week-day {
+  display: flex; flex-direction: column; gap: 6px; padding: 14px 16px; border-radius: 20px; background: var(--card);
+  box-shadow: 0 0 0 1px rgba(21, 23, 27, 0.05); text-decoration: none; transition: transform 140ms var(--ease-out);
+}
+.week-day.empty-day { background: var(--warn-tint); box-shadow: inset 0 0 0 1px rgba(181, 71, 8, 0.25); }
+.week-day.empty-day:active { transform: scale(0.97); }
+@media (max-width: 767px) {
+  .week { display: flex; overflow-x: auto; scrollbar-width: none; margin-top: -16px; }
+  .week-day { flex: 0 0 92px; }
+}
