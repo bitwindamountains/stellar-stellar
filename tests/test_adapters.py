@@ -91,3 +91,20 @@ def test_ig_still_processing_is_transient():
             g, ACCOUNT, post(media_type="image", media_urls="https://x/a.jpg"), sleep=lambda s: None, checks=3
         )
     assert e.value.kind == "transient"
+
+
+def test_fb_and_ig_use_their_own_text():
+    import json as _json
+
+    variants = _json.dumps({"facebook": {"hashtags": "#fb"}, "instagram": {"caption": "IG only"}})
+    g = FakeGraph([{"id": "PAGE_1"}, {"permalink_url": ""}])
+    facebook.publish(g, ACCOUNT, post(variants=variants))
+    assert g.calls[0][2]["message"] == "Hello\n\n#fb"
+    g = FakeGraph([{"id": "C1"}, {"status_code": "FINISHED"}, {"id": "M1"}, {"permalink": ""}])
+    instagram.publish(
+        g,
+        ACCOUNT,
+        post(variants=variants, media_type="image", media_urls="https://x/a.jpg"),
+        sleep=lambda s: None,
+    )
+    assert g.calls[0][2]["caption"] == "IG only"

@@ -5,7 +5,8 @@ from postpilot.timeutil import parse_local
 
 IG_CAPTION_MAX = 2200
 IG_HASHTAGS_MAX = 30
-TELEGRAM_TEXT_MAX = 4096
+TELEGRAM_TEXT_MAX = 4000  # Telegram's limit is 4096; room for the label and markup
+YOUTUBE_TITLE_MAX = 100
 
 
 def validate(post: Post, accounts: dict[str, Account]) -> list[str]:
@@ -51,7 +52,6 @@ def validate(post: Post, accounts: dict[str, Account]) -> list[str]:
         errors.append("Only one image per post for now (carousels come later)")
 
     api_platforms = {FACEBOOK, INSTAGRAM} & set(platforms)
-    caption = post.get("caption")
     if media_type == "video" and api_platforms:
         errors.append(
             "Video to Facebook/Instagram isn't supported yet; use tiktok/youtube/fb_profile for now"
@@ -59,16 +59,20 @@ def validate(post: Post, accounts: dict[str, Account]) -> list[str]:
     if INSTAGRAM in platforms:
         if media_type != "image":
             errors.append("Instagram needs an image (media_type image + media_urls)")
+        caption = post.text_for(INSTAGRAM)
         if len(caption) > IG_CAPTION_MAX:
             errors.append(
                 f"Instagram captions max {IG_CAPTION_MAX:,} characters (this one: {len(caption):,})"
             )
         if len(re.findall(r"#\w+", caption)) > IG_HASHTAGS_MAX:
             errors.append(f"Instagram allows at most {IG_HASHTAGS_MAX} hashtags")
-    if FACEBOOK in platforms and not (caption or post.get("link") or urls):
+    if FACEBOOK in platforms and not (post.text_for(FACEBOOK) or post.get("link") or urls):
         errors.append("Facebook post is empty: add a caption, link or image")
     if {"tiktok", "youtube"} & set(platforms) and media_type != "video":
         errors.append("TikTok/YouTube need a video (media_type video + media_urls)")
-    if set(ASSISTED_PLATFORMS) & set(platforms) and len(caption) > TELEGRAM_TEXT_MAX:
-        errors.append(f"Caption too long for the Telegram assist (max {TELEGRAM_TEXT_MAX:,})")
+    for p in set(ASSISTED_PLATFORMS) & set(platforms):
+        if len(post.text_for(p)) > TELEGRAM_TEXT_MAX:
+            errors.append(f"{p} caption too long for the Telegram assist (max {TELEGRAM_TEXT_MAX:,})")
+    if len(post.title_for("youtube")) > YOUTUBE_TITLE_MAX:
+        errors.append(f"YouTube titles max {YOUTUBE_TITLE_MAX} characters")
     return errors

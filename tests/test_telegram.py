@@ -31,7 +31,11 @@ def test_video_then_copyable_caption():
     assert calls[0][0] == "sendVideo"
     assert calls[0][1]["video"] == "https://x/a.mp4"
     assert "TikTok, YouTube" in calls[0][1]["caption"] and "#7" in calls[0][1]["caption"]
-    assert calls[1] == ("sendMessage", {"chat_id": "CHAT", "text": "Ube latte!\n\nhttps://shop"})
+    # By-hand text goes as a tap-to-copy block; the link belongs to Facebook, so TikTok/YouTube don't get it.
+    assert calls[1] == (
+        "sendMessage",
+        {"chat_id": "CHAT", "text": "<b>TikTok, YouTube</b>\n<pre>Ube latte!</pre>", "parse_mode": "HTML"},
+    )
 
 
 def test_media_telegram_cant_fetch_falls_back_to_link():
@@ -77,3 +81,32 @@ def test_header_links_to_app_handoff_when_given():
     post = Post(row=7, cells={"caption": "x"})
     send_assist(http, "T", "C", post, ["fb_profile"], handoff_url="https://pp.example/#/handoff/7")
     assert "https://pp.example/#/handoff/7" in calls[0]["text"]
+
+
+def test_each_platform_text_in_tap_to_copy_block_with_youtube_title():
+    calls = []
+
+    def record(request):
+        calls.append(json.loads(request.content))
+        return ok(len(calls))
+
+    http = httpx.Client(transport=httpx.MockTransport(record))
+    variants = json.dumps({"tiktok": {"hashtags": "#fyp <3"}, "youtube": {"title": "Latte art"}})
+    post = Post(row=7, cells={"caption": "Ube latte", "variants": variants})
+    send_assist(http, "T", "C", post, ["tiktok", "youtube"])
+    texts = [c["text"] for c in calls if "text" in c]
+    assert calls[1]["parse_mode"] == "HTML"
+    assert "<b>TikTok</b>" in texts[1] and "<pre>Ube latte\n\n#fyp &lt;3</pre>" in texts[1]
+    assert "<b>YouTube title</b>\n<pre>Latte art</pre>" in texts[2] and "<pre>Ube latte</pre>" in texts[2]
+
+
+def test_identical_texts_share_one_message():
+    calls = []
+
+    def record(request):
+        calls.append(json.loads(request.content))
+        return ok(len(calls))
+
+    http = httpx.Client(transport=httpx.MockTransport(record))
+    send_assist(http, "T", "C", Post(row=7, cells={"caption": "Same"}), ["tiktok", "fb_profile"])
+    assert len(calls) == 2 and "<b>TikTok, Facebook (personal)</b>" in calls[1]["text"]

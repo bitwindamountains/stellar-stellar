@@ -3,7 +3,7 @@ from postpilot.models import Account, Post, PublishResult
 
 
 def publish(graph, account: Account, post: Post) -> PublishResult:
-    caption, link, urls = post.get("caption"), post.get("link"), post.media_urls
+    caption, link, urls = post.text_for("facebook"), post.get("link"), post.media_urls
     if urls:
         # Photo posts have no link field, so the link goes in the caption.
         text = "\n\n".join(t for t in (caption, link) if t)

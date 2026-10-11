@@ -10,7 +10,10 @@ def publish(
 ) -> PublishResult:
     # An unpublished container is harmless if duplicated, so this call may retry.
     container = graph.post(
-        f"{account.ig_user_id}/media", safe=True, image_url=post.media_urls[0], caption=post.get("caption")
+        f"{account.ig_user_id}/media",
+        safe=True,
+        image_url=post.media_urls[0],
+        caption=post.text_for("instagram"),
     )["id"]
     for check in range(checks):
         status = graph.get(container, fields="status_code").get("status_code")
