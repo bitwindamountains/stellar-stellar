@@ -1,4 +1,5 @@
-import type { CSSProperties } from 'react'
+import { useEffect, useState, type CSSProperties } from 'react'
+import type { Platform } from './types'
 
 // Thin-stroke inline icons; decorative unless a label is given.
 const base = { fill: 'none', stroke: 'currentColor', strokeLinecap: 'round', strokeLinejoin: 'round' } as const
@@ -12,14 +13,24 @@ export const Logo = () => (
 // Decorative flight path for the night-sky headers (.sky in styles.css): a dashed route, a contrail that
 // travels along it, and the logo plane landing at the end.
 const ROUTE = 'M8 212C120 200 196 120 300 112S470 40 552 22'
-export const FlightPath = () => (
-  <svg className="flight" viewBox="0 0 560 230" fill="none" aria-hidden="true" focusable="false">
+// The composer calls launchNext() after a successful "Post now"; the next flight path to mount (the queue's,
+// a moment later) plays the take-off once: the route draws in full, then the plane climbs away and returns.
+let launchPending = false
+export const launchNext = () => { launchPending = true }
+export const FlightPath = () => {
+  const [launch] = useState(() => launchPending)
+  useEffect(() => { launchPending = false }, [])
+  return (
+  <svg className={launch ? 'flight launch' : 'flight'} viewBox="0 0 560 230" fill="none" aria-hidden="true" focusable="false">
     <path d={ROUTE} stroke="rgba(255,255,255,0.28)" strokeWidth="1.2" strokeDasharray="2 7" strokeLinecap="round" />
     <path className="contrail" d={ROUTE} pathLength={100} stroke="url(#contrail)" strokeWidth="2" strokeLinecap="round" />
+    {launch && <path className="trail" d={ROUTE} pathLength={100} stroke="#ffd9c2" strokeWidth="1.6" strokeLinecap="round" />}
     <circle cx="8" cy="212" r="4" fill="#0f1326" stroke="rgba(255,255,255,0.6)" strokeWidth="1.2" />
     <g transform="translate(540 8) rotate(8)" stroke="#fff" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M3 11.5 21 4l-7.5 18-2.6-7.9L3 11.5Z" fill="rgba(255,255,255,0.12)" />
-      <path d="m10.9 14.1 4.6-4.6" />
+      <g className="plane">
+        <path d="M3 11.5 21 4l-7.5 18-2.6-7.9L3 11.5Z" fill="rgba(255,255,255,0.12)" />
+        <path d="m10.9 14.1 4.6-4.6" />
+      </g>
     </g>
     <defs>
       <linearGradient id="contrail" x1="0" y1="0" x2="1" y2="0">
@@ -28,7 +39,8 @@ export const FlightPath = () => (
       </linearGradient>
     </defs>
   </svg>
-)
+  )
+}
 // Platform marks etched into the asteroids, drawn in the same thin stroke as the other icons.
 const MARKS = {
   fb: <path d="M14.5 6.5H13a2.5 2.5 0 0 0-2.5 2.5v11M7.5 12.5h6" />,
@@ -36,6 +48,23 @@ const MARKS = {
   yt: <><rect x="3" y="6.5" width="18" height="11" rx="3.5" /><path d="m10.5 9.6 4 2.4-4 2.4Z" /></>,
   tt: <path d="M13 5v9.5a3 3 0 1 1-3-3M13 5c.5 2 2 3.3 4 3.5" />,
 }
+const MARK_OF: Record<Platform, keyof typeof MARKS> = { facebook: 'fb', fb_profile: 'fb', instagram: 'ig', youtube: 'yt', tiktok: 'tt' }
+export const PlatformMark = ({ platform }: { platform: Platform }) => (
+  <svg viewBox="0 0 24 24" width="100%" height="100%" strokeWidth={2} {...base} aria-hidden="true">{MARKS[MARK_OF[platform]]}</svg>
+)
+
+// Empty-queue art: stars that twinkle and join up into the paper plane.
+const STARS = [[3, 11.5], [21, 4], [13.5, 22], [10.9, 14.1], [15.5, 9.5]]
+const FAINT = [[6, 4], [19, 15], [7, 20], [22, 21], [12, 3.5]]
+export const Constellation = () => (
+  <svg className="constellation" viewBox="1 2 23 22" aria-hidden="true" focusable="false">
+    <path className="const-line" d="M3 11.5 21 4l-7.5 18-2.6-7.9L3 11.5Z" pathLength={100} />
+    <path className="const-line" d="m10.9 14.1 4.6-4.6" pathLength={100} style={{ animationDelay: '1.6s' }} />
+    {FAINT.map(([x, y], i) => <circle key={`f${i}`} className="star faint" cx={x} cy={y} r={0.35} style={{ animationDelay: `${i * 0.7}s` }} />)}
+    {STARS.map(([x, y], i) => <circle key={i} className="star" cx={x} cy={y} r={0.7} style={{ animationDelay: `${i * 0.45}s` }} />)}
+  </svg>
+)
+
 // Faceted silhouettes so no two rocks look alike.
 const SHAPES = [
   'M30 5l13 3 10 9 6 13-2 13-8 10-13 6-14-1-11-7-6-12 1-14 7-11Z',

@@ -19,6 +19,23 @@ export default function App() {
     return () => data.subscription.unsubscribe()
   }, [])
 
+  // Pointer parallax for the night-sky layers (desktop only): CSS reads --px/--py in -1..1. No React state,
+  // at most one write per frame.
+  useEffect(() => {
+    if (!matchMedia('(hover: hover) and (pointer: fine)').matches || matchMedia('(prefers-reduced-motion: reduce)').matches) return
+    let frame = 0
+    const move = (e: PointerEvent) => {
+      cancelAnimationFrame(frame)
+      frame = requestAnimationFrame(() => {
+        const s = document.documentElement.style
+        s.setProperty('--px', ((e.clientX / innerWidth) * 2 - 1).toFixed(3))
+        s.setProperty('--py', ((e.clientY / innerHeight) * 2 - 1).toFixed(3))
+      })
+    }
+    addEventListener('pointermove', move)
+    return () => { removeEventListener('pointermove', move); cancelAnimationFrame(frame) }
+  }, [])
+
   if (session === undefined) return null
   if (session === null) return <SignIn />
 

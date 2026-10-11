@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { cleanVariants, isCustomized, textFor, type Variant, type Variants } from '../content'
-import { Alert, Arrow, Asteroids, Check, FlightPath } from '../icons'
+import { Alert, Arrow, Asteroids, Check, FlightPath, launchNext } from '../icons'
 import { publishSoon } from '../actions'
 import { toJpeg } from '../media'
 import { mediaWasRemoved } from '../postView'
@@ -162,6 +162,7 @@ export default function Composer({ num }: { num?: number }) {
     if (conflict) return setError(PUBLISHING_NOW)
     rememberChoices(account.id, mediaType, platforms)
     if (!num) saveDraft(null)
+    if (status === 'scheduled' && mode === 'now') launchNext()
     go('/')
   }
 
