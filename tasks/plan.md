@@ -51,7 +51,7 @@ Each task: failing test, code, full suite + ruff green, one commit.
 - [x] 3.4 `telegram.py`: assist message (media + caption), no token in errors
 
 ### Phase 4: Runner
-- [ ] 4.1 `selector.py`: due / missed / exhausted / stale
+- [x] 4.1 `selector.py`: due / missed / exhausted / stale
 - [ ] 4.2 `runner.py`: claim, per-platform publish, immediate write-back, final status, report
 - [ ] 4.3 Dry run (no writes, no API calls)
 - [ ] 4.4 Idempotency tests: crash after FB before IG; stale posting; rerun skips filled IDs
