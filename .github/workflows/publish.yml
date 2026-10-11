@@ -16,10 +16,18 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
-      - uses: actions/checkout@v5
-      - uses: astral-sh/setup-uv@v6
-      - run: uv sync --frozen --no-dev
-      - run: uv run --no-dev postpilot publish ${{ inputs.dry_run && '--dry-run' || '' }}
+      # Until the publisher is configured, scheduled runs skip instead of failing (and emailing) every 30 minutes.
+      # Manual runs always go ahead so missing settings show up as a clear error.
+      - id: gate
+        run: echo "ready=${{ (secrets.SUPABASE_SERVICE_ROLE_KEY != '' || secrets.GOOGLE_SHEET_ID != '') && vars.META_GRAPH_VERSION != '' }}" >> "$GITHUB_OUTPUT"
+      - if: steps.gate.outputs.ready == 'true' || github.event_name == 'workflow_dispatch'
+        uses: actions/checkout@v5
+      - if: steps.gate.outputs.ready == 'true' || github.event_name == 'workflow_dispatch'
+        uses: astral-sh/setup-uv@v6
+      - if: steps.gate.outputs.ready == 'true' || github.event_name == 'workflow_dispatch'
+        run: uv sync --frozen --no-dev
+      - if: steps.gate.outputs.ready == 'true' || github.event_name == 'workflow_dispatch'
+        run: uv run --no-dev postpilot publish ${{ inputs.dry_run && '--dry-run' || '' }}
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
