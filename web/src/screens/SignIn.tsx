@@ -1,5 +1,5 @@
 import { useState, type FormEvent } from 'react'
-import { Arrow, FlightPath, Logo } from '../icons'
+import { Arrow, Asteroids, FlightPath, Logo } from '../icons'
 import { supabase } from '../supabase'
 
 export default function SignIn() {
@@ -31,6 +31,7 @@ export default function SignIn() {
   return (
     <main className="page auth" style={{ display: 'grid', placeItems: 'center' }}>
       <FlightPath />
+      <Asteroids />
       <div className="tray rise" style={{ width: 'min(440px, 100%)' }}>
         <form className="core" onSubmit={submit} style={{ gap: 24 }}>
           <span style={{ display: 'flex', alignItems: 'center', gap: 10, fontWeight: 600 }}><Logo />PostPilot</span>

@@ -1,3 +1,5 @@
+import type { CSSProperties } from 'react'
+
 // Thin-stroke inline icons; decorative unless a label is given.
 const base = { fill: 'none', stroke: 'currentColor', strokeLinecap: 'round', strokeLinejoin: 'round' } as const
 
@@ -27,6 +29,51 @@ export const FlightPath = () => (
     </defs>
   </svg>
 )
+// Platform marks etched into the asteroids, drawn in the same thin stroke as the other icons.
+const MARKS = {
+  fb: <path d="M14.5 6.5H13a2.5 2.5 0 0 0-2.5 2.5v11M7.5 12.5h6" />,
+  ig: <><rect x="5" y="5" width="14" height="14" rx="4" /><circle cx="12" cy="12" r="3.2" /><path d="M16.3 7.7h.01" /></>,
+  yt: <><rect x="3" y="6.5" width="18" height="11" rx="3.5" /><path d="m10.5 9.6 4 2.4-4 2.4Z" /></>,
+  tt: <path d="M13 5v9.5a3 3 0 1 1-3-3M13 5c.5 2 2 3.3 4 3.5" />,
+}
+// size px, top of its lane, seconds per crossing, start offset (negative: already mid-flight on load),
+// vertical drift and wobble over one crossing (small, so the marks stay readable).
+const ROCKS = [
+  { mark: 'fb', size: 58, top: '12%', dur: 38, delay: -6, dy: '40px', spin: '-28deg' },
+  { mark: 'yt', size: 68, top: '40%', dur: 54, delay: -22, dy: '46px', spin: '22deg' },
+  { mark: 'ig', size: 48, top: '66%', dur: 46, delay: -33, dy: '-34px', spin: '30deg' },
+  { mark: 'tt', size: 42, top: '82%', dur: 42, delay: -12, dy: '-20px', spin: '-20deg' },
+] as const
+const ROCK = 'M33 4c9 1 18 6 22 14s5 17 1 25-11 15-21 16-19-2-24-9S3 33 5 24 14 6 22 5Z'
+
+// Decorative asteroid belt for the night-sky scenes: one rock per platform PostPilot posts to.
+export const Asteroids = () => (
+  <div className="belt" aria-hidden="true">
+    {ROCKS.map((r) => (
+      <div key={r.mark} className="lane"
+        style={{ top: r.top, animationDuration: `${r.dur}s`, animationDelay: `${r.delay}s`, '--dy': r.dy } as CSSProperties}>
+        <span className="rock" style={{ width: r.size, height: r.size, animationDuration: `${r.dur}s`, animationDelay: `${r.delay}s`, '--spin': r.spin } as CSSProperties}>
+          <svg viewBox="0 0 64 64" width="100%" height="100%">
+            <defs>
+              <radialGradient id="rock-fill" cx="0.32" cy="0.28" r="0.85">
+                <stop offset="0" stopColor="#737dbd" />
+                <stop offset="0.55" stopColor="#363e74" />
+                <stop offset="1" stopColor="#171c38" />
+              </radialGradient>
+            </defs>
+            <path d={ROCK} fill="url(#rock-fill)" stroke="rgba(255,255,255,0.3)" strokeWidth="1" />
+            <circle cx="47" cy="44" r="3.5" fill="rgba(8,10,24,0.35)" />
+            <circle cx="16" cy="40" r="2.2" fill="rgba(8,10,24,0.3)" />
+            <g transform="translate(16 16) scale(1.33)" {...base} stroke="#fff" strokeWidth={1.7}>
+              {MARKS[r.mark]}
+            </g>
+          </svg>
+        </span>
+      </div>
+    ))}
+  </div>
+)
+
 export const Plus = () => (
   <svg width="14" height="14" viewBox="0 0 24 24" strokeWidth={1.6} {...base} aria-hidden="true">
     <path d="M12 5v14M5 12h14" />

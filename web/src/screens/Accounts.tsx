@@ -1,5 +1,5 @@
 import { useEffect, useState, type FormEvent } from 'react'
-import { Arrow, FlightPath } from '../icons'
+import { Arrow, Asteroids, FlightPath } from '../icons'
 import { supabase } from '../supabase'
 import type { Account } from '../types'
 
@@ -65,6 +65,7 @@ export default function Accounts() {
         <h1>Accounts</h1>
         <p>One account per brand. Tokens never live here: the publisher reads them from GitHub secrets by name.</p>
         <FlightPath />
+        <Asteroids />
       </header>
 
       <div className="split">

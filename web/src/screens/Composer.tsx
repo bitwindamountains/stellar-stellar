@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { cleanVariants, isCustomized, textFor, type Variant, type Variants } from '../content'
-import { Alert, Arrow, Check, FlightPath } from '../icons'
+import { Alert, Arrow, Asteroids, Check, FlightPath } from '../icons'
 import { publishSoon } from '../actions'
 import { toJpeg } from '../media'
 import { mediaWasRemoved } from '../postView'
@@ -196,6 +196,7 @@ export default function Composer({ num }: { num?: number }) {
         <p>Posts belong to an account: your Facebook Page and Instagram, or just your phone for by-hand platforms.</p>
         <a className="btn primary" href="#/accounts" style={{ alignSelf: 'flex-start' }}>Add account<span className="knob"><Arrow /></span></a>
         <FlightPath />
+        <Asteroids />
       </section>
     )
   }
@@ -233,6 +234,7 @@ export default function Composer({ num }: { num?: number }) {
         )}
         {error && <p className="notice" role="alert">{error}</p>}
         <FlightPath />
+        <Asteroids />
       </header>
 
       <form className="split" onSubmit={(e) => { e.preventDefault(); save('scheduled') }}
