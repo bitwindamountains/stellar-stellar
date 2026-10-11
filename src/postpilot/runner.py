@@ -1,0 +1,148 @@
+from collections.abc import Callable
+from dataclasses import dataclass, field
+from datetime import datetime
+from typing import Protocol
+
+from postpilot.config import Config
+from postpilot.models import (
+    API_PLATFORMS,
+    ASSISTED_PLATFORMS,
+    ID_COLUMN,
+    PERMALINK_COLUMN,
+    Account,
+    PlatformError,
+    Post,
+    PublishResult,
+)
+from postpilot.selector import select
+
+Publisher = Callable[[Post, Account], PublishResult]
+Assist = Callable[[Post, list[str]], str]
+
+
+class Repository(Protocol):
+    def load(self) -> tuple[list[Post], dict[str, Account]]: ...
+    def write(self, updates: dict[int, dict[str, str]]) -> None: ...
+
+
+@dataclass
+class Report:
+    posted: list[int] = field(default_factory=list)
+    partial: list[int] = field(default_factory=list)
+    failed: list[int] = field(default_factory=list)
+    missed: list[int] = field(default_factory=list)
+    lines: list[str] = field(default_factory=list)
+
+
+def run(
+    repo: Repository,
+    publishers: dict[str, Publisher],
+    assist: Assist | None,
+    cfg: Config,
+    now: datetime,
+    dry_run: bool = False,
+) -> Report:
+    report = Report()
+    stamp = now.isoformat(timespec="seconds")
+    if dry_run:
+        write = lambda updates: None  # noqa: E731
+        publishers = {name: (lambda post, account: PublishResult("dry-run", "")) for name in publishers}
+        assist = lambda post, platforms: "dry-run"  # noqa: E731
+    else:
+        write = repo.write
+
+    posts, accounts = repo.load()
+    s = select(
+        posts,
+        accounts,
+        now,
+        grace_minutes=cfg.late_grace_minutes,
+        max_attempts=cfg.max_attempts,
+        stale_minutes=cfg.stale_posting_minutes,
+        limit=cfg.max_posts_per_run,
+    )
+
+    # One batch: close out rows that won't publish, then claim the due ones.
+    updates: dict[int, dict[str, str]] = {}
+    for post in s.missed:
+        why = f"Not posted: over {cfg.late_grace_minutes} min late. Set new publish_at, status scheduled."
+        updates[post.row] = {"status": "missed", "last_error": why}
+        report.missed.append(post.row)
+    for post in s.exhausted:
+        why = f"Gave up after {post.get('attempts') or 0} attempt(s). {post.get('last_error')}".strip()
+        updates[post.row] = {"status": "failed", "last_error": why}
+    for post in s.stale:
+        pending = [p for p in post.platforms if not post.done(p)]
+        why = f"Run stopped while posting. Check {', '.join(pending)}, then reschedule if it's missing."
+        updates[post.row] = {"status": "failed", "last_error": why}
+    for post, errors in s.invalid:
+        updates[post.row] = {"status": "failed", "last_error": "; ".join(errors)}
+    report.failed += [p.row for p in s.exhausted + s.stale] + [p.row for p, _ in s.invalid]
+    for post in s.due:
+        attempts = str(int(post.get("attempts") or 0) + 1)
+        updates[post.row] = {"status": "posting", "attempts": attempts, "claimed_at": stamp, "last_error": ""}
+        post.cells["attempts"] = attempts
+    write(updates)
+
+    for post in s.due:
+        _publish_row(
+            post, accounts[post.get("account")], publishers, assist, write, cfg, stamp, report, dry_run
+        )
+    for row, fields in sorted(updates.items()):
+        if fields["status"] in ("missed", "failed"):
+            report.lines.append(f"row {row}: {fields['status']}: {fields['last_error']}")
+    return report
+
+
+def _publish_row(post, account, publishers, assist, write, cfg, stamp, report, dry_run) -> None:
+    def save(fields: dict[str, str]) -> None:
+        post.cells.update(fields)
+        write({post.row: fields})  # immediately: a filled ID is what stops a repost
+
+    errors: list[tuple[str, PlatformError]] = []
+    done_now: list[str] = []
+    for platform in post.platforms:
+        if platform not in API_PLATFORMS or post.done(platform):
+            continue
+        try:
+            result = publishers[platform](post, account)
+        except PlatformError as e:
+            errors.append((platform, e))
+            continue
+        except Exception as e:  # never surface raw text: it may contain URLs with tokens
+            errors.append(
+                (platform, PlatformError("unknown", f"Unexpected {type(e).__name__}; check if it posted"))
+            )
+            continue
+        save({ID_COLUMN[platform]: result.id, PERMALINK_COLUMN[platform]: result.permalink})
+        done_now.append(platform)
+
+    assisted = [p for p in post.platforms if p in ASSISTED_PLATFORMS and not post.done(p)]
+    if assisted:
+        if assist is None:
+            errors.append(
+                ("telegram", PlatformError("permanent", "Set TELEGRAM_BOT_TOKEN and TELEGRAM_CHAT_ID"))
+            )
+        else:
+            try:
+                save({"tg_message_id": assist(post, assisted)})
+                done_now += assisted
+            except PlatformError as e:
+                errors.append(("telegram", e))
+
+    if not errors:
+        final = {"status": "posted", "posted_at": stamp, "last_error": ""}
+        report.posted.append(post.row)
+    else:
+        retry = all(e.retryable for _, e in errors) and int(post.get("attempts")) < cfg.max_attempts
+        message = "; ".join(f"{platform}: {e}" for platform, e in errors)
+        final = {"status": "partial" if retry else "failed", "last_error": message}
+        (report.partial if retry else report.failed).append(post.row)
+    write({post.row: final})
+    verb = "would publish" if dry_run else "published"
+    line = f"row {post.row}: {final['status']}"
+    if done_now:
+        line += f" ({verb} {', '.join(done_now)})"
+    if errors:
+        line += f": {final['last_error']}"
+    report.lines.append(line)

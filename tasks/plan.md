@@ -52,9 +52,9 @@ Each task: failing test, code, full suite + ruff green, one commit.
 
 ### Phase 4: Runner
 - [x] 4.1 `selector.py`: due / missed / exhausted / stale
-- [ ] 4.2 `runner.py`: claim, per-platform publish, immediate write-back, final status, report
-- [ ] 4.3 Dry run (no writes, no API calls)
-- [ ] 4.4 Idempotency tests: crash after FB before IG; stale posting; rerun skips filled IDs
+- [x] 4.2 `runner.py`: claim, per-platform publish, immediate write-back, final status, report
+- [x] 4.3 Dry run (no writes, no API calls)
+- [x] 4.4 Idempotency tests: crash after FB before IG; stale posting; rerun skips filled IDs
 
 ### Phase 5: CLI + automation
 - [ ] 5.1 `validate`, `publish` (exit codes 0/1/2), `doctor` (config, sheet, tokens)
