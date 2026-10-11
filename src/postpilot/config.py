@@ -19,14 +19,20 @@ class Config:
     max_posts_per_run: int
     max_attempts: int
     stale_posting_minutes: int
+    supabase_url: str
+    supabase_service_role_key: str
     env: Mapping[str, str]  # account tokens are looked up by name from here
 
 
 def load_config(env: Mapping[str, str] | None = None) -> Config:
     env = os.environ if env is None else env
-    missing = [k for k in ("GOOGLE_SHEET_ID", "META_GRAPH_VERSION") if not env.get(k)]
-    if not env.get("GOOGLE_SERVICE_ACCOUNT_JSON") and not env.get("GOOGLE_SERVICE_ACCOUNT_FILE"):
-        missing.append("GOOGLE_SERVICE_ACCOUNT_JSON or GOOGLE_SERVICE_ACCOUNT_FILE")
+    missing = [] if env.get("META_GRAPH_VERSION") else ["META_GRAPH_VERSION"]
+    if env.get("SUPABASE_URL"):  # Supabase replaces the Google Sheet
+        missing += [] if env.get("SUPABASE_SERVICE_ROLE_KEY") else ["SUPABASE_SERVICE_ROLE_KEY"]
+    else:
+        missing += [] if env.get("GOOGLE_SHEET_ID") else ["GOOGLE_SHEET_ID"]
+        if not env.get("GOOGLE_SERVICE_ACCOUNT_JSON") and not env.get("GOOGLE_SERVICE_ACCOUNT_FILE"):
+            missing.append("GOOGLE_SERVICE_ACCOUNT_JSON or GOOGLE_SERVICE_ACCOUNT_FILE")
     if missing:
         raise ConfigError("Missing settings: " + ", ".join(missing))
 
@@ -40,7 +46,7 @@ def load_config(env: Mapping[str, str] | None = None) -> Config:
         return value
 
     return Config(
-        sheet_id=env["GOOGLE_SHEET_ID"],
+        sheet_id=env.get("GOOGLE_SHEET_ID", ""),
         service_account_json=env.get("GOOGLE_SERVICE_ACCOUNT_JSON", ""),
         service_account_file=env.get("GOOGLE_SERVICE_ACCOUNT_FILE", ""),
         meta_graph_version=env["META_GRAPH_VERSION"],
@@ -50,5 +56,7 @@ def load_config(env: Mapping[str, str] | None = None) -> Config:
         max_posts_per_run=num("PP_MAX_POSTS_PER_RUN", 10),
         max_attempts=num("PP_MAX_ATTEMPTS", 3),
         stale_posting_minutes=num("PP_STALE_POSTING_MINUTES", 30),
+        supabase_url=env.get("SUPABASE_URL", ""),
+        supabase_service_role_key=env.get("SUPABASE_SERVICE_ROLE_KEY", ""),
         env=env,
     )

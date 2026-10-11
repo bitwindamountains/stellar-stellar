@@ -36,3 +36,19 @@ def test_needs_a_service_account():
 def test_bad_number():
     with pytest.raises(ConfigError, match="PP_MAX_ATTEMPTS"):
         load_config({**BASE, "PP_MAX_ATTEMPTS": "three"})
+
+
+def test_supabase_replaces_google_settings():
+    cfg = load_config(
+        {
+            "SUPABASE_URL": "https://x.supabase.co",
+            "SUPABASE_SERVICE_ROLE_KEY": "k",
+            "META_GRAPH_VERSION": "v23.0",
+        }
+    )
+    assert cfg.supabase_url == "https://x.supabase.co" and cfg.sheet_id == ""
+
+
+def test_supabase_url_needs_service_key():
+    with pytest.raises(ConfigError, match="SUPABASE_SERVICE_ROLE_KEY"):
+        load_config({"SUPABASE_URL": "https://x.supabase.co", "META_GRAPH_VERSION": "v23.0"})

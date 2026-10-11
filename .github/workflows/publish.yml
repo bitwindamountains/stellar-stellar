@@ -21,6 +21,8 @@ jobs:
       - run: uv sync --frozen --no-dev
       - run: uv run --no-dev postpilot publish ${{ inputs.dry_run && '--dry-run' || '' }}
         env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
           GOOGLE_SERVICE_ACCOUNT_JSON: ${{ secrets.GOOGLE_SERVICE_ACCOUNT_JSON }}
           GOOGLE_SHEET_ID: ${{ secrets.GOOGLE_SHEET_ID }}
           META_GRAPH_VERSION: ${{ vars.META_GRAPH_VERSION }}
