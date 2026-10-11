@@ -1,4 +1,5 @@
 import os
+import time
 from datetime import UTC, datetime
 
 import httpx
@@ -7,9 +8,10 @@ import typer
 from postpilot import facebook, instagram, telegram
 from postpilot.config import Config, ConfigError, load_config
 from postpilot.graph import GraphClient
-from postpilot.models import API_PLATFORMS, PlatformError
+from postpilot.models import API_PLATFORMS, PlatformError, StoreError
 from postpilot.runner import run
 from postpilot.sheet import SheetError, SheetRepository, init_sheet, open_spreadsheet
+from postpilot.supabase_repo import SupabaseRepository
 from postpilot.validation import validate
 
 app = typer.Typer(help="Publish due posts from a Google Sheet content calendar.", no_args_is_help=True)
@@ -27,7 +29,9 @@ def _config() -> Config:
         raise _fail(f"Config error: {e}") from None
 
 
-def _repository(cfg: Config) -> SheetRepository:
+def _repository(cfg: Config):
+    if cfg.supabase_url:
+        return SupabaseRepository(cfg.supabase_url, cfg.supabase_service_role_key)
     try:
         return SheetRepository(open_spreadsheet(cfg))
     except SheetError as e:
@@ -37,8 +41,8 @@ def _repository(cfg: Config) -> SheetRepository:
 def _load(repo):
     try:
         return repo.load()
-    except SheetError as e:
-        raise _fail(f"Sheet error: {e}") from None
+    except StoreError as e:
+        raise _fail(f"Store error: {e}") from None
 
 
 @app.command("init-sheet")
@@ -98,6 +102,7 @@ def publish(
         def assist(post, platforms):
             return telegram.send_assist(http, cfg.telegram_bot_token, cfg.telegram_chat_id, post, platforms)
 
+    started = time.monotonic()
     try:
         report = run(
             repo,
@@ -107,8 +112,11 @@ def publish(
             datetime.now(UTC),
             dry_run=dry_run,
         )
-    except SheetError as e:
-        raise _fail(f"Sheet error: {e}") from None
+    except StoreError as e:
+        raise _fail(f"Store error: {e}") from None
+    if hasattr(repo, "record_run") and not dry_run:
+        counts = {k: len(getattr(report, k)) for k in ("posted", "partial", "failed", "missed")}
+        repo.record_run(**counts, duration_ms=int((time.monotonic() - started) * 1000), dry_run=False)
     for line in report.lines:
         typer.echo(line)
     prefix = "Dry run: " if dry_run else ""
@@ -131,13 +139,13 @@ def doctor() -> None:
         nonlocal problems
         try:
             typer.echo(f"OK   {label}: {fn()}")
-        except (SheetError, PlatformError) as e:
+        except (StoreError, PlatformError) as e:
             problems += 1
             typer.echo(f"FAIL {label}: {e}")
 
     repo = _repository(cfg)
     posts, accounts = _load(repo)
-    typer.echo(f"OK   sheet: {len(posts)} post row(s), {len(accounts)} account(s)")
+    typer.echo(f"OK   store: {len(posts)} active post(s), {len(accounts)} account(s)")
     for account in accounts.values():
         used = {p for post in posts if post.get("account") == account.name for p in post.platforms}
         if not used & set(API_PLATFORMS):

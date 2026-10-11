@@ -89,3 +89,23 @@ def test_real_publish_outside_github_needs_local_flag(monkeypatch):
     assert result.exit_code == 2 and "--local" in result.output and repo.writes == []
     result = invoke(monkeypatch, ["publish", "--local"], repo)
     assert result.exit_code == 0
+
+
+def test_supabase_backend_records_real_runs_only(monkeypatch):
+    class Recording(FakeRepository):
+        runs = []
+
+        def record_run(self, **counts):
+            self.runs.append(counts)
+
+    repo = Recording([], ACCOUNTS)
+    env = {
+        "SUPABASE_URL": "https://x.supabase.co",
+        "SUPABASE_SERVICE_ROLE_KEY": "k",
+        "META_GRAPH_VERSION": "v23.0",
+        "GITHUB_ACTIONS": "true",
+    }
+    assert invoke(monkeypatch, ["publish", "--dry-run"], repo, env=env).exit_code == 0
+    assert repo.runs == []
+    assert invoke(monkeypatch, ["publish"], repo, env=env).exit_code == 0
+    assert repo.runs[0]["posted"] == 0 and repo.runs[0]["dry_run"] is False
