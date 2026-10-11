@@ -22,7 +22,20 @@ class Config:
     supabase_url: str
     supabase_service_role_key: str
     web_app_url: str  # Telegram messages link to the app's handoff page
+    nudge_hour: int | None  # local hour for the 'nothing posted today' Telegram nudge; None = off
     env: Mapping[str, str]  # account tokens are looked up by name from here
+
+
+def _hour(value: str) -> int | None:
+    if value.strip().lower() == "off":
+        return None
+    try:
+        hour = int(value)
+    except ValueError:
+        hour = -1
+    if not 0 <= hour <= 23:
+        raise ConfigError("PP_NUDGE_HOUR must be an hour from 0 to 23, or off")
+    return hour
 
 
 def load_config(env: Mapping[str, str] | None = None) -> Config:
@@ -60,5 +73,6 @@ def load_config(env: Mapping[str, str] | None = None) -> Config:
         supabase_url=env.get("SUPABASE_URL", ""),
         supabase_service_role_key=env.get("SUPABASE_SERVICE_ROLE_KEY", ""),
         web_app_url=env.get("WEB_APP_URL", "").rstrip("/"),
+        nudge_hour=_hour(env.get("PP_NUDGE_HOUR") or "16"),
         env=env,
     )

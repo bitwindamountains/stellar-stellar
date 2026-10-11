@@ -4,7 +4,7 @@ from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 import httpx
 
-from postpilot.models import Account, Post, StoreError
+from postpilot.models import DEFAULT_TIMEZONE, Account, Post, StoreError
 
 # Statuses the publisher and `validate` act on; finished posts are never loaded.
 ACTIVE = "(draft,scheduled,partial,posting)"
@@ -22,6 +22,7 @@ class SupabaseRepository:
         self.base = url.rstrip("/") + "/rest/v1"
         self.headers = {"apikey": service_key, "Authorization": f"Bearer {service_key}"}
         self.http = http or httpx.Client(timeout=30)
+        self.timezone = DEFAULT_TIMEZONE  # set from the first account on load; used for the daily nudge
 
     def load(self) -> tuple[list[Post], dict[str, Account]]:
         rows = self._request(
@@ -33,6 +34,8 @@ class SupabaseRepository:
             )
             for a in rows
         }
+        if accounts:
+            self.timezone = next(iter(accounts.values())).timezone
         rows = self._request("GET", "posts", params={"select": "*", "status": f"in.{ACTIVE}", "order": "num"})
         return [Post(row=r["num"], cells=_to_cells(r, accounts)) for r in rows], accounts
 
@@ -40,10 +43,20 @@ class SupabaseRepository:
         for num, fields in updates.items():
             self._request("PATCH", "posts", params={"num": f"eq.{num}"}, json=_from_cells(fields))
 
+    def count_live_between(self, start: datetime, end: datetime) -> int:
+        """Posts planned or done in [start, end). Failed and missed ones don't count."""
+        params = [
+            ("select", "num"),
+            ("publish_at", f"gte.{start.isoformat()}"),
+            ("publish_at", f"lt.{end.isoformat()}"),
+            ("status", "not.in.(failed,missed)"),
+        ]
+        return len(self._request("GET", "posts", params=params))
+
     def record_run(self, **counts) -> None:
         self._request("POST", "runs", json=counts)
 
-    def _request(self, method: str, table: str, params: dict | None = None, json: dict | None = None):
+    def _request(self, method: str, table: str, params: dict | list | None = None, json: dict | None = None):
         headers = {**self.headers, "Prefer": "return=minimal"} if method != "GET" else self.headers
         try:
             r = self.http.request(method, f"{self.base}/{table}", params=params, json=json, headers=headers)

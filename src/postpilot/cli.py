@@ -8,13 +8,18 @@ import typer
 from postpilot import facebook, instagram, telegram
 from postpilot.config import Config, ConfigError, load_config
 from postpilot.graph import GraphClient
-from postpilot.models import API_PLATFORMS, PlatformError, StoreError
+from postpilot.models import API_PLATFORMS, DEFAULT_TIMEZONE, PlatformError, StoreError
+from postpilot.nudge import nudge_window
 from postpilot.runner import run
 from postpilot.sheet import SheetError, SheetRepository, init_sheet, open_spreadsheet
 from postpilot.supabase_repo import SupabaseRepository
 from postpilot.validation import validate
 
 app = typer.Typer(help="Publish due posts from a Google Sheet content calendar.", no_args_is_help=True)
+
+
+def _now() -> datetime:
+    return datetime.now(UTC)
 
 
 def _fail(message: str, code: int = 2) -> typer.Exit:
@@ -106,13 +111,14 @@ def publish(
             )
 
     started = time.monotonic()
+    now = _now()
     try:
         report = run(
             repo,
             {"facebook": publisher(facebook), "instagram": publisher(instagram)},
             assist,
             cfg,
-            datetime.now(UTC),
+            now,
             dry_run=dry_run,
         )
     except StoreError as e:
@@ -120,6 +126,8 @@ def publish(
     if hasattr(repo, "record_run") and not dry_run:
         counts = {k: len(getattr(report, k)) for k in ("posted", "partial", "failed", "missed")}
         repo.record_run(**counts, duration_ms=int((time.monotonic() - started) * 1000), dry_run=False)
+    if not dry_run and assist and cfg.nudge_hour is not None and hasattr(repo, "count_live_between"):
+        _nudge_if_empty(repo, cfg, http, now)
     for line in report.lines:
         typer.echo(line)
     prefix = "Dry run: " if dry_run else ""
@@ -168,3 +176,19 @@ def doctor() -> None:
         typer.echo("SKIP telegram: not configured (needed for fb_profile, tiktok, youtube rows)")
     if problems:
         raise typer.Exit(1)
+
+
+def _nudge_if_empty(repo, cfg: Config, http: httpx.Client, now: datetime) -> None:
+    """Once a day at PP_NUDGE_HOUR, message Telegram if nothing is planned or posted today."""
+    # ponytail: a manual run in the same half hour can nudge a second time; add a sent-marker if that annoys.
+    window = nudge_window(now, getattr(repo, "timezone", DEFAULT_TIMEZONE), cfg.nudge_hour)
+    if not window:
+        return
+    try:
+        if repo.count_live_between(*window) == 0:
+            link = f" {cfg.web_app_url}/#/new" if cfg.web_app_url else ""
+            telegram.send_text(
+                http, cfg.telegram_bot_token, cfg.telegram_chat_id, f"Nothing posted today yet.{link}"
+            )
+    except (StoreError, PlatformError) as e:
+        typer.echo(f"Nudge skipped: {e}")  # a missed reminder must never fail the publish run
