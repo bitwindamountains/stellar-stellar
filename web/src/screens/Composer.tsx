@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { cleanVariants, isCustomized, textFor, type Variant, type Variants } from '../content'
 import { Alert, Arrow, Check } from '../icons'
+import { loadDefaults, loadDraft, rememberChoices, saveDraft } from '../prefs'
 import { go } from '../route'
 import { supabase } from '../supabase'
 import { quickTimes, utcToZoned, zonedToUtc } from '../time'
@@ -11,19 +12,23 @@ const ACCEPT = 'image/jpeg,image/png,image/webp,video/mp4,video/quicktime'
 const MAX_BYTES = 50 * 1024 * 1024 // matches the bucket's file_size_limit
 
 export default function Composer({ num }: { num?: number }) {
+  const [restored] = useState(() => (num ? null : loadDraft()))
   const [accounts, setAccounts] = useState<Account[] | null>(null) // null = still loading
   const [post, setPost] = useState<Post | null>(null)
   const [accountId, setAccountId] = useState<number | ''>('')
-  const [platforms, setPlatforms] = useState<Platform[]>(['facebook', 'instagram'])
-  const [publishAt, setPublishAt] = useState('')
+  const [platforms, setPlatforms] = useState<Platform[]>(
+    restored?.platforms ?? loadDefaults().platformsByMedia?.none ?? ['facebook', 'instagram'],
+  )
+  const [publishAt, setPublishAt] = useState(restored?.publishAt ?? '')
   // Daily posting is the common case, so new posts default to going out now.
-  const [mode, setMode] = useState<'now' | 'later'>('now')
-  const [caption, setCaption] = useState('')
-  const [variants, setVariants] = useState<Variants>({})
+  const [mode, setMode] = useState<'now' | 'later'>(restored?.mode ?? 'now')
+  const [caption, setCaption] = useState(restored?.caption ?? '')
+  const [variants, setVariants] = useState<Variants>(restored?.variants ?? {})
   const [tab, setTab] = useState<'all' | Platform>('all')
-  const [mediaType, setMediaType] = useState<MediaType>('none')
-  const [mediaUrl, setMediaUrl] = useState('')
-  const [link, setLink] = useState('')
+  const [mediaType, setMediaType] = useState<MediaType>(restored?.mediaType ?? 'none')
+  const [mediaUrl, setMediaUrl] = useState(restored?.mediaUrl ?? '')
+  const [link, setLink] = useState(restored?.link ?? '')
+  const [dragging, setDragging] = useState(false)
   const [busy, setBusy] = useState<'' | 'upload' | 'save'>('')
   const [error, setError] = useState('')
   const [tried, setTried] = useState(false)
@@ -33,7 +38,11 @@ export default function Composer({ num }: { num?: number }) {
       if (error) return setError(error.message)
       const list = (data as Account[]) ?? []
       setAccounts(list)
-      if (!num && list.length) setAccountId(list[0].id)
+      if (!num && list.length) {
+        // Last used account, if it still exists.
+        const wanted = restored?.accountId ?? loadDefaults().accountId
+        setAccountId(list.some((a) => a.id === wanted) ? wanted! : list[0].id)
+      }
     })
   }, [num])
 
@@ -55,6 +64,11 @@ export default function Composer({ num }: { num?: number }) {
       setLink(p.link)
     })
   }, [num, accounts])
+
+  useEffect(() => {
+    if (num) return
+    saveDraft({ accountId: accountId || undefined, platforms, caption, variants, mediaType, mediaUrl, link, mode, publishAt })
+  }, [num, accountId, platforms, caption, variants, mediaType, mediaUrl, link, mode, publishAt])
 
   const account = accounts?.find((a) => a.id === accountId)
   const draft = { account, platforms, publishAt, caption, variants, mediaType, mediaUrls: mediaUrl ? [mediaUrl] : [], link }
@@ -83,7 +97,10 @@ export default function Composer({ num }: { num?: number }) {
     setBusy('')
     if (error) return setError(error.message)
     setMediaUrl(supabase.storage.from('media').getPublicUrl(path).data.publicUrl)
-    setMediaType(file.type.startsWith('video/') ? 'video' : 'image')
+    const type = file.type.startsWith('video/') ? 'video' : 'image'
+    setMediaType(type)
+    const remembered = loadDefaults().platformsByMedia?.[type]
+    if (!num && remembered) setPlatforms(remembered)
   }
 
   async function save(status: 'draft' | 'scheduled') {
@@ -114,6 +131,8 @@ export default function Composer({ num }: { num?: number }) {
     }
     setBusy('')
     if (error) return setError(error.message)
+    rememberChoices(account.id, mediaType, platforms)
+    if (!num) saveDraft(null)
     go('/')
   }
 
@@ -150,6 +169,15 @@ export default function Composer({ num }: { num?: number }) {
         <span className="eyebrow">{num ? `Post #${num}` : 'One post · every platform'}</span>
         <h1>{num ? 'Edit post' : 'Write it once'}</h1>
         <p>Pick where it goes. PostPilot checks it now, not at post time.</p>
+        {restored && (restored.caption || restored.mediaUrl) && (
+          <p style={{ fontSize: 14 }}>
+            Draft restored from last time.{' '}
+            <button type="button" onClick={() => { saveDraft(null); window.location.reload() }}
+              style={{ minHeight: 44, padding: 0, border: 0, background: 'none', color: 'var(--accent-ink)', fontSize: 14, cursor: 'pointer' }}>
+              Start fresh
+            </button>
+          </p>
+        )}
       </header>
 
       {locked && <p className="notice" role="status">This post is being published right now. Edit it after the run finishes.</p>}
@@ -159,6 +187,19 @@ export default function Composer({ num }: { num?: number }) {
       <form className="split" onSubmit={(e) => { e.preventDefault(); save('scheduled') }}
         onKeyDown={(e) => {
           if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') { e.preventDefault(); save('scheduled') }
+        }}
+        onPaste={(e) => {
+          const file = e.clipboardData.files[0]
+          if (file && ACCEPT.split(',').includes(file.type)) { e.preventDefault(); upload(file) }
+        }}
+        onDragOver={(e) => { if (e.dataTransfer.types.includes('Files')) { e.preventDefault(); setDragging(true) } }}
+        onDragLeave={(e) => { if (e.currentTarget === e.target) setDragging(false) }}
+        onDrop={(e) => {
+          const file = e.dataTransfer.files[0]
+          if (!file) return
+          e.preventDefault()
+          setDragging(false)
+          upload(file)
         }}>
         <section className="main tray rise" aria-label="Post">
           <fieldset className="core" disabled={locked} style={{ gap: 28, border: 0, margin: 0, minWidth: 0 }}>
@@ -187,7 +228,8 @@ export default function Composer({ num }: { num?: number }) {
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: 16 }}>
               <div className="field" style={{ flex: '1 1 280px', minWidth: 0 }}>
                 <span className="legend">Media</span>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 14, padding: 12, borderRadius: 18, background: 'var(--well)', boxShadow: 'inset 0 0 0 1px var(--hair)' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 14, padding: 12, borderRadius: 18, background: dragging ? 'var(--accent-tint)' : 'var(--well)',
+                  boxShadow: dragging ? 'inset 0 0 0 1.5px var(--accent)' : 'inset 0 0 0 1px var(--hair)', transition: 'background-color 150ms ease, box-shadow 150ms ease' }}>
                   <span className="thumb" aria-hidden="true" style={mediaType === 'image' && mediaUrl ? { width: 64, height: 64, backgroundImage: `url("${mediaUrl}")`, color: 'transparent' } : { width: 64, height: 64 }}>
                     {mediaType === 'none' ? 'None' : mediaType}
                   </span>
@@ -198,10 +240,15 @@ export default function Composer({ num }: { num?: number }) {
                         onChange={(e) => e.target.files?.[0] && upload(e.target.files[0])} />
                     </label>
                     <span style={{ fontSize: 13, color: 'var(--muted)' }}>
-                      {busy === 'upload' ? 'Uploading…' : mediaUrl ? 'Uploaded.' : 'JPG, PNG, WebP, MP4 or MOV, up to 50 MB'}
+                      {busy === 'upload' ? 'Uploading…' : dragging ? 'Drop to upload' : mediaUrl ? 'Uploaded.' : 'Drop or paste a file here · up to 50 MB'}
                     </span>
                     {mediaUrl && (
-                      <button type="button" onClick={() => { setMediaUrl(''); setMediaType('none') }}
+                      <button type="button" onClick={() => {
+                        setMediaUrl('')
+                        setMediaType('none')
+                        const remembered = loadDefaults().platformsByMedia?.none
+                        if (!num && remembered) setPlatforms(remembered)
+                      }}
                         style={{ alignSelf: 'flex-start', minHeight: 44, padding: 0, border: 0, background: 'none', color: 'var(--accent-ink)', fontSize: 14, cursor: 'pointer' }}>
                         Remove media
                       </button>
