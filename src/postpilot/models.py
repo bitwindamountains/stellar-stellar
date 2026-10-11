@@ -103,3 +103,7 @@ class PlatformError(Exception):
     @property
     def retryable(self) -> bool:
         return self.kind in self.RETRYABLE
+
+
+class StoreError(Exception):
+    """The post store (Google Sheet or Supabase) can't be read or written."""
