@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { retryNow } from '../actions'
-import { Arrow, FlightPath } from '../icons'
+import { Arrow, Asteroids, FlightPath } from '../icons'
 import { awaitingHandoff, canRetry, chips, groupByDay, mergePosts, needsYou, statusLabel, timeOf, weekStrip } from '../postView'
 import { supabase } from '../supabase'
 import { isAssisted, PLATFORM_CODES, type Account, type Post, type Run } from '../types'
@@ -73,6 +73,7 @@ export default function Queue() {
           ))}
         </div>
         <FlightPath />
+        <Asteroids />
       </header>
 
       {error && <p className="notice" role="alert">Couldn't load everything: {error}</p>}
