@@ -1,3 +1,5 @@
+from html import escape
+
 import httpx
 
 from postpilot.models import PlatformError, Post
@@ -30,9 +32,21 @@ def send_assist(
             header += f"\nMedia (too big or unreachable for Telegram, download it here): {url}"
     if first_id is None:
         first_id = _call(http, token, "sendMessage", chat_id=chat_id, text=header)["message_id"]
-    text = "\n\n".join(t for t in (post.get("caption"), post.get("link")) if t)
-    if text:
-        _call(http, token, "sendMessage", chat_id=chat_id, text=text)
+    # One message per distinct text; <pre> blocks copy with a single tap in Telegram.
+    groups: dict[tuple[str, str], list[str]] = {}
+    for p in platforms:
+        text = post.text_for(p)
+        if p == "fb_profile" and post.get("link"):
+            text = "\n\n".join(t for t in (text, post.get("link")) if t)
+        groups.setdefault((text, post.title_for(p)), []).append(p)
+    for (text, title), names in groups.items():
+        parts = [f"<b>{escape(', '.join(NAMES.get(p, p) for p in names))}</b>"]
+        if title:
+            parts.append(f"<b>{escape(NAMES.get(names[0], names[0]))} title</b>\n<pre>{escape(title)}</pre>")
+        if text:
+            parts.append(f"<pre>{escape(text)}</pre>")
+        if len(parts) > 1:
+            _call(http, token, "sendMessage", chat_id=chat_id, text="\n".join(parts), parse_mode="HTML")
     return str(first_id)
 
 

@@ -1,3 +1,4 @@
+import json
 from dataclasses import dataclass
 
 FACEBOOK = "facebook"
@@ -74,6 +75,27 @@ class Post:
     @property
     def media_urls(self) -> list[str]:
         return [u.strip() for u in self.get("media_urls").splitlines() if u.strip()]
+
+    @property
+    def variants(self) -> dict[str, dict[str, str]]:
+        """Per-platform overrides: {platform: {caption?, hashtags?, title?}}. Bad JSON counts as none."""
+        try:
+            value = json.loads(self.get("variants") or "{}")
+        except ValueError:
+            return {}
+        return value if isinstance(value, dict) else {}
+
+    def _variant(self, platform: str, key: str) -> str:
+        variant = self.variants.get(platform)
+        return str(variant.get(key) or "").strip() if isinstance(variant, dict) else ""
+
+    def text_for(self, platform: str) -> str:
+        """The platform's caption override (or the base caption), then its hashtags line."""
+        caption = self._variant(platform, "caption") or self.get("caption")
+        return "\n\n".join(t for t in (caption, self._variant(platform, "hashtags")) if t)
+
+    def title_for(self, platform: str) -> str:
+        return self._variant(platform, "title")
 
     def done(self, platform: str) -> bool:
         """A filled ID means: never publish this platform for this row again."""

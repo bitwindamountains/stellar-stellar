@@ -137,3 +137,16 @@ def test_record_run_inserts_counts():
         "duration_ms": 1500,
         "dry_run": False,
     }
+
+
+def test_variants_object_loads_as_json_text():
+    rows = [{**POSTS[0], "variants": {"youtube": {"title": "Latte art"}}}]
+
+    def handler(request):
+        if request.url.path.endswith("/posts"):
+            return httpx.Response(200, json=rows)
+        return serve(request)
+
+    r, _ = repo(handler)
+    posts, _ = r.load()
+    assert posts[0].title_for("youtube") == "Latte art"
