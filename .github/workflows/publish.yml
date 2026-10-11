@@ -1,0 +1,41 @@
+name: publish
+on:
+  schedule:
+    - cron: "7,37 * * * *" # every 30 min (UTC), off the busy top of the hour
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: Show what would happen; change nothing
+        type: boolean
+        default: true
+concurrency:
+  group: postpilot-publish # never two runs at once: the claim logic relies on it
+  cancel-in-progress: false
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      # Until the publisher is configured, scheduled runs skip instead of failing (and emailing) every 30 minutes.
+      # Manual runs always go ahead so missing settings show up as a clear error.
+      - id: gate
+        run: echo "ready=${{ (secrets.SUPABASE_SERVICE_ROLE_KEY != '' || secrets.GOOGLE_SHEET_ID != '') && vars.META_GRAPH_VERSION != '' }}" >> "$GITHUB_OUTPUT"
+      - if: steps.gate.outputs.ready == 'true' || github.event_name == 'workflow_dispatch'
+        uses: actions/checkout@v5
+      - if: steps.gate.outputs.ready == 'true' || github.event_name == 'workflow_dispatch'
+        uses: astral-sh/setup-uv@v6
+      - if: steps.gate.outputs.ready == 'true' || github.event_name == 'workflow_dispatch'
+        run: uv sync --frozen --no-dev
+      - if: steps.gate.outputs.ready == 'true' || github.event_name == 'workflow_dispatch'
+        run: uv run --no-dev postpilot publish ${{ inputs.dry_run && '--dry-run' || '' }}
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          GOOGLE_SERVICE_ACCOUNT_JSON: ${{ secrets.GOOGLE_SERVICE_ACCOUNT_JSON }}
+          GOOGLE_SHEET_ID: ${{ secrets.GOOGLE_SHEET_ID }}
+          META_GRAPH_VERSION: ${{ vars.META_GRAPH_VERSION }}
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          WEB_APP_URL: ${{ vars.WEB_APP_URL }}
+          # One line per account; the name must match Accounts.token_env.
+          META_TOKEN_MAIN: ${{ secrets.META_TOKEN_MAIN }}

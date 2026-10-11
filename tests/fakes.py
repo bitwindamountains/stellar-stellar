@@ -1,0 +1,24 @@
+from postpilot.models import ACCOUNT_COLUMNS, POST_COLUMNS, Account, Post
+from postpilot.sheet import accounts_from_values, posts_from_values
+
+
+class FakeRepository:
+    """In-memory Posts/Accounts tabs that go through the same parsing as the real sheet."""
+
+    def __init__(self, posts: list[dict[str, str]], accounts: list[dict[str, str]]):
+        self.posts = [list(POST_COLUMNS)] + [[p.get(c, "") for c in POST_COLUMNS] for p in posts]
+        self.accounts = [list(ACCOUNT_COLUMNS)] + [[a.get(c, "") for c in ACCOUNT_COLUMNS] for a in accounts]
+        self.writes: list[dict[int, dict[str, str]]] = []
+
+    def load(self) -> tuple[list[Post], dict[str, Account]]:
+        return posts_from_values(self.posts), accounts_from_values(self.accounts)
+
+    def write(self, updates: dict[int, dict[str, str]]) -> None:
+        self.writes.append(updates)
+        header = self.posts[0]
+        for row, fields in updates.items():
+            for col, value in fields.items():
+                self.posts[row - 1][header.index(col)] = value
+
+    def row(self, row: int) -> dict[str, str]:
+        return dict(zip(self.posts[0], self.posts[row - 1], strict=True))
