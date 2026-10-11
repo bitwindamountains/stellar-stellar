@@ -31,7 +31,7 @@ def test_help_lists_commands():
 
 
 def test_missing_config_exits_2(monkeypatch):
-    result = invoke(monkeypatch, ["publish"], env={})
+    result = invoke(monkeypatch, ["publish", "--dry-run"], env={})
     assert result.exit_code == 2 and "GOOGLE_SHEET_ID" in result.output
 
 
