@@ -34,6 +34,7 @@ create table public.posts (
   ig_media_id text not null default '',
   ig_permalink text not null default '',
   tg_message_id text not null default '',
+  assist_done_at timestamptz, -- set from the app when you've posted the by-hand platforms yourself
   last_error text not null default '',
   posted_at timestamptz,
   created_at timestamptz not null default now()
