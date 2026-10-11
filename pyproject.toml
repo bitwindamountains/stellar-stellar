@@ -1,0 +1,31 @@
+[project]
+name = "postpilot"
+version = "0.1.0"
+description = "Google Sheet content calendar to Facebook Page and Instagram publishing."
+authors = [
+    { name = "NinoCLint", email = "clintoy164@gmail.com" }
+]
+requires-python = ">=3.12"
+dependencies = [
+    "typer>=0.27.3",
+]
+
+[project.scripts]
+postpilot = "postpilot:main"
+
+[build-system]
+requires = ["uv_build>=0.12.21,<0.13.0"]
+build-backend = "uv_build"
+
+[dependency-groups]
+dev = [
+    "pytest>=9.1.1",
+    "ruff>=0.17.0",
+]
+
+[tool.ruff]
+line-length = 110
+include = ["src/**/*.py", "tests/**/*.py"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B"]
