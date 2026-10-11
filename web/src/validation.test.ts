@@ -4,7 +4,7 @@ import { hashtagCount, validate, type Draft } from './validation'
 
 const account: Account = { id: 1, name: 'Kape', fb_page_id: 'P', ig_user_id: 'I', token_env: 'META_TOKEN_KAPE', timezone: 'Asia/Manila' }
 const draft = (over: Partial<Draft>): Draft => ({
-  account, platforms: ['facebook'], publishAt: '2026-10-05T18:00', caption: 'Hi', mediaType: 'none', mediaUrls: [], link: '', ...over,
+  account, platforms: ['facebook'], publishAt: '2026-10-05T18:00', caption: 'Hi', variants: {}, mediaType: 'none', mediaUrls: [], link: '', ...over,
 })
 const expectError = (d: Partial<Draft>, text: string) => expect(validate(draft(d), true).join('|')).toContain(text)
 
@@ -29,6 +29,14 @@ describe('validate (mirrors validation.py)', () => {
     expectError({ platforms: ['instagram'], mediaType: 'image', mediaUrls: ['https://x/a.jpg'], caption: 'x'.repeat(2201) }, '2,200')
     expectError({ platforms: ['instagram'], mediaType: 'image', mediaUrls: ['https://x/a.jpg'],
       caption: Array.from({ length: 31 }, (_, i) => `#t${i}`).join(' ') }, '30 hashtags')
+  })
+  it('applies each platform limit to that platform text only', () => {
+    const tags = Array.from({ length: 31 }, (_, i) => `#t${i}`).join(' ')
+    const img = { platforms: ['facebook', 'instagram'] as const, mediaType: 'image' as const, mediaUrls: ['https://x/a.jpg'] }
+    expect(validate(draft({ ...img, platforms: [...img.platforms], variants: { facebook: { hashtags: tags } } }), true)).toEqual([])
+    expectError({ ...img, platforms: [...img.platforms], variants: { instagram: { hashtags: tags } } }, '30 hashtags')
+    expectError({ platforms: ['youtube'], mediaType: 'video', mediaUrls: ['https://x/a.mp4'], variants: { youtube: { title: 'x'.repeat(101) } } }, 'YouTube titles')
+    expect(validate(draft({ caption: '', variants: { facebook: { hashtags: '#kape' } } }), true)).toEqual([])
   })
   it('drafts may skip the time', () => {
     expect(validate(draft({ publishAt: '' }), false)).toEqual([])
