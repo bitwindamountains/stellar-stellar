@@ -57,7 +57,7 @@ Each task: failing test, code, full suite + ruff green, one commit.
 - [x] 4.4 Idempotency tests: crash after FB before IG; stale posting; rerun skips filled IDs
 
 ### Phase 5: CLI + automation
-- [ ] 5.1 `validate`, `publish` (exit codes 0/1/2), `doctor` (config, sheet, tokens)
+- [x] 5.1 `validate`, `publish` (exit codes 0/1/2), `doctor` (config, sheet, tokens)
 - [ ] 5.2 `.github/workflows/ci.yml` + `publish.yml` (cron 7,37, concurrency, dry-run input)
 
 ### Phase 6: Go live (needs you)

@@ -16,21 +16,27 @@ def send_assist(http: httpx.Client, token: str, chat_id: str, post: Post, platfo
             ("sendVideo", "video") if post.get("media_type").lower() == "video" else ("sendPhoto", "photo")
         )
         try:
-            first_id = _call(http, token, method, chat_id=chat_id, caption=header, **{field: url})
+            first_id = _call(http, token, method, chat_id=chat_id, caption=header, **{field: url})[
+                "message_id"
+            ]
         except PlatformError as e:
             if e.kind != "permanent":
                 raise
             # Telegram fetches by URL only up to ~20 MB (5 MB for photos); send the link instead.
             header += f"\nMedia (too big or unreachable for Telegram, download it here): {url}"
     if first_id is None:
-        first_id = _call(http, token, "sendMessage", chat_id=chat_id, text=header)
+        first_id = _call(http, token, "sendMessage", chat_id=chat_id, text=header)["message_id"]
     text = "\n\n".join(t for t in (post.get("caption"), post.get("link")) if t)
     if text:
         _call(http, token, "sendMessage", chat_id=chat_id, text=text)
-    return first_id
+    return str(first_id)
 
 
-def _call(http: httpx.Client, token: str, method: str, **params: str) -> str:
+def bot_name(http: httpx.Client, token: str) -> str:
+    return _call(http, token, "getMe")["username"]
+
+
+def _call(http: httpx.Client, token: str, method: str, **params: str) -> dict:
     # The token is part of the URL, so httpx error text is never passed on.
     try:
         response = http.post(f"{API}/bot{token}/{method}", json=params, timeout=60)
@@ -41,7 +47,7 @@ def _call(http: httpx.Client, token: str, method: str, **params: str) -> str:
     except ValueError:
         body = {}
     if response.is_success and body.get("ok"):
-        return str(body["result"]["message_id"])
+        return body["result"]
     description = body.get("description") or f"HTTP {response.status_code}"
     if response.status_code in (401, 404):
         raise PlatformError("auth", "Telegram bot token is wrong or revoked: check TELEGRAM_BOT_TOKEN")
