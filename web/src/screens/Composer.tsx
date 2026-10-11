@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { cleanVariants, isCustomized, textFor, type Variant, type Variants } from '../content'
 import { Alert, Arrow, Check } from '../icons'
+import { publishSoon } from '../actions'
 import { loadDefaults, loadDraft, rememberChoices, saveDraft } from '../prefs'
 import { go } from '../route'
 import { supabase } from '../supabase'
@@ -126,14 +127,19 @@ export default function Composer({ num }: { num?: number }) {
       ? await supabase.from('posts').update(fields).eq('num', num).neq('status', 'posting')
       : await supabase.from('posts').insert(fields)
     if (!error && status === 'scheduled' && mode === 'now') {
-      // Ask the publisher to run right away. If that isn't set up yet, the next 30-minute run posts it.
-      await supabase.functions.invoke('dispatch').catch(() => undefined)
+      await publishSoon()
     }
     setBusy('')
     if (error) return setError(error.message)
     rememberChoices(account.id, mediaType, platforms)
     if (!num) saveDraft(null)
     go('/')
+  }
+
+  // Copies the content into a fresh draft; the new post gets its own IDs, so it really posts again.
+  function postAgain() {
+    saveDraft({ accountId: accountId || undefined, platforms, caption, variants, mediaType, mediaUrl, link, mode: 'now', publishAt: '' })
+    go('/new')
   }
 
   async function remove() {
@@ -182,6 +188,13 @@ export default function Composer({ num }: { num?: number }) {
 
       {locked && <p className="notice" role="status">This post is being published right now. Edit it after the run finishes.</p>}
       {post?.last_error && <p className="notice" role="status">{post.last_error}</p>}
+      {post && (
+        <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 10 }}>
+          {post.fb_permalink && <a className="btn light" href={post.fb_permalink} target="_blank" rel="noopener">View on Facebook<span className="knob"><Arrow /></span></a>}
+          {post.ig_permalink && <a className="btn light" href={post.ig_permalink} target="_blank" rel="noopener">View on Instagram<span className="knob"><Arrow /></span></a>}
+          <button type="button" className="btn" onClick={postAgain}>Post again</button>
+        </div>
+      )}
       {error && <p className="notice" role="alert">{error}</p>}
 
       <form className="split" onSubmit={(e) => { e.preventDefault(); save('scheduled') }}

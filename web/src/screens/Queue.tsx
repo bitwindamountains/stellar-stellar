@@ -1,6 +1,7 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
+import { retryNow } from '../actions'
 import { Arrow } from '../icons'
-import { awaitingHandoff, chips, groupByDay, needsYou, statusLabel, timeOf } from '../postView'
+import { awaitingHandoff, canRetry, chips, groupByDay, needsYou, statusLabel, timeOf } from '../postView'
 import { supabase } from '../supabase'
 import { isAssisted, PLATFORM_CODES, type Account, type Post, type Run } from '../types'
 
@@ -13,8 +14,9 @@ export default function Queue() {
   const [filter, setFilter] = useState<Filter>('all')
   const [error, setError] = useState('')
   const [loaded, setLoaded] = useState(false)
+  const [retrying, setRetrying] = useState<number | null>(null)
 
-  useEffect(() => {
+  const load = useCallback(() => {
     // Last 2 days onward, plus undated drafts. ponytail: no paging; fine for a personal queue of a few hundred.
     const since = new Date(Date.now() - 2 * 86_400_000).toISOString()
     Promise.all([
@@ -30,6 +32,15 @@ export default function Queue() {
       setLoaded(true)
     })
   }, [])
+  useEffect(load, [load])
+
+  async function retry(num: number) {
+    setRetrying(num)
+    const failed = await retryNow(num)
+    setRetrying(null)
+    if (failed) setError(failed)
+    else load()
+  }
 
   const shown = useMemo(() => {
     const keep: Record<Filter, (p: Post) => boolean> = {
@@ -113,16 +124,24 @@ export default function Queue() {
                 Nothing gets posted twice. When PostPilot isn't sure, it stops and asks.
               </p>
               {attention.slice(0, 3).map((post) => (
-                <a key={post.num} href={awaitingHandoff(post) ? `#/handoff/${post.num}` : `#/edit/${post.num}`}
-                  style={{ display: 'flex', flexDirection: 'column', gap: 6, padding: 16, borderRadius: 18, textDecoration: 'none',
-                    background: 'rgba(255,255,255,0.06)', boxShadow: 'inset 0 0 0 1px rgba(255,255,255,0.08)' }}>
-                  <span className="mono" style={{ color: awaitingHandoff(post) ? '#afc0ff' : '#f5b583' }}>
-                    {post.platforms.map((p) => PLATFORM_CODES[p]).join(' · ')} · {timeOf(post.publish_at)}
-                  </span>
-                  <span style={{ fontSize: 14, lineHeight: 1.45 }}>
-                    {awaitingHandoff(post) ? 'Waiting for you to post by hand.' : post.last_error || 'Check this post.'}
-                  </span>
-                </a>
+                <div key={post.num} style={{ display: 'flex', flexDirection: 'column', gap: 10, padding: 16, borderRadius: 18,
+                  background: 'rgba(255,255,255,0.06)', boxShadow: 'inset 0 0 0 1px rgba(255,255,255,0.08)' }}>
+                  <a href={awaitingHandoff(post) ? `#/handoff/${post.num}` : `#/edit/${post.num}`}
+                    style={{ display: 'flex', flexDirection: 'column', gap: 6, textDecoration: 'none' }}>
+                    <span className="mono" style={{ color: awaitingHandoff(post) ? '#afc0ff' : '#f5b583' }}>
+                      {post.platforms.map((p) => PLATFORM_CODES[p]).join(' · ')} · {timeOf(post.publish_at)}
+                    </span>
+                    <span style={{ fontSize: 14, lineHeight: 1.45 }}>
+                      {awaitingHandoff(post) ? 'Waiting for you to post by hand.' : post.last_error || 'Check this post.'}
+                    </span>
+                  </a>
+                  {canRetry(post) && (
+                    <button type="button" className="btn light" onClick={() => retry(post.num)} disabled={retrying === post.num}
+                      style={{ alignSelf: 'flex-start', minHeight: 40, padding: '0 16px', fontSize: 13 }}>
+                      {retrying === post.num ? 'Retrying…' : 'Retry now'}
+                    </button>
+                  )}
+                </div>
               ))}
             </div>
           </section>

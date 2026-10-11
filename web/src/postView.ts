@@ -75,3 +75,11 @@ export function groupByDay(posts: Post[], now = new Date()) {
 export function timeOf(iso: string | null): string {
   return iso ? new Date(iso).toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit', hour12: false }) : '--:--'
 }
+
+/**
+ * One-tap retry is only offered when the post certainly didn't go out. "Check if it posted" and
+ * "run stopped" failures may already be live, so those need a look first.
+ */
+export function canRetry(post: Post): boolean {
+  return ['failed', 'missed'].includes(post.status) && !/check|stopped/i.test(post.last_error)
+}
