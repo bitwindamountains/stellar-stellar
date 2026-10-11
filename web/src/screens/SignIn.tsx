@@ -29,7 +29,7 @@ export default function SignIn() {
   }
 
   return (
-    <main className="page" style={{ display: 'grid', placeItems: 'center' }}>
+    <main className="page auth" style={{ display: 'grid', placeItems: 'center' }}>
       <div className="tray rise" style={{ width: 'min(440px, 100%)' }}>
         <form className="core" onSubmit={submit} style={{ gap: 24 }}>
           <span style={{ display: 'flex', alignItems: 'center', gap: 10, fontWeight: 600 }}><Logo />PostPilot</span>

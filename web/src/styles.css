@@ -20,7 +20,8 @@
 }
 
 * { box-sizing: border-box; }
-html, body { margin: 0; background: var(--ground); color: var(--ink); font-family: var(--sans); }
+html, body { margin: 0; color: var(--ink); font-family: var(--sans); }
+html { background: var(--ground); } /* body stays clear so the ambient backdrop (body::before) shows */
 body { -webkit-font-smoothing: antialiased; -webkit-tap-highlight-color: transparent; }
 a { color: inherit; }
 button, input, textarea, select { font: inherit; color: inherit; }
@@ -30,6 +31,19 @@ input, textarea { caret-color: var(--accent); }
 html { scrollbar-color: rgba(21, 23, 27, 0.22) transparent; }
 /* Times and counts line up digit for digit. */
 .mono, dd, .week-day { font-variant-numeric: tabular-nums; }
+
+/* Ambient backdrop: two faint pools of light (brand blue, warm) and fine paper grain. Fixed, so scrolling
+   never repaints it; sign-in turns the light up a little because there's nothing else on screen. */
+body::before {
+  content: ''; position: fixed; inset: 0; z-index: -1; pointer-events: none;
+  --cool: rgba(43, 75, 216, 0.08); --warm: rgba(226, 140, 92, 0.09);
+  background:
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 .045 0 0 0 0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E"),
+    radial-gradient(60vmax 42vmax at 6% -8%, var(--cool), transparent 70%),
+    radial-gradient(55vmax 40vmax at 104% 108%, var(--warm), transparent 70%),
+    radial-gradient(45vmax 30vmax at 72% 18%, rgba(255, 255, 255, 0.65), transparent 70%);
+}
+body:has(.auth)::before { --cool: rgba(43, 75, 216, 0.16); --warm: rgba(226, 140, 92, 0.2); }
 
 .page { min-height: 100dvh; padding: 24px 24px calc(96px + env(safe-area-inset-bottom)); }
 .wrap { max-width: 1240px; margin: 0 auto; display: flex; flex-direction: column; gap: 64px; }
@@ -273,6 +287,7 @@ button.chip:active { transform: scale(0.96); }
   .island::after { background: #fff; backdrop-filter: none; -webkit-backdrop-filter: none; }
 }
 @media (prefers-contrast: more) {
+  body::before { display: none; }
   :root { --muted: #3b3f46; --hair: rgba(21, 23, 27, 0.4); }
   .island { box-shadow: 0 0 0 1px var(--ink); }
   .island::before { backdrop-filter: none; }
