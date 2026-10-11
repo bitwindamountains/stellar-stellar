@@ -53,15 +53,22 @@ export default function Handoff({ num }: { num: number }) {
   }
 
   async function copy(key: string, value: string) {
-    await navigator.clipboard.writeText(value)
+    let result = key
+    try {
+      await navigator.clipboard.writeText(value)
+    } catch {
+      result = `${key}:failed` // no clipboard permission (or not https): say so instead of failing silently
+    }
     // Blur bridges the label swap so it reads as one change, not two overlapping words.
     setSwapping(key)
-    setTimeout(() => { setCopied(key); setSwapping('') }, 90)
+    setTimeout(() => { setCopied(result); setSwapping('') }, 90)
+    // Revert so a second tap visibly copies again.
+    setTimeout(() => setCopied((c) => (c === result ? '' : c)), 1800)
   }
 
   const copyButton = (key: string, label: string, value: string) => (
     <button type="button" className="step" onClick={() => copy(key, value)}>
-      <span className={`swap${swapping === key ? ' swapping' : ''}`} style={{ flex: 1 }}>{copied === key ? 'Copied' : label}</span>
+      <span className={`swap${swapping === key ? ' swapping' : ''}`} style={{ flex: 1 }}>{copied === key ? 'Copied' : copied === `${key}:failed` ? "Couldn't copy: select the text above" : label}</span>
       {copied === key && <Check />}
     </button>
   )
