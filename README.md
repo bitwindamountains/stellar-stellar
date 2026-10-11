@@ -51,3 +51,16 @@ is missing.
    run is the default), then let the schedule take over.
 
 Timing: posts go out within about 30 minutes of `publish_at` (GitHub cron can start late when busy).
+
+## Web + phone app (Supabase)
+The app in `web/` replaces the Sheet. The publisher switches to Supabase when `SUPABASE_URL` is set.
+
+1. **Supabase** (free): create a project, run `supabase/migrations/20261011000000_init.sql` in the SQL editor.
+   Under Authentication: turn **off** "Allow new users to sign up", then add yourself under Users.
+2. **Web app**: in `web/`, copy `.env.example` to `.env` with the project URL and *publishable* key, then
+   `npm install` and `npm run dev`. Deploy: Cloudflare Pages (or Workers static assets) with build command
+   `npm run build`, output `dist`, root `web`, and the same two `VITE_` variables. Add the deployed URL to
+   Supabase Authentication > URL Configuration (Site URL and Redirect URLs) so sign-in links work.
+3. **Publisher**: add GitHub secrets `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY` and variable `WEB_APP_URL`.
+   The service-role key bypasses all access rules: keep it only in GitHub secrets, never in `web/`.
+4. On your phone, open the app and use "Add to Home Screen".
