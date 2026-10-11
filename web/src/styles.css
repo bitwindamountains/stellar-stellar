@@ -34,15 +34,31 @@ html { scrollbar-color: rgba(21, 23, 27, 0.22) transparent; }
 .page { min-height: 100dvh; padding: 24px 24px calc(96px + env(safe-area-inset-bottom)); }
 .wrap { max-width: 1240px; margin: 0 auto; display: flex; flex-direction: column; gap: 64px; }
 
-/* Floating island nav */
+/* Floating island nav: liquid glass that stays put while the page scrolls under it.
+   Layers: ::before refracts what's behind (SVG #lg-refract in index.html), ::after frosts and tints it and
+   carries the specular rim. Separate layers, so a browser without SVG backdrop filters still gets the frost. */
 .island {
+  position: sticky; top: 16px; z-index: 10;
   align-self: center; display: flex; flex-wrap: wrap; justify-content: center; align-items: center; gap: 4px;
-  padding: 6px; border-radius: 999px; background: rgba(255, 255, 255, 0.78);
-  box-shadow: 0 0 0 1px rgba(21, 23, 27, 0.06), 0 24px 48px -28px rgba(21, 23, 27, 0.18);
+  padding: 6px; border-radius: 999px;
+  box-shadow: 0 0 0 1px rgba(21, 23, 27, 0.07), 0 18px 40px -20px rgba(21, 23, 27, 0.3);
+}
+.island::before, .island::after {
+  content: ''; position: absolute; inset: 0; z-index: -1; border-radius: inherit; pointer-events: none;
+}
+.island::before { backdrop-filter: url(#lg-refract); }
+.island::after {
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.42), rgba(255, 255, 255, 0.22));
+  backdrop-filter: blur(6px) saturate(200%) brightness(1.05); -webkit-backdrop-filter: blur(6px) saturate(200%) brightness(1.05);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.95), /* light catching the top edge */
+    inset 0 -1px 1px rgba(255, 255, 255, 0.5),
+    inset 0 0 0 1px rgba(255, 255, 255, 0.35),
+    inset 0 -10px 20px -14px rgba(21, 23, 27, 0.12); /* thickness toward the bottom */
 }
 .island a, .island button {
   display: flex; align-items: center; gap: 10px; min-height: 44px; padding: 0 18px; border: 0; border-radius: 999px;
-  background: transparent; color: var(--ink-2); text-decoration: none; font-size: 14px; cursor: pointer;
+  background: transparent; color: var(--ink); text-decoration: none; font-size: 14px; font-weight: 500; cursor: pointer;
   transition: background-color 150ms ease, transform 140ms var(--ease-out);
 }
 .island a:active, .island button:active { transform: scale(0.97); }
@@ -215,14 +231,9 @@ button.chip:active { transform: scale(0.96); }
   /* Phone: the island becomes a bottom tab bar within thumb reach. */
   .island {
     position: fixed; z-index: 10; left: 12px; right: 12px; bottom: calc(12px + env(safe-area-inset-bottom));
-    flex-wrap: nowrap; justify-content: space-between; backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px);
+    top: auto; flex-wrap: nowrap; justify-content: space-between;
   }
   .island .brand, .island .desktop-only { display: none; }
-  /* Scroll edge: content fades out where the floating bar overlaps it, instead of cutting off under glass. */
-  .wrap:has(> .island)::after {
-    content: ''; position: fixed; z-index: 9; left: 0; right: 0; bottom: 0; pointer-events: none;
-    height: calc(88px + env(safe-area-inset-bottom)); background: linear-gradient(rgba(241, 241, 236, 0), var(--ground) 75%);
-  }
   .island a { flex: 1; justify-content: center; padding: 0 10px; }
   .island .btn.primary { flex: 1.4; padding-right: 4px; }
   .filters { scrollbar-width: none; align-self: stretch; }
@@ -258,11 +269,14 @@ button.chip:active { transform: scale(0.96); }
 
 /* Glass falls back to solid when people ask for less transparency or more contrast. */
 @media (prefers-reduced-transparency: reduce) {
-  .island { background: #fff; backdrop-filter: none; -webkit-backdrop-filter: none; }
+  .island::before { backdrop-filter: none; }
+  .island::after { background: #fff; backdrop-filter: none; -webkit-backdrop-filter: none; }
 }
 @media (prefers-contrast: more) {
   :root { --muted: #3b3f46; --hair: rgba(21, 23, 27, 0.4); }
-  .island { background: #fff; backdrop-filter: none; -webkit-backdrop-filter: none; box-shadow: 0 0 0 1px var(--ink); }
+  .island { box-shadow: 0 0 0 1px var(--ink); }
+  .island::before { backdrop-filter: none; }
+  .island::after { background: #fff; backdrop-filter: none; -webkit-backdrop-filter: none; }
   .tray, .step, .week-day, .chip.queued, .pill.scheduled, .pill.draft { box-shadow: 0 0 0 1px rgba(21, 23, 27, 0.5); }
 }
 @media (prefers-reduced-motion: reduce) { .skeleton { animation: none; opacity: 0.7; } }
