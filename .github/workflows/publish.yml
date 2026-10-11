@@ -28,5 +28,6 @@ jobs:
           META_GRAPH_VERSION: ${{ vars.META_GRAPH_VERSION }}
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          WEB_APP_URL: ${{ vars.WEB_APP_URL }}
           # One line per account; the name must match Accounts.token_env.
           META_TOKEN_MAIN: ${{ secrets.META_TOKEN_MAIN }}

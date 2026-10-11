@@ -52,3 +52,8 @@ def test_supabase_replaces_google_settings():
 def test_supabase_url_needs_service_key():
     with pytest.raises(ConfigError, match="SUPABASE_SERVICE_ROLE_KEY"):
         load_config({"SUPABASE_URL": "https://x.supabase.co", "META_GRAPH_VERSION": "v23.0"})
+
+
+def test_web_app_url_optional():
+    assert load_config(BASE).web_app_url == ""
+    assert load_config({**BASE, "WEB_APP_URL": "https://pp.example/"}).web_app_url == "https://pp.example"
