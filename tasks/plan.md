@@ -48,7 +48,7 @@ Each task: failing test, code, full suite + ruff green, one commit.
 - [x] 3.1 `graph.py`: pinned-version client, error classification, transient retry
 - [x] 3.2 `facebook.py`: text/link/photo + permalink
 - [x] 3.3 `instagram.py`: image container, wait for FINISHED, publish, permalink
-- [ ] 3.4 `telegram.py`: assist message (media + caption), no token in errors
+- [x] 3.4 `telegram.py`: assist message (media + caption), no token in errors
 
 ### Phase 4: Runner
 - [ ] 4.1 `selector.py`: due / missed / exhausted / stale
