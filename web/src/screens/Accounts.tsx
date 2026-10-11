@@ -119,7 +119,6 @@ export default function Accounts() {
               </div>
             </form>
           </section>
-          <button type="button" className="btn" onClick={() => supabase.auth.signOut()} style={{ alignSelf: 'flex-start' }}>Sign out</button>
         </aside>
       </div>
     </>

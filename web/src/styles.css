@@ -100,6 +100,16 @@ body:has(.auth)::before { background: radial-gradient(circle, rgba(255, 255, 255
 .island a:active, .island button:active { transform: scale(0.97); }
 .island a[aria-current='page'] { background: var(--ink); color: #fff; font-weight: 500; }
 .island .brand { color: var(--ink); font-weight: 600; font-size: 15px; letter-spacing: -0.01em; padding-left: 10px; }
+/* Sign out: set apart by a divider at the end of the nav; armed (first tap) it turns amber and asks again. */
+.island .signout {
+  position: relative; margin-left: 13px; color: var(--ink-2);
+  background: rgba(255, 255, 255, 0.72); box-shadow: inset 0 0 0 1px rgba(21, 23, 27, 0.14);
+}
+.island .signout::before {
+  content: ''; position: absolute; left: -9px; top: 12px; bottom: 12px; width: 1px; background: rgba(21, 23, 27, 0.14);
+}
+.island .signout-short { display: none; }
+.island .signout.armed { background: var(--warn-tint); color: var(--warn-ink); box-shadow: inset 0 0 0 1px rgba(181, 71, 8, 0.3); }
 
 /* Headings */
 .hero { display: flex; flex-direction: column; gap: 20px; max-width: 760px; }
@@ -339,6 +349,8 @@ button.chip:active { transform: scale(0.96); }
 /* Hover only where a real pointer exists: taps on phones would leave these stuck on. */
 @media (hover: hover) and (pointer: fine) {
   .island a:not([aria-current='page']):hover, .island button:hover { background: rgba(21, 23, 27, 0.05); }
+  .island .signout:not(.armed):hover { background: #fff; color: var(--ink); }
+  .island .signout.armed:hover { background: var(--warn-tint); }
   .row:hover { background: #f7f7f3; }
   .btn:not(:disabled):hover .knob { transform: translate(2px, -1px); }
   .step:not(:disabled):hover { background: #fafaf7; }
@@ -410,8 +422,14 @@ button.chip:active { transform: scale(0.96); }
     top: auto; flex-wrap: nowrap; justify-content: space-between;
   }
   .island .brand { display: none; }
+  /* Phone: an icon at the end of the tab bar; armed it asks "Sure?". Room comes from dropping New post's knob. */
+  .island .signout { flex: none; gap: 6px; padding: 0 13px; margin-left: 9px; }
+  .island .signout::before { left: -7px; }
+  .island .signout:not(.armed) .signout-text, .island .signout-long { display: none; }
+  .island .signout-short { display: inline; }
+  .island .btn.primary .knob { display: none; }
   .island a { flex: 1; justify-content: center; padding: 0 10px; }
-  .island .btn.primary { flex: 1.4; padding-right: 4px; }
+  .island .btn.primary { flex: 1.4; padding: 0 12px; white-space: nowrap; }
   .filters { scrollbar-width: none; align-self: stretch; }
   .row {
     grid-template-columns: 56px minmax(0, 1fr); grid-template-areas: 'thumb time' 'thumb body' 'pill pill';

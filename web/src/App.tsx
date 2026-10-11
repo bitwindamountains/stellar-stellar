@@ -1,6 +1,6 @@
 import type { Session } from '@supabase/supabase-js'
-import { useEffect, useState } from 'react'
-import { Logo, Plus } from './icons'
+import { useEffect, useRef, useState } from 'react'
+import { Exit, Logo, Plus } from './icons'
 import { useRoute } from './route'
 import Accounts from './screens/Accounts'
 import Composer from './screens/Composer'
@@ -54,6 +54,7 @@ export default function App() {
             style={{ color: '#fff', minHeight: 44 }}>
             New post<span className="knob"><Plus /></span>
           </a>
+          <SignOut />
         </nav>
         {screen === 'new' && <Composer />}
         {screen === 'edit' && id && <Composer num={Number(id)} />}
@@ -61,5 +62,29 @@ export default function App() {
         {screen === '' && <Queue />}
       </div>
     </div>
+  )
+}
+
+// Visible but hard to hit by accident: set apart at the end of the nav, and it takes two taps. The first
+// arms it for 3 s; a second tap within 0.4 s (a double-tap slip) is ignored.
+function SignOut() {
+  const [armedAt, setArmedAt] = useState(0)
+  const timer = useRef(0)
+  useEffect(() => () => clearTimeout(timer.current), [])
+  function click() {
+    if (!armedAt) {
+      setArmedAt(Date.now())
+      timer.current = window.setTimeout(() => setArmedAt(0), 3000)
+    } else if (Date.now() - armedAt > 400) {
+      clearTimeout(timer.current)
+      supabase.auth.signOut()
+    }
+  }
+  return (
+    <button type="button" className={armedAt ? 'signout armed' : 'signout'} onClick={click}
+      aria-label={armedAt ? 'Tap again to sign out' : 'Sign out'}>
+      <Exit />
+      <span className="signout-text" aria-live="polite">{armedAt ? <><span className="signout-long">Tap again to sign out</span><span className="signout-short">Sure?</span></> : 'Sign out'}</span>
+    </button>
   )
 }
