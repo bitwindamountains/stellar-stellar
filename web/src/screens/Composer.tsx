@@ -192,7 +192,6 @@ export default function Composer({ num }: { num?: number }) {
   if (accounts.length === 0 && !error) {
     return (
       <section className="hero rise">
-        <span className="eyebrow">First things first</span>
         <h1>Add an account</h1>
         <p>Posts belong to an account: your Facebook Page and Instagram, or just your phone for by-hand platforms.</p>
         <a className="btn primary" href="#/accounts" style={{ alignSelf: 'flex-start' }}>Add account<span className="knob"><Arrow /></span></a>
@@ -210,8 +209,7 @@ export default function Composer({ num }: { num?: number }) {
   return (
     <>
       <header className="hero rise">
-        <span className="eyebrow">{num ? `Post #${num}` : 'One post · every platform'}</span>
-        <h1>{num ? 'Edit post' : 'Write it once'}</h1>
+        <h1>{num ? `Edit post #${num}` : 'Write it once'}</h1>
         <p>Pick where it goes. PostPilot checks it now, not at post time.</p>
         {restored?.note && <p className="notice" role="status" style={{ fontSize: 14 }}>{restored.note}</p>}
         {restored && (restored.caption || restored.mediaUrl) && (
@@ -223,18 +221,17 @@ export default function Composer({ num }: { num?: number }) {
             </button>
           </p>
         )}
+        {locked && <p className="notice" role="status">This post is being published right now. Edit it after the run finishes.</p>}
+        {post?.last_error && <p className="notice" role="status">{post.last_error}</p>}
+        {post && (
+          <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 10 }}>
+            {post.fb_permalink && <a className="btn light" href={post.fb_permalink} target="_blank" rel="noopener">View on Facebook<span className="knob"><Arrow /></span></a>}
+            {post.ig_permalink && <a className="btn light" href={post.ig_permalink} target="_blank" rel="noopener">View on Instagram<span className="knob"><Arrow /></span></a>}
+            <button type="button" className="btn" onClick={postAgain}>Post again</button>
+          </div>
+        )}
+        {error && <p className="notice" role="alert">{error}</p>}
       </header>
-
-      {locked && <p className="notice" role="status">This post is being published right now. Edit it after the run finishes.</p>}
-      {post?.last_error && <p className="notice" role="status">{post.last_error}</p>}
-      {post && (
-        <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 10 }}>
-          {post.fb_permalink && <a className="btn light" href={post.fb_permalink} target="_blank" rel="noopener">View on Facebook<span className="knob"><Arrow /></span></a>}
-          {post.ig_permalink && <a className="btn light" href={post.ig_permalink} target="_blank" rel="noopener">View on Instagram<span className="knob"><Arrow /></span></a>}
-          <button type="button" className="btn" onClick={postAgain}>Post again</button>
-        </div>
-      )}
-      {error && <p className="notice" role="alert">{error}</p>}
 
       <form className="split" onSubmit={(e) => { e.preventDefault(); save('scheduled') }}
         onKeyDown={(e) => {
@@ -256,7 +253,7 @@ export default function Composer({ num }: { num?: number }) {
         <section className="main tray rise" aria-label="Post">
           <fieldset className="core" disabled={locked} style={{ gap: 28, border: 0, margin: 0, minWidth: 0 }}>
             <div className="field" style={{ gap: 12 }}>
-              <div role="group" aria-label="Edit the text for" className="filters" style={{ alignSelf: 'flex-start', flexWrap: 'wrap', borderRadius: 22 }}>
+              <div role="group" aria-label="Edit the text for" className="filters" style={{ alignSelf: 'flex-start', maxWidth: '100%' }}>
                 <button type="button" aria-pressed={editing === 'all'} onClick={() => setTab('all')}>All platforms</button>
                 {platforms.map((p) => (
                   <button key={p} type="button" aria-pressed={editing === p} onClick={() => setTab(p)}>
@@ -266,7 +263,7 @@ export default function Composer({ num }: { num?: number }) {
               </div>
               {editing === 'all' ? (
                 <>
-                  <span style={{ display: 'flex', justifyContent: 'space-between', gap: 12 }}>
+                  <span style={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'space-between', gap: '4px 12px' }}>
                     <label htmlFor="caption">Caption <span style={{ fontWeight: 400, color: 'var(--muted)' }}>· used everywhere unless a platform overrides it</span></label>
                     <span className="mono" aria-live="polite">{caption.length.toLocaleString('en')} chars · {hashtagCount(caption)} hashtags</span>
                   </span>
@@ -399,7 +396,7 @@ export default function Composer({ num }: { num?: number }) {
           {platforms.length > 0 && (
             <section className="tray rise">
               <div className="core dark">
-                <span className="eyebrow" style={{ background: 'rgba(255,255,255,0.1)', color: '#fff' }}>{mode === 'now' ? 'When you post' : `At ${when}`}</span>
+                <h2 style={{ color: '#fff' }}>{mode === 'now' ? 'When you post' : `At ${when}`}</h2>
                 <ol style={{ listStyle: 'none', margin: 0, padding: 0 }}>
                   {plan.map(({ p, text }, i) => (
                     <li key={p} style={{ display: 'flex', gap: 16, padding: '14px 0', borderTop: i ? '1px solid rgba(255,255,255,0.08)' : 0 }}>
@@ -431,7 +428,7 @@ function PlatformText({ p, base, variants, set }: {
     <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
       {p === 'youtube' && (
         <div className="field">
-          <span style={{ display: 'flex', justifyContent: 'space-between', gap: 12 }}>
+          <span style={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'space-between', gap: '4px 12px' }}>
             <label htmlFor="v-title">YouTube title</label>
             <span className="mono">{(v.title ?? '').length} / {YOUTUBE_TITLE_MAX}</span>
           </span>
@@ -439,7 +436,7 @@ function PlatformText({ p, base, variants, set }: {
         </div>
       )}
       <div className="field">
-        <span style={{ display: 'flex', justifyContent: 'space-between', gap: 12 }}>
+        <span style={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'space-between', gap: '4px 12px' }}>
           <label htmlFor="v-caption">Caption for {PLATFORM_NAMES[p]} <span style={sub}>· empty = main caption</span></label>
           <span className="mono" aria-live="polite">{text.length.toLocaleString('en')}{limit} · {hashtagCount(text)} hashtags</span>
         </span>

@@ -64,7 +64,6 @@ export default function Queue() {
     <>
       <header className="hero rise" style={{ maxWidth: 'none', flexDirection: 'row', flexWrap: 'wrap', alignItems: 'flex-end', justifyContent: 'space-between', gap: 32 }}>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 20, maxWidth: 720 }}>
-          <span className="eyebrow">Your posts</span>
           <h1>Your queue</h1>
           <p>Facebook and Instagram post themselves. TikTok, YouTube and your personal profile come to your phone ready to share.</p>
         </div>
@@ -143,7 +142,6 @@ export default function Queue() {
         <aside className="side" aria-label="Status">
           <section className="tray rise">
             <div className="core dark">
-              <span className="eyebrow" style={{ background: 'rgba(255,255,255,0.1)', color: '#fff' }}>Needs you</span>
               <h2 style={{ fontSize: 24, letterSpacing: '-0.02em' }}>
                 {attention.length === 0 ? 'All clear' : `${attention.length} thing${attention.length === 1 ? '' : 's'} to check`}
               </h2>

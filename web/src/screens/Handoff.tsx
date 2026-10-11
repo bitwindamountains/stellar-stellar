@@ -85,15 +85,14 @@ export default function Handoff({ num }: { num: number }) {
     go('/')
   }
 
-  const n = (i: string) => <span className="mono" style={{ width: 28 }}>{i}</span>
 
   return (
     <Frame>
       <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-        <span className="eyebrow" style={{ background: 'var(--accent-tint)', color: 'var(--accent-ink)' }}>
-          {post.assist_done_at ? 'Done' : 'Post by hand'}
-        </span>
         <h1 style={{ margin: 0, fontSize: 34, lineHeight: 1.02, fontWeight: 600, letterSpacing: '-0.035em' }}>Post to {names || 'your apps'}</h1>
+        <p style={{ margin: 0, fontSize: 15, color: post.assist_done_at ? 'var(--accent-ink)' : 'var(--muted)' }}>
+          {post.assist_done_at ? 'Marked as posted.' : 'Share it from your phone, then tap I posted it.'}
+        </p>
       </div>
 
       <div className="tray">
@@ -105,7 +104,7 @@ export default function Handoff({ num }: { num: number }) {
       </div>
 
       <ol style={{ listStyle: 'none', margin: 0, padding: 0, display: 'flex', flexDirection: 'column', gap: 8 }}>
-        {media && <li><button type="button" className="step" onClick={shareMedia} disabled={sharing}>{n('01')}{sharing ? 'Preparing…' : `Share ${post.media_type}`}</button></li>}
+        {media && <li><button type="button" className="step" onClick={shareMedia} disabled={sharing}>{sharing ? 'Preparing…' : `Share ${post.media_type}`}</button></li>}
         {targets.map((p) => (
           <li key={p} style={{ display: 'flex', flexDirection: 'column', gap: 8, paddingTop: 8 }}>
             <span className="mono" style={{ paddingLeft: 4 }}>{PLATFORM_NAMES[p].toUpperCase()}</span>

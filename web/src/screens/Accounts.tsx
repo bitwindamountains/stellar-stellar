@@ -62,7 +62,6 @@ export default function Accounts() {
   return (
     <>
       <header className="hero rise">
-        <span className="eyebrow">Where posts go</span>
         <h1>Accounts</h1>
         <p>One account per brand. Tokens never live here: the publisher reads them from GitHub secrets by name.</p>
       </header>
@@ -76,7 +75,7 @@ export default function Accounts() {
               <ul className="rows" style={{ paddingTop: 16 }}>
                 {accounts.map((a) => (
                   <li key={a.id}>
-                    <button type="button" className="row" onClick={() => edit(a)}
+                    <button type="button" className="row simple" onClick={() => edit(a)}
                       style={{ width: '100%', border: 0, background: editing === a.id ? '#f7f7f3' : 'transparent', textAlign: 'left', cursor: 'pointer' }}>
                       <span style={{ flex: '1 1 200px', display: 'flex', flexDirection: 'column', gap: 6 }}>
                         <span style={{ fontSize: 16, fontWeight: 500 }}>{a.name}</span>
