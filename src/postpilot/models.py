@@ -80,3 +80,26 @@ class Post:
         if platform in ID_COLUMN:
             return bool(self.get(ID_COLUMN[platform]))
         return bool(self.get("tg_message_id"))
+
+
+@dataclass(frozen=True)
+class PublishResult:
+    id: str
+    permalink: str
+
+
+class PlatformError(Exception):
+    """kind: auth | rate | transient | permanent | unknown.
+
+    `unknown` means a publish call got no clear answer: it may have posted, so never retry automatically.
+    """
+
+    RETRYABLE = ("rate", "transient")
+
+    def __init__(self, kind: str, message: str):
+        super().__init__(message)
+        self.kind = kind
+
+    @property
+    def retryable(self) -> bool:
+        return self.kind in self.RETRYABLE
