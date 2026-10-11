@@ -93,7 +93,7 @@ Decision (2026-10-11): replace the Google Sheet with Supabase; free-tier stack.
 - **No router or PWA libraries.** Hash routing and a hand-written service worker are a few lines each.
 
 ### Tasks
-- [ ] 10.1 `supabase/migrations/0001_init.sql`: accounts, posts, runs, RLS, storage bucket + policies
+- [x] 10.1 `supabase/migrations/0001_init.sql`: accounts, posts, runs, RLS, storage bucket + policies
 - [ ] 10.2 `supabase_repo.py`: load/write over PostgREST with httpx; type conversion to/from Post cells; tests
 - [ ] 10.3 Config + CLI switch to Supabase when `SUPABASE_URL` is set; publisher writes a `runs` row
 - [ ] 10.4 `web/` scaffold: Vite React TS, Supabase client, sign-in, hash routes, design tokens from the mockup
