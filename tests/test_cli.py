@@ -80,3 +80,12 @@ def test_publish_dry_run_reports_without_writing(monkeypatch):
     result = invoke(monkeypatch, ["publish", "--dry-run"], repo)
     assert repo.writes == []
     assert "row 2: missed" in result.output and result.exit_code == 1
+
+
+def test_real_publish_outside_github_needs_local_flag(monkeypatch):
+    monkeypatch.delenv("GITHUB_ACTIONS", raising=False)
+    repo = FakeRepository([], ACCOUNTS)
+    result = invoke(monkeypatch, ["publish"], repo)
+    assert result.exit_code == 2 and "--local" in result.output and repo.writes == []
+    result = invoke(monkeypatch, ["publish", "--local"], repo)
+    assert result.exit_code == 0

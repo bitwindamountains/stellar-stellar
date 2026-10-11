@@ -1,3 +1,4 @@
+import os
 from datetime import UTC, datetime
 
 import httpx
@@ -72,8 +73,12 @@ def validate_command() -> None:
 @app.command()
 def publish(
     dry_run: bool = typer.Option(False, "--dry-run", help="Show what would happen; change nothing."),
+    local: bool = typer.Option(False, "--local", help="Allow a real publish outside GitHub Actions."),
 ) -> None:
     """Publish due posts. Exit 1 if any row failed or was missed (GitHub then emails you)."""
+    # A laptop run overlapping a scheduled run could post the same row twice.
+    if not dry_run and not local and not os.environ.get("GITHUB_ACTIONS"):
+        raise _fail("Real publish outside GitHub Actions: pause the schedule first, then add --local.")
     cfg = _config()
     repo = _repository(cfg)
     http = httpx.Client(timeout=30)
