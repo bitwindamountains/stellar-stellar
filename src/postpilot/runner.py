@@ -15,6 +15,7 @@ from postpilot.models import (
     PublishResult,
 )
 from postpilot.selector import select
+from postpilot.validation import validate
 
 Publisher = Callable[[Post, Account], PublishResult]
 Assist = Callable[[Post, list[str]], str]
@@ -23,6 +24,9 @@ Assist = Callable[[Post, list[str]], str]
 class Repository(Protocol):
     def load(self) -> tuple[list[Post], dict[str, Account]]: ...
     def write(self, updates: dict[int, dict[str, str]]) -> None: ...
+    def claim(self, claims: dict[int, dict[str, str]]) -> dict[int, Post]:
+        """Set rows to `posting` only if still scheduled/partial; return the claimed rows as stored now."""
+        ...
 
 
 @dataclass
@@ -44,6 +48,7 @@ def run(
 ) -> Report:
     report = Report()
     stamp = now.isoformat(timespec="seconds")
+    claim = repo.claim
     if dry_run:
         write = lambda updates: None  # noqa: E731
         publishers = {name: (lambda post, account: PublishResult("dry-run", "")) for name in publishers}
@@ -78,15 +83,33 @@ def run(
     for post, errors in s.invalid:
         updates[post.row] = {"status": "failed", "last_error": "; ".join(errors)}
     report.failed += [p.row for p in s.exhausted + s.stale] + [p.row for p, _ in s.invalid]
+    if updates:
+        write(updates)
+
+    claims = {}
     for post in s.due:
         attempts = str(int(post.get("attempts") or 0) + 1)
-        updates[post.row] = {"status": "posting", "attempts": attempts, "claimed_at": stamp, "last_error": ""}
-        post.cells["attempts"] = attempts
-    write(updates)
+        claims[post.row] = {"status": "posting", "attempts": attempts, "claimed_at": stamp, "last_error": ""}
+    if dry_run:
+        claimed = {p.row: p for p in s.due}
+    else:
+        claimed = claim(claims) if claims else {}
 
     for post in s.due:
+        # The app may have edited or deleted the post since loading: publish what's stored now, or nothing.
+        fresh = claimed.get(post.row)
+        if fresh is None:
+            report.lines.append(f"row {post.row}: skipped: changed or deleted while the run started")
+            continue
+        errors = validate(fresh, accounts)
+        if errors:
+            failed = {"status": "failed", "last_error": "; ".join(errors)}
+            write({post.row: failed})
+            updates[post.row] = failed
+            report.failed.append(post.row)
+            continue
         _publish_row(
-            post, accounts[post.get("account")], publishers, assist, write, cfg, stamp, report, dry_run
+            fresh, accounts[fresh.get("account")], publishers, assist, write, cfg, stamp, report, dry_run
         )
     for row, fields in sorted(updates.items()):
         if fields["status"] in ("missed", "failed"):

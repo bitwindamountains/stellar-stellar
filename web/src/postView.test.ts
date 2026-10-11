@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { canRetry, chips, groupByDay, needsYou, statusLabel, weekStrip } from './postView'
+import { canRetry, chips, groupByDay, mediaWasRemoved, mergePosts, needsYou, statusLabel, weekStrip } from './postView'
 import type { Post } from './types'
 
 function post(over: Partial<Post>): Post {
@@ -75,5 +75,20 @@ describe('weekStrip', () => {
     expect(strip.map((d) => d.count)).toEqual([2, 0, 0, 0, 0, 0, 1])
     expect(strip[0].label).toBe('Today')
     expect(strip.map((d) => d.date)).toEqual([5, 6, 7, 8, 9, 10, 11])
+  })
+})
+
+describe('mediaWasRemoved', () => {
+  it('is true only when a post with media has no link left', () => {
+    expect(mediaWasRemoved(post({ media_type: 'video', media_urls: [] }))).toBe(true)
+    expect(mediaWasRemoved(post({ media_type: 'video', media_urls: ['https://x/a.mp4'] }))).toBe(false)
+    expect(mediaWasRemoved(post({ media_type: 'none', media_urls: [] }))).toBe(false)
+  })
+})
+
+describe('mergePosts', () => {
+  it('keeps one copy of each post across queries and tolerates failed queries', () => {
+    const merged = mergePosts([post({ num: 1 }), post({ num: 2 })], null, [post({ num: 2, status: 'failed' }), post({ num: 9 })])
+    expect(merged.map((p) => p.num).sort()).toEqual([1, 2, 9])
   })
 })

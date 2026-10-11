@@ -38,6 +38,22 @@ describe('validate (mirrors validation.py)', () => {
     expectError({ platforms: ['youtube'], mediaType: 'video', mediaUrls: ['https://x/a.mp4'], variants: { youtube: { title: 'x'.repeat(101) } } }, 'YouTube titles')
     expect(validate(draft({ caption: '', variants: { facebook: { hashtags: '#kape' } } }), true)).toEqual([])
   })
+  it('Instagram rejects PNG/WebP links, Facebook accepts them', () => {
+    expectError({ platforms: ['instagram'], mediaType: 'image', mediaUrls: ['https://x/a.png'] }, 'JPEG')
+    expectError({ platforms: ['instagram'], mediaType: 'image', mediaUrls: ['https://x/a.WEBP?v=1'] }, 'JPEG')
+    expectError({ platforms: ['instagram'], mediaType: 'image', mediaUrls: ['https://x/a.png#preview'] }, 'JPEG')
+    expectError({ platforms: ['instagram'], mediaType: 'image', mediaUrls: ['https://x/a.HEIC'] }, 'JPEG')
+    expect(validate(draft({ platforms: ['instagram'], mediaType: 'image', mediaUrls: ['https://x/a.jpeg'] }), true)).toEqual([])
+    expect(validate(draft({ mediaType: 'image', mediaUrls: ['https://x/a.png'] }), true)).toEqual([])
+  })
+  it('Telegram limit counts the whole message (mirrors validation.py)', () => {
+    const video = { platforms: ['youtube'] as ['youtube'], mediaType: 'video' as const, mediaUrls: ['https://x/a.mp4'] }
+    const title = { youtube: { title: 't'.repeat(100) } }
+    expect(validate(draft({ ...video, caption: 'x'.repeat(3800), variants: title }), true)).toEqual([])
+    expectError({ ...video, caption: 'x'.repeat(3990), variants: title }, 'shorten it by')
+    // Counted after Telegram parses HTML, so '&' is one character.
+    expect(validate(draft({ platforms: ['tiktok'], mediaType: 'video', mediaUrls: ['https://x/a.mp4'], caption: '&'.repeat(900) }), true)).toEqual([])
+  })
   it('drafts may skip the time', () => {
     expect(validate(draft({ publishAt: '' }), false)).toEqual([])
   })

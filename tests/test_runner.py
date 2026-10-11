@@ -156,3 +156,53 @@ def test_dry_run_writes_nothing_and_calls_nothing():
     report = run(repo, plats.publishers(), plats.assist, CFG, NOW, dry_run=True)
     assert repo.writes == [] and plats.calls == []
     assert report.posted == [2] and "would" in report.lines[0].lower()
+
+
+class EditedMidRun(FakeRepository):
+    """Simulates the app changing rows after the publisher loaded them but before it claimed them."""
+
+    def __init__(self, posts, accounts, change):
+        super().__init__(posts, accounts)
+        self.change = change
+
+    def claim(self, claims):
+        self.change(self)
+        return super().claim(claims)
+
+
+def test_claim_uses_content_edited_after_load():
+    def edit(repo):
+        repo.posts[1][repo.posts[0].index("caption")] = "edited caption"
+
+    repo = EditedMidRun([row()], ACCOUNTS, edit)
+    seen = []
+    plats = Platforms(facebook=[PublishResult("F1", "")])
+    publishers = {
+        "facebook": lambda post, account: seen.append(post.text_for("facebook")) or PublishResult("F1", "")
+    }
+    run(repo, publishers, plats.assist, CFG, NOW)
+    assert seen == ["edited caption"]
+    assert repo.row(2)["status"] == "posted"
+
+
+def test_post_deleted_or_unscheduled_after_load_is_not_published():
+    def unschedule(repo):
+        repo.posts[1][repo.posts[0].index("status")] = "draft"  # what a delete or edit-to-draft looks like
+
+    repo = EditedMidRun([row()], ACCOUNTS, unschedule)
+    plats = Platforms(facebook=[PublishResult("F1", "")])
+    report = go(repo, plats)
+    assert plats.calls == []
+    assert repo.row(2)["status"] == "draft"
+    assert any("changed" in line for line in report.lines)
+
+
+def test_post_made_invalid_after_load_fails_instead_of_publishing():
+    def break_it(repo):
+        repo.posts[1][repo.posts[0].index("platforms")] = "instagram"  # no image: invalid for Instagram
+
+    repo = EditedMidRun([row()], ACCOUNTS, break_it)
+    plats = Platforms()
+    go(repo, plats)
+    assert plats.calls == []
+    assert repo.row(2)["status"] == "failed" and "Instagram needs an image" in repo.row(2)["last_error"]

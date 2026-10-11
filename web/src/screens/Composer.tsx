@@ -2,6 +2,8 @@ import { useEffect, useState } from 'react'
 import { cleanVariants, isCustomized, textFor, type Variant, type Variants } from '../content'
 import { Alert, Arrow, Check } from '../icons'
 import { publishSoon } from '../actions'
+import { toJpeg } from '../media'
+import { mediaWasRemoved } from '../postView'
 import { takeShared } from '../share'
 import { loadDefaults, loadDraft, rememberChoices, saveDraft } from '../prefs'
 import { go } from '../route'
@@ -12,6 +14,8 @@ import { hashtagCount, IG_CAPTION_MAX, validate, YOUTUBE_TITLE_MAX } from '../va
 
 const ACCEPT = 'image/jpeg,image/png,image/webp,video/mp4,video/quicktime'
 const MAX_BYTES = 50 * 1024 * 1024 // matches the bucket's file_size_limit
+const PUBLISHING_NOW = 'This post is being published right now. Try again in a minute, after the run finishes.'
+
 
 export default function Composer({ num }: { num?: number }) {
   const [restored] = useState(() => (num ? null : loadDraft()))
@@ -37,7 +41,10 @@ export default function Composer({ num }: { num?: number }) {
 
   useEffect(() => {
     supabase.from('accounts').select('*').order('name').then(({ data, error }) => {
-      if (error) return setError(error.message)
+      if (error) {
+        setAccounts([]) // leave the loading state so the error is shown instead of a blank screen
+        return setError(`Couldn't load your accounts: ${error.message}. Reload to try again.`)
+      }
       const list = (data as Account[]) ?? []
       setAccounts(list)
       if (!num && list.length) {
@@ -99,9 +106,17 @@ export default function Composer({ num }: { num?: number }) {
   }
 
   async function upload(file: File) {
-    if (file.size > MAX_BYTES) return setError('Files over 50 MB are too big for the free plan; shrink it first')
-    setBusy('upload')
+    setBusy('upload') // lock saving now: converting a big image can take a moment
     setError('')
+    // A new post switches to the platforms remembered for this media type, so decide with those.
+    const kind = file.type.startsWith('video/') ? 'video' : 'image'
+    const remembered = num ? undefined : loadDefaults().platformsByMedia?.[kind]
+    // Only Instagram needs JPEG; other platforms keep the original (and its transparency).
+    if ((remembered ?? platforms).includes('instagram')) file = await toJpeg(file)
+    if (file.size > MAX_BYTES) {
+      setBusy('')
+      return setError('Files over 50 MB are too big for the free plan; shrink it first')
+    }
     const { data: auth } = await supabase.auth.getUser()
     const ext = file.name.split('.').pop()?.toLowerCase() || 'bin'
     // Random name in the user's own folder: storage policies only allow that folder.
@@ -110,13 +125,12 @@ export default function Composer({ num }: { num?: number }) {
     setBusy('')
     if (error) return setError(error.message)
     setMediaUrl(supabase.storage.from('media').getPublicUrl(path).data.publicUrl)
-    const type = file.type.startsWith('video/') ? 'video' : 'image'
-    setMediaType(type)
-    const remembered = loadDefaults().platformsByMedia?.[type]
-    if (!num && remembered) setPlatforms(remembered)
+    setMediaType(kind)
+    if (remembered) setPlatforms(remembered)
   }
 
   async function save(status: 'draft' | 'scheduled') {
+    if (busy) return // Ctrl+Enter skips the disabled buttons; never save mid-upload or twice
     setTried(true)
     const errors = validate(draft, status === 'scheduled' && mode === 'later')
     if (errors.length || !account) return
@@ -135,14 +149,17 @@ export default function Composer({ num }: { num?: number }) {
       // Rescheduling starts a fresh retry budget; filled platform IDs still stop any repost.
       ...(status === 'scheduled' ? { attempts: 0, last_error: '', claimed_at: null } : {}),
     }
-    const { error } = num
-      ? await supabase.from('posts').update(fields).eq('num', num).neq('status', 'posting')
-      : await supabase.from('posts').insert(fields)
-    if (!error && status === 'scheduled' && mode === 'now') {
+    // Never change a post the publisher has claimed; .select() reveals a zero-row update so it isn't silent.
+    const { data, error } = num
+      ? await supabase.from('posts').update(fields).eq('num', num).neq('status', 'posting').select('num')
+      : await supabase.from('posts').insert(fields).select('num')
+    const conflict = !error && data?.length === 0
+    if (!error && !conflict && status === 'scheduled' && mode === 'now') {
       await publishSoon()
     }
     setBusy('')
     if (error) return setError(error.message)
+    if (conflict) return setError(PUBLISHING_NOW)
     rememberChoices(account.id, mediaType, platforms)
     if (!num) saveDraft(null)
     go('/')
@@ -150,14 +167,23 @@ export default function Composer({ num }: { num?: number }) {
 
   // Copies the content into a fresh draft; the new post gets its own IDs, so it really posts again.
   function postAgain() {
-    saveDraft({ accountId: accountId || undefined, platforms, caption, variants, mediaType, mediaUrl, link, mode: 'now', publishAt: '' })
+    // An upload is removed once its by-hand post is marked done (see Handoff), so don't copy a dead link.
+    const gone = !!post && mediaWasRemoved(post)
+    saveDraft({
+      accountId: accountId || undefined, platforms, caption, variants, link, mode: 'now', publishAt: '',
+      mediaType: gone ? 'none' : mediaType,
+      mediaUrl: gone ? '' : mediaUrl,
+      note: gone ? 'The original file was removed after you posted it by hand. Add it again.' : undefined,
+    })
     go('/new')
   }
 
   async function remove() {
     if (!num || !confirm('Delete this post? This cannot be undone.')) return
-    const { error } = await supabase.from('posts').delete().eq('num', num)
+    // If the publisher claimed it meanwhile, deleting would leave a live post with no record.
+    const { data, error } = await supabase.from('posts').delete().eq('num', num).neq('status', 'posting').select('num')
     if (error) return setError(error.message)
+    if (data.length === 0) return setError(PUBLISHING_NOW)
     go('/')
   }
 
@@ -187,6 +213,7 @@ export default function Composer({ num }: { num?: number }) {
         <span className="eyebrow">{num ? `Post #${num}` : 'One post · every platform'}</span>
         <h1>{num ? 'Edit post' : 'Write it once'}</h1>
         <p>Pick where it goes. PostPilot checks it now, not at post time.</p>
+        {restored?.note && <p className="notice" role="status" style={{ fontSize: 14 }}>{restored.note}</p>}
         {restored && (restored.caption || restored.mediaUrl) && (
           <p style={{ fontSize: 14 }}>
             Draft restored from last time.{' '}
