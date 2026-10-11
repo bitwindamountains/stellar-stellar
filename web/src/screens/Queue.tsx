@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { retryNow } from '../actions'
 import { Arrow } from '../icons'
-import { awaitingHandoff, canRetry, chips, groupByDay, needsYou, statusLabel, timeOf } from '../postView'
+import { awaitingHandoff, canRetry, chips, groupByDay, needsYou, statusLabel, timeOf, weekStrip } from '../postView'
 import { supabase } from '../supabase'
 import { isAssisted, PLATFORM_CODES, type Account, type Post, type Run } from '../types'
 
@@ -70,6 +70,27 @@ export default function Queue() {
       </header>
 
       {error && <p className="notice" role="alert">Couldn't load everything: {error}</p>}
+
+      {loaded && (
+        <nav aria-label="Next 7 days" className="week rise">
+          {weekStrip(posts).map((day) => {
+            const inner = (
+              <>
+                <span className="mono">{day.label.toUpperCase()}</span>
+                <span style={{ fontSize: 22, fontWeight: 600, letterSpacing: '-0.02em' }}>{day.date}</span>
+                <span style={{ fontSize: 12, color: day.count ? 'var(--ink-2)' : 'var(--warn-ink)' }}>
+                  {day.count ? `${day.count} post${day.count === 1 ? '' : 's'}` : 'Nothing yet'}
+                </span>
+              </>
+            )
+            return day.count ? (
+              <div key={day.key} className="week-day">{inner}</div>
+            ) : (
+              <a key={day.key} href="#/new" className="week-day empty-day" aria-label={`${day.label} ${day.date}: nothing planned, write a post`}>{inner}</a>
+            )
+          })}
+        </nav>
+      )}
 
       <div className="split">
         <section className="main tray rise" aria-label="Posts">

@@ -83,3 +83,25 @@ export function timeOf(iso: string | null): string {
 export function canRetry(post: Post): boolean {
   return ['failed', 'missed'].includes(post.status) && !/check|stopped/i.test(post.last_error)
 }
+
+/** Today and the next 6 days, with how many live posts each has (failed and missed don't count). */
+export function weekStrip(posts: Post[], now = new Date()) {
+  const today = dayStart(now)
+  return Array.from({ length: 7 }, (_, i) => {
+    const start = new Date(today)
+    start.setDate(start.getDate() + i) // calendar days, so DST shifts can't skip or repeat a day
+    const end = new Date(start)
+    end.setDate(end.getDate() + 1)
+    const count = posts.filter((p) => {
+      if (!p.publish_at || ['failed', 'missed'].includes(p.status)) return false
+      const t = new Date(p.publish_at).getTime()
+      return t >= start.getTime() && t < end.getTime()
+    }).length
+    return {
+      key: start.toISOString(),
+      label: i === 0 ? 'Today' : start.toLocaleDateString(undefined, { weekday: 'short' }),
+      date: start.getDate(),
+      count,
+    }
+  })
+}
