@@ -45,7 +45,7 @@ Each task: failing test, code, full suite + ruff green, one commit.
 - [x] 2.3 `init-sheet` command: tabs, headers, status/media dropdowns, `publish_at` format
 
 ### Phase 3: Platforms
-- [ ] 3.1 `graph.py`: pinned-version client, error classification, transient retry
+- [x] 3.1 `graph.py`: pinned-version client, error classification, transient retry
 - [ ] 3.2 `facebook.py`: text/link/photo + permalink
 - [ ] 3.3 `instagram.py`: image container, wait for FINISHED, publish, permalink
 - [ ] 3.4 `telegram.py`: assist message (media + caption), no token in errors
