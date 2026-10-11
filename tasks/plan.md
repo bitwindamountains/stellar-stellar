@@ -105,3 +105,22 @@ Decision (2026-10-11): replace the Google Sheet with Supabase; free-tier stack.
 - [x] 10.10 Delete uploaded media when you mark a by-hand post done (videos, the big files). Publisher-side image cleanup deferred: ~1 MB each
 - [ ] 10.11 Go live (needs you): ~~create Supabase project, apply migration~~ (done: existing project, RLS verified), disable sign-ups, deploy web to
   Cloudflare, add `SUPABASE_URL` / `SUPABASE_SERVICE_ROLE_KEY` secrets, retire the Sheet
+
+## Phase 11: Usability round 1 (docs/ideas/usability-round-1.md)
+
+### Design decisions
+- **Variants are overrides, not copies.** `posts.variants` = `{platform: {caption?, hashtags?, title?}}`. The text
+  for a platform = its caption override or the base caption, then its hashtags line. Blank tabs cost nothing.
+- **Telegram sends each by-hand platform's text in a tap-to-copy block**, one message per distinct text.
+- **Post now = publish_at now + an optional immediate trigger.** Without the trigger it still goes out at the next
+  30-minute run, so it works before the repo is on GitHub.
+
+### Tasks
+- [ ] 11.1 `variants` column; publisher, validation, Telegram and Sheet path use per-platform text
+- [ ] 11.2 Composer platform tabs (caption override, hashtags, YouTube title) + handoff copy per platform
+- [ ] 11.3 Post now / Schedule toggle with time chips; Ctrl+Enter
+- [ ] 11.4 `dispatch` Supabase function that triggers the GitHub publish workflow (deploy needs the repo on GitHub)
+- [ ] 11.5 Sticky defaults, draft autosave, paste/drag media
+- [ ] 11.6 Post again, one-tap Retry/Reschedule, Open post links
+- [ ] 11.7 Android share target
+- [ ] 11.8 7-day strip on the Queue; Telegram nudge on empty days
