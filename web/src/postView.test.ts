@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { chips, groupByDay, needsYou, statusLabel } from './postView'
+import { canRetry, chips, groupByDay, needsYou, statusLabel } from './postView'
 import type { Post } from './types'
 
 function post(over: Partial<Post>): Post {
@@ -48,5 +48,15 @@ describe('groupByDay', () => {
     ], now)
     expect(groups.map((g) => g.label)).toEqual(['Today', 'Tomorrow', 'No date yet'])
     expect(groups[0].posts[0].num).toBe(1)
+  })
+})
+
+describe('canRetry', () => {
+  it('offers retry only when the post surely did not go out', () => {
+    expect(canRetry(post({ status: 'missed', last_error: 'Not posted: over 180 min late.' }))).toBe(true)
+    expect(canRetry(post({ status: 'failed', last_error: 'instagram: Meta rejected the post' }))).toBe(true)
+    expect(canRetry(post({ status: 'failed', last_error: 'No clear answer from Meta while publishing: check if it posted' }))).toBe(false)
+    expect(canRetry(post({ status: 'failed', last_error: 'Run stopped while posting. Check instagram' }))).toBe(false)
+    expect(canRetry(post({ status: 'scheduled' }))).toBe(false)
   })
 })
