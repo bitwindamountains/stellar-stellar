@@ -32,3 +32,5 @@ include = ["src/**/*.py", "tests/**/*.py"]
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP", "B"]
+[tool.pytest.ini_options]
+pythonpath = ["tests"]
