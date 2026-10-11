@@ -122,6 +122,8 @@ class SheetRepository:
         return posts_from_values(posts_values), accounts_from_values(account_values)
 
     def write(self, updates: dict[int, dict[str, str]]) -> None:
+        # ponytail: rows are addressed by number from load(); inserting/sorting rows mid-run would misplace
+        # results. Runs take seconds, so README asks users not to. Add a stable row id if that ever bites.
         # One request per write (Sheets quota is ~60/min); ranges carry the tab name so no metadata fetch.
         data = [{**d, "range": f"{POSTS_TAB}!{d['range']}"} for d in cell_updates(self.header, updates)]
         if data:

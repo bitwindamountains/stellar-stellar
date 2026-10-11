@@ -30,6 +30,12 @@ and `posted_at`. A filled ID means that platform is done for that row and is nev
 If a row ends up `failed` with "check if it posted", look at the platform first. Only reschedule it if the post
 is missing.
 
+**Two rules that keep posts from doubling or landing in the wrong row:**
+- Never run `publish` (without `--dry-run`) on your laptop while the GitHub schedule is on. Two runs at the
+  same time can both post the same row.
+- Add new posts at the bottom. Don't insert, delete or sort rows in the minute around :07 and :37, when a run is
+  writing results back by row number.
+
 ## Go-live setup
 1. **Google**: create a service account, download its JSON key, share the Sheet with its email (Editor).
 2. **Meta**: create a Business-type app in developer mode (no App Review needed for accounts where you have a
