@@ -50,7 +50,6 @@ export default function App() {
           <a href="#/" className="brand"><Logo />PostPilot</a>
           <a href="#/" aria-current={screen === '' ? 'page' : undefined}>Queue</a>
           <a href="#/accounts" aria-current={screen === 'accounts' ? 'page' : undefined}>Accounts</a>
-          <button type="button" className="desktop-only" onClick={() => supabase.auth.signOut()}>Sign out</button>
           <a href="#/new" className="btn primary" aria-current={screen === 'new' ? 'page' : undefined}
             style={{ color: '#fff', minHeight: 44 }}>
             New post<span className="knob"><Plus /></span>
