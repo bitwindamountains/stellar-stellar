@@ -7,6 +7,26 @@ export const Logo = () => (
     <path d="m10.9 14.1 4.6-4.6" />
   </svg>
 )
+// Decorative flight path for the night-sky headers (.sky in styles.css): a dashed route, a contrail that
+// travels along it, and the logo plane landing at the end.
+const ROUTE = 'M8 212C120 200 196 120 300 112S470 40 552 22'
+export const FlightPath = () => (
+  <svg className="flight" viewBox="0 0 560 230" fill="none" aria-hidden="true" focusable="false">
+    <path d={ROUTE} stroke="rgba(255,255,255,0.28)" strokeWidth="1.2" strokeDasharray="2 7" strokeLinecap="round" />
+    <path className="contrail" d={ROUTE} pathLength={100} stroke="url(#contrail)" strokeWidth="2" strokeLinecap="round" />
+    <circle cx="8" cy="212" r="4" fill="#0f1326" stroke="rgba(255,255,255,0.6)" strokeWidth="1.2" />
+    <g transform="translate(540 8) rotate(8)" stroke="#fff" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M3 11.5 21 4l-7.5 18-2.6-7.9L3 11.5Z" fill="rgba(255,255,255,0.12)" />
+      <path d="m10.9 14.1 4.6-4.6" />
+    </g>
+    <defs>
+      <linearGradient id="contrail" x1="0" y1="0" x2="1" y2="0">
+        <stop offset="0" stopColor="#f2a477" stopOpacity="0" />
+        <stop offset="1" stopColor="#ffd9c2" />
+      </linearGradient>
+    </defs>
+  </svg>
+)
 export const Plus = () => (
   <svg width="14" height="14" viewBox="0 0 24 24" strokeWidth={1.6} {...base} aria-hidden="true">
     <path d="M12 5v14M5 12h14" />

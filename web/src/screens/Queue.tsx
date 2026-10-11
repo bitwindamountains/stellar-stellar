@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { retryNow } from '../actions'
-import { Arrow } from '../icons'
+import { Arrow, FlightPath } from '../icons'
 import { awaitingHandoff, canRetry, chips, groupByDay, mergePosts, needsYou, statusLabel, timeOf, weekStrip } from '../postView'
 import { supabase } from '../supabase'
 import { isAssisted, PLATFORM_CODES, type Account, type Post, type Run } from '../types'
@@ -62,7 +62,7 @@ export default function Queue() {
 
   return (
     <>
-      <header className="hero rise" style={{ maxWidth: 'none', flexDirection: 'row', flexWrap: 'wrap', alignItems: 'flex-end', justifyContent: 'space-between', gap: 32 }}>
+      <header className="hero sky rise" style={{ maxWidth: 'none', flexDirection: 'row', flexWrap: 'wrap', alignItems: 'flex-end', justifyContent: 'space-between', gap: 32 }}>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 20, maxWidth: 720 }}>
           <h1>Your queue</h1>
           <p>Facebook and Instagram post themselves. TikTok, YouTube and your personal profile come to your phone ready to share.</p>
@@ -72,6 +72,7 @@ export default function Queue() {
             <button key={key} type="button" aria-pressed={filter === key} onClick={() => setFilter(key)}>{label}</button>
           ))}
         </div>
+        <FlightPath />
       </header>
 
       {error && <p className="notice" role="alert">Couldn't load everything: {error}</p>}
