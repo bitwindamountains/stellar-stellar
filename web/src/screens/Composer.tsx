@@ -3,7 +3,7 @@ import { cleanVariants, isCustomized, textFor, type Variant, type Variants } fro
 import { Alert, Arrow, Check } from '../icons'
 import { publishSoon } from '../actions'
 import { toJpeg } from '../media'
-import { mediaWasRemoved as removedFrom } from '../postView'
+import { mediaWasRemoved } from '../postView'
 import { takeShared } from '../share'
 import { loadDefaults, loadDraft, rememberChoices, saveDraft } from '../prefs'
 import { go } from '../route'
@@ -16,9 +16,6 @@ const ACCEPT = 'image/jpeg,image/png,image/webp,video/mp4,video/quicktime'
 const MAX_BYTES = 50 * 1024 * 1024 // matches the bucket's file_size_limit
 const PUBLISHING_NOW = 'This post is being published right now. Try again in a minute, after the run finishes.'
 
-function mediaWasRemoved(post: Post): boolean {
-  return removedFrom(post, supabase.storage.from('media').getPublicUrl('').data.publicUrl)
-}
 
 export default function Composer({ num }: { num?: number }) {
   const [restored] = useState(() => (num ? null : loadDraft()))
@@ -109,10 +106,14 @@ export default function Composer({ num }: { num?: number }) {
   }
 
   async function upload(file: File) {
-    file = await toJpeg(file) // Instagram only accepts JPEG
-    if (file.size > MAX_BYTES) return setError('Files over 50 MB are too big for the free plan; shrink it first')
-    setBusy('upload')
+    setBusy('upload') // lock saving now: converting a big image can take a moment
     setError('')
+    // Only Instagram needs JPEG; other platforms keep the original (and its transparency).
+    if (platforms.includes('instagram')) file = await toJpeg(file)
+    if (file.size > MAX_BYTES) {
+      setBusy('')
+      return setError('Files over 50 MB are too big for the free plan; shrink it first')
+    }
     const { data: auth } = await supabase.auth.getUser()
     const ext = file.name.split('.').pop()?.toLowerCase() || 'bin'
     // Random name in the user's own folder: storage policies only allow that folder.
@@ -128,6 +129,7 @@ export default function Composer({ num }: { num?: number }) {
   }
 
   async function save(status: 'draft' | 'scheduled') {
+    if (busy) return // Ctrl+Enter skips the disabled buttons; never save mid-upload or twice
     setTried(true)
     const errors = validate(draft, status === 'scheduled' && mode === 'later')
     if (errors.length || !account) return

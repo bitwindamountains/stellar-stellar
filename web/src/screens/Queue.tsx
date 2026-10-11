@@ -24,8 +24,11 @@ export default function Queue() {
       supabase.from('accounts').select('*').order('name'),
       supabase.from('runs').select('*').order('ran_at', { ascending: false }).limit(1),
       // Unresolved posts stay visible however old, so a failure can't quietly drop out of "Needs you".
-      supabase.from('posts').select('*').in('status', ['failed', 'missed', 'partial', 'posting']).limit(100),
-      supabase.from('posts').select('*').neq('tg_message_id', '').is('assist_done_at', null).limit(100),
+      // Newest first up to 1,000 (Supabase's default row cap); a personal queue won't get near that.
+      supabase.from('posts').select('*').in('status', ['failed', 'missed', 'partial', 'posting'])
+        .order('publish_at', { ascending: false }).limit(1000),
+      supabase.from('posts').select('*').neq('tg_message_id', '').is('assist_done_at', null)
+        .order('publish_at', { ascending: false }).limit(1000),
     ]).then(([p, a, r, unresolved, handoffs]) => {
       const failed = p.error ?? a.error ?? r.error ?? unresolved.error ?? handoffs.error
       if (failed) setError(failed.message)
