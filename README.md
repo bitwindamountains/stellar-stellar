@@ -64,3 +64,8 @@ The app in `web/` replaces the Sheet. The publisher switches to Supabase when `S
 3. **Publisher**: add GitHub secrets `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY` and variable `WEB_APP_URL`.
    The service-role key bypasses all access rules: keep it only in GitHub secrets, never in `web/`.
 4. On your phone, open the app and use "Add to Home Screen".
+
+### "Post now" without the 30-minute wait (optional)
+Deploy `supabase/functions/dispatch` (JWT verification on) and set its secrets: `GITHUB_REPO` (`owner/name`) and
+`GITHUB_TOKEN`, a fine-grained token for this repo only with **Actions: read and write**. Without it, "Post now"
+still works; the post goes out at the next scheduled run.

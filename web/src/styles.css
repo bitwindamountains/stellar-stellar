@@ -223,3 +223,6 @@ textarea.input { min-height: 140px; line-height: 1.55; resize: vertical; }
   .rows { padding: 0 6px 10px; }
   .row { gap: 14px; padding: 14px; }
 }
+
+.sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+.chip[aria-pressed='true'] { background: var(--ink); color: #fff; box-shadow: none; }

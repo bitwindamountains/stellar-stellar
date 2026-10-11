@@ -3,7 +3,7 @@ import { cleanVariants, isCustomized, textFor, type Variant, type Variants } fro
 import { Alert, Arrow, Check } from '../icons'
 import { go } from '../route'
 import { supabase } from '../supabase'
-import { utcToZoned, zonedToUtc } from '../time'
+import { quickTimes, utcToZoned, zonedToUtc } from '../time'
 import { isAssisted, isDone, PLATFORM_CODES, PLATFORM_NAMES, PLATFORMS, type Account, type MediaType, type Platform, type Post } from '../types'
 import { hashtagCount, IG_CAPTION_MAX, validate, YOUTUBE_TITLE_MAX } from '../validation'
 
@@ -16,6 +16,8 @@ export default function Composer({ num }: { num?: number }) {
   const [accountId, setAccountId] = useState<number | ''>('')
   const [platforms, setPlatforms] = useState<Platform[]>(['facebook', 'instagram'])
   const [publishAt, setPublishAt] = useState('')
+  // Daily posting is the common case, so new posts default to going out now.
+  const [mode, setMode] = useState<'now' | 'later'>('now')
   const [caption, setCaption] = useState('')
   const [variants, setVariants] = useState<Variants>({})
   const [tab, setTab] = useState<'all' | Platform>('all')
@@ -45,6 +47,7 @@ export default function Composer({ num }: { num?: number }) {
       setAccountId(p.account_id)
       setPlatforms(p.platforms)
       setPublishAt(p.publish_at ? utcToZoned(p.publish_at, tz) : '')
+      setMode(p.publish_at && new Date(p.publish_at) > new Date() ? 'later' : 'now')
       setCaption(p.caption)
       setVariants((p.variants as Variants) ?? {})
       setMediaType(p.media_type)
@@ -56,9 +59,9 @@ export default function Composer({ num }: { num?: number }) {
   const account = accounts?.find((a) => a.id === accountId)
   const draft = { account, platforms, publishAt, caption, variants, mediaType, mediaUrls: mediaUrl ? [mediaUrl] : [], link }
   const editing = tab !== 'all' && platforms.includes(tab) ? tab : 'all' // a deselected platform's tab falls back
-  const problems = validate(draft, true)
+  const problems = validate(draft, mode === 'later')
   const locked = post?.status === 'posting'
-  const when = publishAt ? publishAt.slice(11, 16) : 'post time'
+  const when = mode === 'now' ? 'once posted' : publishAt ? publishAt.slice(11, 16) : 'post time'
 
   function setVariant(p: Platform, key: keyof Variant, value: string) {
     setVariants((cur) => ({ ...cur, [p]: { ...cur[p], [key]: value } }))
@@ -85,13 +88,14 @@ export default function Composer({ num }: { num?: number }) {
 
   async function save(status: 'draft' | 'scheduled') {
     setTried(true)
-    const errors = validate(draft, status === 'scheduled')
+    const errors = validate(draft, status === 'scheduled' && mode === 'later')
     if (errors.length || !account) return
     setBusy('save')
     const fields = {
       account_id: account.id,
       platforms,
-      publish_at: publishAt ? zonedToUtc(publishAt, account.timezone) : null,
+      publish_at: status === 'scheduled' && mode === 'now' ? new Date().toISOString()
+        : publishAt ? zonedToUtc(publishAt, account.timezone) : null,
       caption,
       variants: cleanVariants(variants, platforms),
       media_type: mediaType,
@@ -104,6 +108,10 @@ export default function Composer({ num }: { num?: number }) {
     const { error } = num
       ? await supabase.from('posts').update(fields).eq('num', num).neq('status', 'posting')
       : await supabase.from('posts').insert(fields)
+    if (!error && status === 'scheduled' && mode === 'now') {
+      // Ask the publisher to run right away. If that isn't set up yet, the next 30-minute run posts it.
+      await supabase.functions.invoke('dispatch').catch(() => undefined)
+    }
     setBusy('')
     if (error) return setError(error.message)
     go('/')
@@ -148,7 +156,10 @@ export default function Composer({ num }: { num?: number }) {
       {post?.last_error && <p className="notice" role="status">{post.last_error}</p>}
       {error && <p className="notice" role="alert">{error}</p>}
 
-      <form className="split" onSubmit={(e) => { e.preventDefault(); save('scheduled') }}>
+      <form className="split" onSubmit={(e) => { e.preventDefault(); save('scheduled') }}
+        onKeyDown={(e) => {
+          if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') { e.preventDefault(); save('scheduled') }
+        }}>
         <section className="main tray rise" aria-label="Post">
           <fieldset className="core" disabled={locked} style={{ gap: 28, border: 0, margin: 0, minWidth: 0 }}>
             <div className="field" style={{ gap: 12 }}>
@@ -206,8 +217,26 @@ export default function Composer({ num }: { num?: number }) {
                   </select>
                 </div>
                 <div className="field">
-                  <label htmlFor="when">Post at <span style={{ fontWeight: 400, color: 'var(--muted)' }}>· {account?.timezone}</span></label>
-                  <input id="when" className="input" type="datetime-local" value={publishAt} onChange={(e) => setPublishAt(e.target.value)} />
+                  <span className="legend">When</span>
+                  <div role="group" aria-label="When to post" className="filters" style={{ alignSelf: 'flex-start' }}>
+                    <button type="button" aria-pressed={mode === 'now'} onClick={() => setMode('now')}>Post now</button>
+                    <button type="button" aria-pressed={mode === 'later'} onClick={() => setMode('later')}>Schedule</button>
+                  </div>
+                  {mode === 'later' && (
+                    <>
+                      <label htmlFor="when" className="sr-only">Post at ({account?.timezone})</label>
+                      <input id="when" className="input" type="datetime-local" value={publishAt} onChange={(e) => setPublishAt(e.target.value)} />
+                      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                        {quickTimes(account?.timezone ?? 'Asia/Manila').map((c) => (
+                          <button key={c.label} type="button" className="chip queued" onClick={() => setPublishAt(c.value)}
+                            aria-pressed={publishAt === c.value} style={{ height: 36, cursor: 'pointer', border: 0, fontFamily: 'var(--sans)' }}>
+                            {c.label}
+                          </button>
+                        ))}
+                      </div>
+                      <span style={{ fontSize: 13, color: 'var(--muted)' }}>{account?.timezone} time</span>
+                    </>
+                  )}
                 </div>
                 <div className="field">
                   <label htmlFor="link">Link <span style={{ fontWeight: 400, color: 'var(--muted)' }}>· Facebook only</span></label>
@@ -243,7 +272,8 @@ export default function Composer({ num }: { num?: number }) {
               )}
               <button type="button" className="btn" disabled={busy !== ''} onClick={() => save('draft')}>Save draft</button>
               <button type="submit" className="btn primary" disabled={busy !== ''}>
-                {busy === 'save' ? 'Saving…' : publishAt ? `Schedule for ${when}` : 'Schedule'}<span className="knob"><Arrow /></span>
+                {busy === 'save' ? 'Saving…' : mode === 'now' ? 'Post now' : publishAt ? `Schedule for ${when}` : 'Schedule'}
+                <span className="knob"><Arrow /></span>
               </button>
             </div>
           </fieldset>
@@ -270,7 +300,7 @@ export default function Composer({ num }: { num?: number }) {
           {platforms.length > 0 && (
             <section className="tray rise">
               <div className="core dark">
-                <span className="eyebrow" style={{ background: 'rgba(255,255,255,0.1)', color: '#fff' }}>At {when}</span>
+                <span className="eyebrow" style={{ background: 'rgba(255,255,255,0.1)', color: '#fff' }}>{mode === 'now' ? 'When you post' : `At ${when}`}</span>
                 <ol style={{ listStyle: 'none', margin: 0, padding: 0 }}>
                   {plan.map(({ p, text }, i) => (
                     <li key={p} style={{ display: 'flex', gap: 16, padding: '14px 0', borderTop: i ? '1px solid rgba(255,255,255,0.08)' : 0 }}>
