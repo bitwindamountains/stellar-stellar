@@ -4,7 +4,7 @@ import gspread
 from gspread.utils import rowcol_to_a1
 
 from postpilot.config import Config
-from postpilot.models import ACCOUNT_COLUMNS, MEDIA_TYPES, POST_COLUMNS, STATUSES, Account, Post
+from postpilot.models import ACCOUNT_COLUMNS, MEDIA_TYPES, POST_COLUMNS, STATUSES, Account, Post, StoreError
 
 # Retries 429/5xx with backoff. Safe: every write sets fixed values, so repeating one changes nothing.
 BACKOFF = gspread.BackOffHTTPClient
@@ -12,7 +12,7 @@ POSTS_TAB = "Posts"
 ACCOUNTS_TAB = "Accounts"
 
 
-class SheetError(Exception):
+class SheetError(StoreError):
     """The sheet can't be read or written as expected. Fix the sheet or run init-sheet."""
 
 
