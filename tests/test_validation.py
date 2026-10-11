@@ -63,6 +63,14 @@ def test_valid_assisted_video_post():
             "Video to Facebook/Instagram isn't supported yet",
         ),
         ({"platforms": "tiktok"}, "TikTok/YouTube need a video"),
+        (
+            {
+                "platforms": "facebook",
+                "media_type": "image",
+                "media_urls": "https://drive.google.com/file/d/X/view",
+            },
+            "Google Drive",
+        ),
         ({"platforms": "facebook", "caption": ""}, "Facebook post is empty"),
         (
             {

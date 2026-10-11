@@ -45,6 +45,8 @@ def validate(post: Post, accounts: dict[str, Account]) -> list[str]:
     errors += [
         f"Media link must start with https:// ({u})" for u in urls if not u.lower().startswith("https://")
     ]
+    if any("drive.google.com" in u.lower() for u in urls):
+        errors.append("Google Drive links open a web page, not the file: use a direct link (e.g. Cloudinary)")
     if len(urls) > 1:
         errors.append("Only one image per post for now (carousels come later)")
 
