@@ -218,6 +218,11 @@ button.chip:active { transform: scale(0.96); }
     flex-wrap: nowrap; justify-content: space-between; backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px);
   }
   .island .brand, .island .desktop-only { display: none; }
+  /* Scroll edge: content fades out where the floating bar overlaps it, instead of cutting off under glass. */
+  .wrap:has(> .island)::after {
+    content: ''; position: fixed; z-index: 9; left: 0; right: 0; bottom: 0; pointer-events: none;
+    height: calc(88px + env(safe-area-inset-bottom)); background: linear-gradient(rgba(241, 241, 236, 0), var(--ground) 75%);
+  }
   .island a { flex: 1; justify-content: center; padding: 0 10px; }
   .island .btn.primary { flex: 1.4; padding-right: 4px; }
   .filters { scrollbar-width: none; align-self: stretch; }
@@ -250,3 +255,14 @@ button.chip:active { transform: scale(0.96); }
   .week { display: flex; overflow-x: auto; scrollbar-width: none; margin-top: -16px; }
   .week-day { flex: 0 0 92px; }
 }
+
+/* Glass falls back to solid when people ask for less transparency or more contrast. */
+@media (prefers-reduced-transparency: reduce) {
+  .island { background: #fff; backdrop-filter: none; -webkit-backdrop-filter: none; }
+}
+@media (prefers-contrast: more) {
+  :root { --muted: #3b3f46; --hair: rgba(21, 23, 27, 0.4); }
+  .island { background: #fff; backdrop-filter: none; -webkit-backdrop-filter: none; box-shadow: 0 0 0 1px var(--ink); }
+  .tray, .step, .week-day, .chip.queued, .pill.scheduled, .pill.draft { box-shadow: 0 0 0 1px rgba(21, 23, 27, 0.5); }
+}
+@media (prefers-reduced-motion: reduce) { .skeleton { animation: none; opacity: 0.7; } }
