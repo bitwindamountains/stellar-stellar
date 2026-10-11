@@ -96,12 +96,12 @@ Decision (2026-10-11): replace the Google Sheet with Supabase; free-tier stack.
 - [x] 10.1 `supabase/migrations/0001_init.sql`: accounts, posts, runs, RLS, storage bucket + policies
 - [x] 10.2 `supabase_repo.py`: load/write over PostgREST with httpx; type conversion to/from Post cells; tests
 - [x] 10.3 Config + CLI switch to Supabase when `SUPABASE_URL` is set; publisher writes a `runs` row
-- [ ] 10.4 `web/` scaffold: Vite React TS, Supabase client, sign-in, hash routes, design tokens from the mockup
-- [ ] 10.5 Queue screen (posts by day, platform states, Needs you, Last run, Connections)
-- [ ] 10.6 Composer: form, media upload to Storage, platform tiles, live checks (TS validation + tests)
-- [ ] 10.7 Handoff screen (mobile) + "I posted it"; Telegram message links to it
-- [ ] 10.8 Accounts screen (add/edit FB Page, IG user, token secret name, time zone)
-- [ ] 10.9 PWA manifest, icons, service worker; phone-width pass
-- [ ] 10.10 Delete media from Storage once every platform of a post is done
+- [x] 10.4 `web/` scaffold: Vite React TS, Supabase client, sign-in, hash routes, design tokens from the mockup
+- [x] 10.5 Queue screen (posts by day, platform states, Needs you, Last run, Connections)
+- [x] 10.6 Composer: form, media upload to Storage, platform tiles, live checks (TS validation + tests)
+- [x] 10.7 Handoff screen (mobile) + "I posted it"; Telegram message links to it
+- [x] 10.8 Accounts screen (add/edit FB Page, IG user, token secret name, time zone)
+- [x] 10.9 PWA manifest, icons, service worker; phone-width pass
+- [x] 10.10 Delete uploaded media when you mark a by-hand post done (videos, the big files). Publisher-side image cleanup deferred: ~1 MB each
 - [ ] 10.11 Go live (needs you): create Supabase project, apply migration, disable sign-ups, deploy web to
   Cloudflare, add `SUPABASE_URL` / `SUPABASE_SERVICE_ROLE_KEY` secrets, retire the Sheet
