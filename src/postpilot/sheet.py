@@ -121,6 +121,9 @@ class SheetRepository:
         self.header = [h.strip() for h in posts_values[0]] if posts_values else []
         return posts_from_values(posts_values), accounts_from_values(account_values)
 
+    def claim(self, claims: dict[int, dict[str, str]]) -> dict[int, Post]:
+        return _claim_sheet(self, claims)
+
     def write(self, updates: dict[int, dict[str, str]]) -> None:
         # ponytail: rows are addressed by number from load(); inserting/sorting rows mid-run would misplace
         # results. Runs take seconds, so README asks users not to. Add a stable row id if that ever bites.
@@ -128,6 +131,14 @@ class SheetRepository:
         data = [{**d, "range": f"{POSTS_TAB}!{d['range']}"} for d in cell_updates(self.header, updates)]
         if data:
             self.spreadsheet.values_batch_update({"valueInputOption": "RAW", "data": data})
+
+
+def _claim_sheet(repo: "SheetRepository", claims: dict[int, dict[str, str]]) -> dict[int, Post]:
+    # ponytail: Sheets has no conditional write, so a row edited in the same second can still be claimed.
+    # The re-read below at least publishes the row's current content. Supabase does this properly.
+    repo.write(claims)
+    fresh = {p.row: p for p in repo.load()[0]}
+    return {r: fresh[r] for r in claims if r in fresh}
 
 
 def init_sheet(spreadsheet: gspread.Spreadsheet) -> None:

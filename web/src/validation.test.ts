@@ -42,6 +42,7 @@ describe('validate (mirrors validation.py)', () => {
     expectError({ platforms: ['instagram'], mediaType: 'image', mediaUrls: ['https://x/a.png'] }, 'JPEG')
     expectError({ platforms: ['instagram'], mediaType: 'image', mediaUrls: ['https://x/a.WEBP?v=1'] }, 'JPEG')
     expectError({ platforms: ['instagram'], mediaType: 'image', mediaUrls: ['https://x/a.png#preview'] }, 'JPEG')
+    expectError({ platforms: ['instagram'], mediaType: 'image', mediaUrls: ['https://x/a.HEIC'] }, 'JPEG')
     expect(validate(draft({ platforms: ['instagram'], mediaType: 'image', mediaUrls: ['https://x/a.jpeg'] }), true)).toEqual([])
     expect(validate(draft({ mediaType: 'image', mediaUrls: ['https://x/a.png'] }), true)).toEqual([])
   })

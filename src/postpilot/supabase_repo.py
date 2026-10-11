@@ -23,6 +23,7 @@ class SupabaseRepository:
         self.headers = {"apikey": service_key, "Authorization": f"Bearer {service_key}"}
         self.http = http or httpx.Client(timeout=30)
         self.timezone = DEFAULT_TIMEZONE  # set from the first account on load; used for the daily nudge
+        self.accounts: dict[str, Account] = {}
 
     def load(self) -> tuple[list[Post], dict[str, Account]]:
         rows = self._request(
@@ -36,12 +37,28 @@ class SupabaseRepository:
         }
         if accounts:
             self.timezone = next(iter(accounts.values())).timezone
+        self.accounts = accounts
         rows = self._request("GET", "posts", params={"select": "*", "status": f"in.{ACTIVE}", "order": "num"})
         return [Post(row=r["num"], cells=_to_cells(r, accounts)) for r in rows], accounts
 
     def write(self, updates: dict[int, dict[str, str]]) -> None:
         for num, fields in updates.items():
             self._request("PATCH", "posts", params={"num": f"eq.{num}"}, json=_from_cells(fields))
+
+    def claim(self, claims: dict[int, dict[str, str]]) -> dict[int, Post]:
+        """Claim a row only if still scheduled/partial, so an edit or delete from the app wins the race."""
+        claimed = {}
+        for num, fields in claims.items():
+            rows = self._request(
+                "PATCH",
+                "posts",
+                params={"num": f"eq.{num}", "status": "in.(scheduled,partial)", "select": "*"},
+                json=_from_cells(fields),
+                returning=True,
+            )
+            if rows:
+                claimed[num] = Post(row=num, cells=_to_cells(rows[0], self.accounts))
+        return claimed
 
     def count_live_between(self, start: datetime, end: datetime) -> int:
         """Posts planned or done in [start, end). Failed and missed ones don't count."""
@@ -56,14 +73,22 @@ class SupabaseRepository:
     def record_run(self, **counts) -> None:
         self._request("POST", "runs", json=counts)
 
-    def _request(self, method: str, table: str, params: dict | list | None = None, json: dict | None = None):
-        headers = {**self.headers, "Prefer": "return=minimal"} if method != "GET" else self.headers
+    def _request(
+        self,
+        method: str,
+        table: str,
+        params: dict | list | None = None,
+        json: dict | None = None,
+        returning=False,
+    ):
+        prefer = "return=representation" if returning else "return=minimal"
+        headers = {**self.headers, "Prefer": prefer} if method != "GET" else self.headers
         try:
             r = self.http.request(method, f"{self.base}/{table}", params=params, json=json, headers=headers)
         except httpx.TransportError:
             raise StoreError("Couldn't reach Supabase (network problem)") from None
         if r.is_success:
-            return r.json() if method == "GET" else None
+            return r.json() if method == "GET" or returning else None
         try:
             message = r.json().get("message", "")
         except ValueError:

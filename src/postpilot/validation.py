@@ -7,7 +7,8 @@ IG_CAPTION_MAX = 2200
 IG_HASHTAGS_MAX = 30
 TELEGRAM_MESSAGE_MAX = 4096
 TELEGRAM_OVERHEAD = 60  # platform label line and title label (Telegram counts text after parsing tags)
-NON_JPEG = (".png", ".webp", ".gif")  # links with no extension get the benefit of the doubt
+NON_JPEG = (".png", ".webp", ".gif", ".heic", ".heif", ".avif", ".bmp", ".tif", ".tiff", ".svg")
+# (links with no extension get the benefit of the doubt)
 YOUTUBE_TITLE_MAX = 100
 
 
@@ -79,10 +80,15 @@ def validate(post: Post, accounts: dict[str, Account]) -> list[str]:
         text = post.text_for(p)
         if p == "fb_profile" and post.get("link"):
             text = f"{text}\n\n{post.get('link')}"
-        size = len(text) + len(post.title_for(p)) + TELEGRAM_OVERHEAD
+        size = _telegram_len(text) + _telegram_len(post.title_for(p)) + TELEGRAM_OVERHEAD
         if size > TELEGRAM_MESSAGE_MAX:
             over = size - TELEGRAM_MESSAGE_MAX
             errors.append(f"{p} caption too long for the Telegram assist: shorten it by {over:,} characters")
     if len(post.title_for("youtube")) > YOUTUBE_TITLE_MAX:
         errors.append(f"YouTube titles max {YOUTUBE_TITLE_MAX} characters")
     return errors
+
+
+def _telegram_len(text: str) -> int:
+    """Telegram counts UTF-16 units: an emoji outside the basic plane is 2 (JavaScript's .length agrees)."""
+    return len(text.encode("utf-16-le")) // 2

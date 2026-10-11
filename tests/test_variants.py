@@ -75,7 +75,13 @@ def test_facebook_empty_uses_facebook_text():
 
 
 def test_instagram_rejects_png_and_webp_links():
-    for url in ("https://x/a.png", "https://x/a.WEBP?v=1", "https://x/a.png#preview"):
+    for url in (
+        "https://x/a.png",
+        "https://x/a.WEBP?v=1",
+        "https://x/a.png#preview",
+        "https://x/a.HEIC",
+        "https://x/a.avif",
+    ):
         p = post(platforms="instagram", media_type="image", media_urls=url)
         assert any("JPEG" in e for e in validate(p, ACCOUNTS)), url
     ok = post(platforms="instagram", media_type="image", media_urls="https://x/a.jpeg")
@@ -94,3 +100,9 @@ def test_telegram_limit_counts_the_whole_message():
     # Telegram counts the text after parsing HTML, so '&' is one character, not five ('&amp;').
     ampersands = post(caption="&" * 900, platforms="tiktok", media_type="video", media_urls="https://x/a.mp4")
     assert validate(ampersands, ACCOUNTS) == []
+
+
+def test_telegram_length_counts_emoji_as_two_like_telegram():
+    # 2,050 emoji are 2,050 characters in Python but 4,100 UTF-16 units, which is how Telegram counts.
+    p = post(caption="😀" * 2050, platforms="tiktok", media_type="video", media_urls="https://x/a.mp4")
+    assert any("Telegram" in e for e in validate(p, ACCOUNTS))
