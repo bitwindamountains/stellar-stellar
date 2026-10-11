@@ -1,0 +1,112 @@
+import { useEffect, useState } from 'react'
+import { Check, Logo } from '../icons'
+import { go } from '../route'
+import { supabase } from '../supabase'
+import { isAssisted, PLATFORM_NAMES, type Platform, type Post } from '../types'
+
+const OPEN_URL: Partial<Record<Platform, string>> = {
+  tiktok: 'https://www.tiktok.com/upload',
+  youtube: 'https://studio.youtube.com',
+  fb_profile: 'https://www.facebook.com',
+}
+
+export default function Handoff({ num }: { num: number }) {
+  const [post, setPost] = useState<Post | null>(null)
+  const [error, setError] = useState('')
+  const [copied, setCopied] = useState(false)
+  const [sharing, setSharing] = useState(false)
+
+  useEffect(() => {
+    supabase.from('posts').select('*').eq('num', num).single().then(({ data, error }) => {
+      if (error) setError(error.message)
+      else setPost(data as Post)
+    })
+  }, [num])
+
+  if (error) return <Frame><p className="notice" role="alert">{error}</p></Frame>
+  if (!post) return <Frame />
+
+  const targets = post.platforms.filter(isAssisted)
+  const media = post.media_urls[0]
+  const text = [post.caption, post.link].filter(Boolean).join('\n\n')
+  const names = targets.map((p) => PLATFORM_NAMES[p]).join(' and ')
+
+  async function shareMedia() {
+    if (!media) return
+    setSharing(true)
+    try {
+      const blob = await (await fetch(media)).blob()
+      const file = new File([blob], media.split('/').pop() || 'post', { type: blob.type })
+      // The phone's share sheet sends the file straight into TikTok, YouTube or Facebook.
+      if (navigator.canShare?.({ files: [file] })) await navigator.share({ files: [file], text })
+      else window.open(media, '_blank', 'noopener')
+    } catch {
+      window.open(media, '_blank', 'noopener') // share cancelled or unsupported: let them save it from the tab
+    } finally {
+      setSharing(false)
+    }
+  }
+
+  async function copy() {
+    await navigator.clipboard.writeText(text)
+    setCopied(true)
+  }
+
+  async function done() {
+    const { error } = await supabase.from('posts').update({ assist_done_at: new Date().toISOString() }).eq('num', num)
+    if (error) setError(error.message)
+    else go('/')
+  }
+
+  const step = { width: '100%', minHeight: 56, display: 'flex', alignItems: 'center', gap: 14, padding: '0 16px', border: 0, borderRadius: 18,
+    background: '#fff', boxShadow: '0 0 0 1px rgba(21,23,27,0.06)', fontSize: 15, fontWeight: 500, textAlign: 'left', textDecoration: 'none', cursor: 'pointer' } as const
+  const n = (i: string) => <span className="mono" style={{ width: 28 }}>{i}</span>
+
+  return (
+    <Frame>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+        <span className="eyebrow" style={{ background: 'var(--accent-tint)', color: 'var(--accent-ink)' }}>
+          {post.assist_done_at ? 'Done' : 'Post by hand'}
+        </span>
+        <h1 style={{ margin: 0, fontSize: 34, lineHeight: 1.02, fontWeight: 600, letterSpacing: '-0.035em' }}>Post to {names || 'your apps'}</h1>
+      </div>
+
+      <div className="tray">
+        <div className="core flush">
+          {media && post.media_type === 'video' && <video src={media} controls playsInline style={{ width: '100%', maxHeight: 280, background: '#1e2026', display: 'block' }} />}
+          {media && post.media_type === 'image' && <img src={media} alt="" style={{ width: '100%', maxHeight: 280, objectFit: 'cover', display: 'block' }} />}
+          <p style={{ margin: 0, padding: '16px 18px 18px', fontSize: 15, lineHeight: 1.5, whiteSpace: 'pre-wrap' }}>{text || 'No caption'}</p>
+        </div>
+      </div>
+
+      <ol style={{ listStyle: 'none', margin: 0, padding: 0, display: 'flex', flexDirection: 'column', gap: 8 }}>
+        {media && <li><button type="button" style={step} onClick={shareMedia} disabled={sharing}>{n('01')}{sharing ? 'Preparing…' : `Share ${post.media_type}`}</button></li>}
+        {text && <li><button type="button" style={step} onClick={copy}>{n(media ? '02' : '01')}<span style={{ flex: 1 }}>{copied ? 'Caption copied' : 'Copy caption'}</span>{copied && <Check />}</button></li>}
+        <li style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+          {targets.map((p) => OPEN_URL[p] && (
+            <a key={p} href={OPEN_URL[p]} target="_blank" rel="noopener" style={{ ...step, flex: '1 1 140px', width: 'auto' }}>Open {PLATFORM_NAMES[p]}</a>
+          ))}
+        </li>
+      </ol>
+
+      <div style={{ marginTop: 'auto', display: 'flex', flexDirection: 'column', gap: 10 }}>
+        <button type="button" className="btn primary" onClick={done} disabled={!!post.assist_done_at}
+          style={{ justifyContent: 'space-between', minHeight: 60, paddingLeft: 24, paddingRight: 8, fontSize: 16 }}>
+          {post.assist_done_at ? 'Marked as posted' : 'I posted it'}<span className="knob" style={{ width: 44, height: 44 }}><Check /></span>
+        </button>
+        <a href="#/" className="btn" style={{ background: 'transparent' }}>Back to queue</a>
+      </div>
+    </Frame>
+  )
+}
+
+function Frame({ children }: { children?: React.ReactNode }) {
+  return (
+    <main className="page" style={{ display: 'flex', justifyContent: 'center' }}>
+      <div style={{ width: 'min(480px, 100%)', minHeight: 'calc(100dvh - 48px)', display: 'flex', flexDirection: 'column', gap: 20 }}>
+        <span style={{ display: 'flex', alignItems: 'center', gap: 8, fontWeight: 600, fontSize: 15 }}><Logo />PostPilot</span>
+        {children}
+      </div>
+    </main>
+  )
+}
