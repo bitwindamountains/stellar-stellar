@@ -108,8 +108,11 @@ export default function Composer({ num }: { num?: number }) {
   async function upload(file: File) {
     setBusy('upload') // lock saving now: converting a big image can take a moment
     setError('')
+    // A new post switches to the platforms remembered for this media type, so decide with those.
+    const kind = file.type.startsWith('video/') ? 'video' : 'image'
+    const remembered = num ? undefined : loadDefaults().platformsByMedia?.[kind]
     // Only Instagram needs JPEG; other platforms keep the original (and its transparency).
-    if (platforms.includes('instagram')) file = await toJpeg(file)
+    if ((remembered ?? platforms).includes('instagram')) file = await toJpeg(file)
     if (file.size > MAX_BYTES) {
       setBusy('')
       return setError('Files over 50 MB are too big for the free plan; shrink it first')
@@ -122,10 +125,8 @@ export default function Composer({ num }: { num?: number }) {
     setBusy('')
     if (error) return setError(error.message)
     setMediaUrl(supabase.storage.from('media').getPublicUrl(path).data.publicUrl)
-    const type = file.type.startsWith('video/') ? 'video' : 'image'
-    setMediaType(type)
-    const remembered = loadDefaults().platformsByMedia?.[type]
-    if (!num && remembered) setPlatforms(remembered)
+    setMediaType(kind)
+    if (remembered) setPlatforms(remembered)
   }
 
   async function save(status: 'draft' | 'scheduled') {
