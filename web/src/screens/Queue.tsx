@@ -62,7 +62,8 @@ export default function Queue() {
 
       <div className="split">
         <section className="main tray rise" aria-label="Posts">
-          <div className="core flush">
+          <div className="core flush" aria-busy={!loaded}>
+            {!loaded && [0, 1, 2].map((i) => <div key={i} className="skeleton" aria-hidden="true" />)}
             {loaded && days.length === 0 && (
               <p className="empty">{filter === 'all' ? <>Nothing planned yet. <a href="#/new">Write your first post</a>.</> : 'Nothing here.'}</p>
             )}
