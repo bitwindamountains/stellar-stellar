@@ -1,6 +1,6 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState, type CSSProperties } from 'react'
 import { retryNow } from '../actions'
-import { Arrow, Asteroids, FlightPath } from '../icons'
+import { Arrow, Asteroids, Constellation, FlightPath, PlatformMark } from '../icons'
 import { awaitingHandoff, canRetry, chips, groupByDay, mergePosts, needsYou, statusLabel, timeOf, weekStrip } from '../postView'
 import { supabase } from '../supabase'
 import { isAssisted, PLATFORM_CODES, type Account, type Post, type Run } from '../types'
@@ -62,7 +62,7 @@ export default function Queue() {
 
   return (
     <>
-      <header className="hero sky rise" style={{ maxWidth: 'none', flexDirection: 'row', flexWrap: 'wrap', alignItems: 'flex-end', justifyContent: 'space-between', gap: 32 }}>
+      <header className={`hero sky rise${attention.length ? ' alert' : ''}`} style={{ maxWidth: 'none', flexDirection: 'row', flexWrap: 'wrap', alignItems: 'flex-end', justifyContent: 'space-between', gap: 32 }}>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 20, maxWidth: 720 }}>
           <h1>Your queue</h1>
           <p>Facebook and Instagram post themselves. TikTok, YouTube and your personal profile come to your phone ready to share.</p>
@@ -104,7 +104,9 @@ export default function Queue() {
           <div className="core flush" aria-busy={!loaded}>
             {!loaded && [0, 1, 2].map((i) => <div key={i} className="skeleton" aria-hidden="true" />)}
             {loaded && days.length === 0 && (
-              <p className="empty">{filter === 'all' ? <>Nothing planned yet. <a href="#/new">Write your first post</a>.</> : 'Nothing here.'}</p>
+              <div className="empty">
+                {filter === 'all' ? <><Constellation /><p>Nothing planned yet. <a href="#/new">Write your first post</a>.</p></> : <p>Nothing here.</p>}
+              </div>
             )}
             {days.map((day) => (
               <div key={day.label + day.date}>
@@ -113,19 +115,31 @@ export default function Queue() {
                   {day.posts.map((post) => {
                     const status = statusLabel(post)
                     const image = post.media_type === 'image' ? post.media_urls[0] : undefined
+                    const rowChips = chips(post)
+                    const done = rowChips.filter((c) => c.state === 'done')
                     return (
                       <li key={post.num}>
                         <a className="row" href={awaitingHandoff(post) ? `#/handoff/${post.num}` : `#/edit/${post.num}`}>
                           <span className="r-time">{timeOf(post.publish_at)}</span>
                           <span className="thumb r-thumb" aria-hidden="true" style={image ? { backgroundImage: `url("${image}")`, color: 'transparent' } : undefined}>
                             {post.media_type === 'none' ? (post.link ? 'Link' : 'Text') : post.media_type}
+                            {/* one moon per platform it has gone out on (the chips carry the same facts for screen readers) */}
+                            {done.length > 0 && (
+                              <span className="orbit">
+                                {done.map((c, i) => (
+                                  <span key={c.platform} className="moon" style={{ '--a': `${(i * 360) / done.length - 45}deg` } as CSSProperties}>
+                                    <PlatformMark platform={c.platform} />
+                                  </span>
+                                ))}
+                              </span>
+                            )}
                           </span>
                           <span className="r-body">
                             <span style={{ fontSize: 15, lineHeight: 1.45, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>
                               {post.caption || <span style={{ color: 'var(--muted)' }}>No caption</span>}
                             </span>
                             <span style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
-                              {chips(post).map((c) => (
+                              {rowChips.map((c) => (
                                 <span key={c.platform} className={`chip ${c.state}`} title={c.label} aria-label={c.label}>{c.code}</span>
                               ))}
                             </span>

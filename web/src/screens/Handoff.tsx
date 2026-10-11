@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { textFor, titleFor, type Variants } from '../content'
-import { Check, Logo } from '../icons'
+import { Check, FlightPath, Logo } from '../icons'
 import { go } from '../route'
 import { supabase } from '../supabase'
 import { isAssisted, isDone, PLATFORM_NAMES, type Platform, type Post } from '../types'
@@ -95,12 +95,13 @@ export default function Handoff({ num }: { num: number }) {
 
   return (
     <Frame>
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+      <header className="sky compact" style={{ display: 'flex', flexDirection: 'column', gap: 10, padding: 24, borderRadius: 28 }}>
         <h1 style={{ margin: 0, fontSize: 34, lineHeight: 1.02, fontWeight: 600, letterSpacing: '-0.035em' }}>Post to {names || 'your apps'}</h1>
         <p style={{ margin: 0, fontSize: 15, color: post.assist_done_at ? 'var(--accent-ink)' : 'var(--muted)' }}>
           {post.assist_done_at ? 'Marked as posted.' : 'Share it from your phone, then tap I posted it.'}
         </p>
-      </div>
+        <FlightPath />
+      </header>
 
       <div className="tray">
         <div className="core flush">
