@@ -20,5 +20,14 @@ class FakeRepository:
             for col, value in fields.items():
                 self.posts[row - 1][header.index(col)] = value
 
+    def claim(self, claims: dict[int, dict[str, str]]) -> dict[int, Post]:
+        """Claims only rows still scheduled/partial (like the Supabase filter) and returns them fresh."""
+        status = self.posts[0].index("status")
+        ok = {r: f for r, f in claims.items() if self.posts[r - 1][status] in ("scheduled", "partial")}
+        if ok:
+            self.write(ok)
+        fresh = {p.row: p for p in self.load()[0]}
+        return {r: fresh[r] for r in ok}
+
     def row(self, row: int) -> dict[str, str]:
         return dict(zip(self.posts[0], self.posts[row - 1], strict=True))

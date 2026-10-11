@@ -161,3 +161,24 @@ def test_count_live_between_filters_window_and_status():
     q = calls[0].url.params
     assert q.get_list("publish_at") == ["gte.2026-10-04T16:00:00+00:00", "lt.2026-10-05T16:00:00+00:00"]
     assert q["status"] == "not.in.(failed,missed)"
+
+
+def test_claim_is_conditional_and_returns_stored_row():
+    def handler(request):
+        if request.method == "PATCH":
+            num = request.url.params["num"]
+            assert request.url.params["status"] == "in.(scheduled,partial)"
+            assert request.headers["Prefer"] == "return=representation"
+            # Post 12 is still scheduled; post 13 was edited to draft (or deleted) in the app meanwhile.
+            return httpx.Response(200, json=[{**POSTS[0], "caption": "stored now"}] if num == "eq.12" else [])
+        return serve(request)
+
+    r, calls = repo(handler)
+    r.load()
+    claimed = r.claim(
+        {12: {"status": "posting", "attempts": "2"}, 13: {"status": "posting", "attempts": "1"}}
+    )
+    assert list(claimed) == [12]
+    assert claimed[12].get("caption") == "stored now"
+    patch = next(c for c in calls if c.method == "PATCH")
+    assert json.loads(patch.content) == {"status": "posting", "attempts": 2}

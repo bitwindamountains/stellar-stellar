@@ -105,3 +105,15 @@ export function weekStrip(posts: Post[], now = new Date()) {
     }
   })
 }
+
+/** The post had media, but the handoff removed the upload and cleared its link (see Handoff.done). */
+export function mediaWasRemoved(post: Post): boolean {
+  return post.media_type !== 'none' && post.media_urls.length === 0
+}
+
+/** Combines query results into one list without duplicates (a post can match several queries). */
+export function mergePosts(...lists: (unknown[] | null)[]): Post[] {
+  const byNum = new Map<number, Post>()
+  for (const list of lists) for (const p of (list ?? []) as Post[]) byNum.set(p.num, p)
+  return [...byNum.values()]
+}

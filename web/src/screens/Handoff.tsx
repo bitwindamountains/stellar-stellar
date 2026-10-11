@@ -67,13 +67,21 @@ export default function Handoff({ num }: { num: number }) {
   )
 
   async function done() {
-    const { error } = await supabase.from('posts').update({ assist_done_at: new Date().toISOString() }).eq('num', num)
-    if (error) return setError(error.message)
     // Free-plan storage is 1 GB: once nothing else needs the upload, remove it. Pasted outside links are left alone.
     const automaticPending = post!.platforms.some((p) => !isAssisted(p) && !isDone(post!, p))
     const prefix = supabase.storage.from('media').getPublicUrl('').data.publicUrl
-    const ours = post!.media_urls.filter((u) => u.startsWith(prefix)).map((u) => u.slice(prefix.length).replace(/^\//, ''))
-    if (!automaticPending && ours.length) await supabase.storage.from('media').remove(ours)
+    let removed = automaticPending ? [] : post!.media_urls.filter((u) => u.startsWith(prefix))
+    if (removed.length) {
+      // Delete first; only forget the links if that worked, so a failed delete leaves a findable file.
+      const { error } = await supabase.storage.from('media').remove(removed.map((u) => u.slice(prefix.length).replace(/^\//, '')))
+      if (error) removed = []
+    }
+    // Drop removed links from the post, so nothing (like Post again) reuses a dead URL.
+    const { error } = await supabase
+      .from('posts')
+      .update({ assist_done_at: new Date().toISOString(), media_urls: post!.media_urls.filter((u) => !removed.includes(u)) })
+      .eq('num', num)
+    if (error) return setError(error.message)
     go('/')
   }
 

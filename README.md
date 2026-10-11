@@ -8,11 +8,11 @@ Status: in development. See `tasks/plan.md`.
 
 ## Quick start
 ```bash
-python -m uv sync
+uv sync
 cp .env.example .env          # fill in values
-python -m uv run --env-file .env postpilot init-sheet
-python -m uv run --env-file .env postpilot validate
-python -m uv run --env-file .env postpilot publish --dry-run
+uv run --env-file .env postpilot init-sheet
+uv run --env-file .env postpilot validate
+uv run --env-file .env postpilot publish --dry-run
 ```
 
 ## Sheet
@@ -55,7 +55,8 @@ Timing: posts go out within about 30 minutes of `publish_at` (GitHub cron can st
 ## Web + phone app (Supabase)
 The app in `web/` replaces the Sheet. The publisher switches to Supabase when `SUPABASE_URL` is set.
 
-1. **Supabase** (free): create a project, run `supabase/migrations/20261011000000_init.sql` in the SQL editor.
+1. **Supabase** (free): create a project, then run **every** file in `supabase/migrations/` in the SQL editor, oldest
+   first (or `supabase db push` with the Supabase CLI). The app needs all of them.
    Under Authentication: turn **off** "Allow new users to sign up", then add yourself under Users.
 2. **Web app**: in `web/`, copy `.env.example` to `.env` with the project URL and *publishable* key, then
    `npm install` and `npm run dev`. Deploy: Cloudflare Pages (or Workers static assets) with build command

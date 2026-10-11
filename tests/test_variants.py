@@ -72,3 +72,37 @@ def test_youtube_title_limit():
 def test_facebook_empty_uses_facebook_text():
     p = post({"facebook": {"hashtags": "#kape"}}, platforms="facebook", caption="")
     assert validate(p, ACCOUNTS) == []
+
+
+def test_instagram_rejects_png_and_webp_links():
+    for url in (
+        "https://x/a.png",
+        "https://x/a.WEBP?v=1",
+        "https://x/a.png#preview",
+        "https://x/a.HEIC",
+        "https://x/a.avif",
+    ):
+        p = post(platforms="instagram", media_type="image", media_urls=url)
+        assert any("JPEG" in e for e in validate(p, ACCOUNTS)), url
+    ok = post(platforms="instagram", media_type="image", media_urls="https://x/a.jpeg")
+    assert validate(ok, ACCOUNTS) == []
+    fb_png = post(platforms="facebook", media_type="image", media_urls="https://x/a.png")
+    assert validate(fb_png, ACCOUNTS) == []  # Facebook takes PNG
+
+
+def test_telegram_limit_counts_the_whole_message():
+    video = {"platforms": "youtube", "media_type": "video", "media_urls": "https://x/a.mp4"}
+    fits = post({"youtube": {"title": "t" * 100}}, caption="x" * 3800, **video)
+    assert validate(fits, ACCOUNTS) == []
+    # Caption alone is under 4,000, but caption + 100-char title + labels exceeds Telegram's 4,096.
+    too_long = post({"youtube": {"title": "t" * 100}}, caption="x" * 3990, **video)
+    assert any("Telegram" in e for e in validate(too_long, ACCOUNTS))
+    # Telegram counts the text after parsing HTML, so '&' is one character, not five ('&amp;').
+    ampersands = post(caption="&" * 900, platforms="tiktok", media_type="video", media_urls="https://x/a.mp4")
+    assert validate(ampersands, ACCOUNTS) == []
+
+
+def test_telegram_length_counts_emoji_as_two_like_telegram():
+    # 2,050 emoji are 2,050 characters in Python but 4,100 UTF-16 units, which is how Telegram counts.
+    p = post(caption="😀" * 2050, platforms="tiktok", media_type="video", media_urls="https://x/a.mp4")
+    assert any("Telegram" in e for e in validate(p, ACCOUNTS))
