@@ -70,7 +70,7 @@ def run(
     # One batch: close out rows that won't publish, then claim the due ones.
     updates: dict[int, dict[str, str]] = {}
     for post in s.missed:
-        why = f"Not posted: over {cfg.late_grace_minutes} min late. Set new publish_at, status scheduled."
+        why = f"Not posted: more than {cfg.late_grace_minutes} minutes late. Edit it to post now or later."
         updates[post.row] = {"status": "missed", "last_error": why}
         report.missed.append(post.row)
     for post in s.exhausted:
