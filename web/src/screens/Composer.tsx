@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { cleanVariants, isCustomized, textFor, type Variant, type Variants } from '../content'
 import { Alert, Arrow, Check } from '../icons'
 import { publishSoon } from '../actions'
+import { takeShared } from '../share'
 import { loadDefaults, loadDraft, rememberChoices, saveDraft } from '../prefs'
 import { go } from '../route'
 import { supabase } from '../supabase'
@@ -70,6 +71,17 @@ export default function Composer({ num }: { num?: number }) {
     if (num) return
     saveDraft({ accountId: accountId || undefined, platforms, caption, variants, mediaType, mediaUrl, link, mode, publishAt })
   }, [num, accountId, platforms, caption, variants, mediaType, mediaUrl, link, mode, publishAt])
+
+  // Opened from the Android share sheet: attach the shared file and text once.
+  useEffect(() => {
+    if (num || !window.location.hash.endsWith('/shared')) return
+    takeShared().then((shared) => {
+      go('/new')
+      if (!shared) return
+      if (shared.text) setCaption((current) => current || shared.text)
+      if (shared.file) upload(shared.file)
+    })
+  }, []) // once, on open
 
   const account = accounts?.find((a) => a.id === accountId)
   const draft = { account, platforms, publishAt, caption, variants, mediaType, mediaUrls: mediaUrl ? [mediaUrl] : [], link }
