@@ -31,7 +31,7 @@ If a row ends up `failed` with "check if it posted", look at the platform first.
 is missing.
 
 **Two rules that keep posts from doubling or landing in the wrong row:**
-- Never run `publish` (without `--dry-run`) on your laptop while the GitHub schedule is on. Two runs at the
+- A real `publish` on your laptop needs `--local`; pause the GitHub schedule first. Two runs at the
   same time can both post the same row.
 - Add new posts at the bottom. Don't insert, delete or sort rows in the minute around :07 and :37, when a run is
   writing results back by row number.
