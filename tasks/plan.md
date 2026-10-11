@@ -103,5 +103,5 @@ Decision (2026-10-11): replace the Google Sheet with Supabase; free-tier stack.
 - [x] 10.8 Accounts screen (add/edit FB Page, IG user, token secret name, time zone)
 - [x] 10.9 PWA manifest, icons, service worker; phone-width pass
 - [x] 10.10 Delete uploaded media when you mark a by-hand post done (videos, the big files). Publisher-side image cleanup deferred: ~1 MB each
-- [ ] 10.11 Go live (needs you): create Supabase project, apply migration, disable sign-ups, deploy web to
+- [ ] 10.11 Go live (needs you): ~~create Supabase project, apply migration~~ (done: existing project, RLS verified), disable sign-ups, deploy web to
   Cloudflare, add `SUPABASE_URL` / `SUPABASE_SERVICE_ROLE_KEY` secrets, retire the Sheet
