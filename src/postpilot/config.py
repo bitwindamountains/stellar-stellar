@@ -21,6 +21,7 @@ class Config:
     stale_posting_minutes: int
     supabase_url: str
     supabase_service_role_key: str
+    web_app_url: str  # Telegram messages link to the app's handoff page
     env: Mapping[str, str]  # account tokens are looked up by name from here
 
 
@@ -58,5 +59,6 @@ def load_config(env: Mapping[str, str] | None = None) -> Config:
         stale_posting_minutes=num("PP_STALE_POSTING_MINUTES", 30),
         supabase_url=env.get("SUPABASE_URL", ""),
         supabase_service_role_key=env.get("SUPABASE_SERVICE_ROLE_KEY", ""),
+        web_app_url=env.get("WEB_APP_URL", "").rstrip("/"),
         env=env,
     )

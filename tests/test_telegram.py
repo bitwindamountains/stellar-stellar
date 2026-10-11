@@ -30,7 +30,7 @@ def test_video_then_copyable_caption():
     assert send() == "101"
     assert calls[0][0] == "sendVideo"
     assert calls[0][1]["video"] == "https://x/a.mp4"
-    assert "TikTok, YouTube" in calls[0][1]["caption"] and "row 7" in calls[0][1]["caption"]
+    assert "TikTok, YouTube" in calls[0][1]["caption"] and "#7" in calls[0][1]["caption"]
     assert calls[1] == ("sendMessage", {"chat_id": "CHAT", "text": "Ube latte!\n\nhttps://shop"})
 
 
@@ -64,3 +64,16 @@ def test_network_error_is_transient_and_hides_token():
     with pytest.raises(PlatformError) as e:
         send()
     assert e.value.kind == "transient" and "BOTTOKEN" not in str(e.value)
+
+
+def test_header_links_to_app_handoff_when_given():
+    calls = []
+
+    def record(request):
+        calls.append(json.loads(request.content))
+        return ok(1)
+
+    http = httpx.Client(transport=httpx.MockTransport(record))
+    post = Post(row=7, cells={"caption": "x"})
+    send_assist(http, "T", "C", post, ["fb_profile"], handoff_url="https://pp.example/#/handoff/7")
+    assert "https://pp.example/#/handoff/7" in calls[0]["text"]

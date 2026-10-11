@@ -100,7 +100,10 @@ def publish(
     if cfg.telegram_bot_token and cfg.telegram_chat_id:
 
         def assist(post, platforms):
-            return telegram.send_assist(http, cfg.telegram_bot_token, cfg.telegram_chat_id, post, platforms)
+            link = f"{cfg.web_app_url}/#/handoff/{post.row}" if cfg.web_app_url else ""
+            return telegram.send_assist(
+                http, cfg.telegram_bot_token, cfg.telegram_chat_id, post, platforms, link
+            )
 
     started = time.monotonic()
     try:
