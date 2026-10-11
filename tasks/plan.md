@@ -58,7 +58,7 @@ Each task: failing test, code, full suite + ruff green, one commit.
 
 ### Phase 5: CLI + automation
 - [x] 5.1 `validate`, `publish` (exit codes 0/1/2), `doctor` (config, sheet, tokens)
-- [ ] 5.2 `.github/workflows/ci.yml` + `publish.yml` (cron 7,37, concurrency, dry-run input)
+- [x] 5.2 `.github/workflows/ci.yml` + `publish.yml` (cron 7,37, concurrency, dry-run input)
 
 ### Phase 6: Go live (needs you)
 - [ ] 6.1 Meta dev-mode app, System User token, Telegram bot + chat id
