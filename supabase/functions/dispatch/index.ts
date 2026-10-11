@@ -1,5 +1,5 @@
 // Starts the GitHub "publish" workflow right away, so "Post now" doesn't wait for the 30-minute schedule.
-// Deploy with JWT verification on: only signed-in app users can call it.
+// Deploy with JWT verification on; the function also checks for a real signed-in user (see below).
 // Secrets: GITHUB_TOKEN (fine-grained, this repo only, "Actions: read and write"), GITHUB_REPO ("owner/name").
 
 const cors = {
@@ -11,8 +11,21 @@ function reply(body: Record<string, unknown>, status = 200): Response {
   return new Response(JSON.stringify(body), { status, headers: { ...cors, 'Content-Type': 'application/json' } })
 }
 
+// The gateway's JWT check also lets the public browser key through, so require a real signed-in user here.
+async function isSignedInUser(req: Request): Promise<boolean> {
+  const auth = req.headers.get('Authorization') ?? ''
+  if (!auth.startsWith('Bearer ')) return false
+  const res = await fetch(`${Deno.env.get('SUPABASE_URL')}/auth/v1/user`, {
+    headers: { Authorization: auth, apikey: Deno.env.get('SUPABASE_ANON_KEY') ?? '' },
+  })
+  if (!res.ok) return false
+  const user = await res.json().catch(() => null)
+  return typeof user?.id === 'string'
+}
+
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: cors })
+  if (!(await isSignedInUser(req))) return reply({ dispatched: false, reason: 'sign in required' }, 401)
   const token = Deno.env.get('GITHUB_TOKEN')
   const repo = Deno.env.get('GITHUB_REPO')
   // Not set up yet is not an error: the scheduled run still publishes the post.
