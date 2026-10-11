@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { cleanVariants, isCustomized, textFor, type Variant, type Variants } from '../content'
-import { Alert, Arrow, Check } from '../icons'
+import { Alert, Arrow, Check, FlightPath } from '../icons'
 import { publishSoon } from '../actions'
 import { toJpeg } from '../media'
 import { mediaWasRemoved } from '../postView'
@@ -191,10 +191,11 @@ export default function Composer({ num }: { num?: number }) {
   if (accounts === null) return null
   if (accounts.length === 0 && !error) {
     return (
-      <section className="hero rise">
+      <section className="hero sky rise">
         <h1>Add an account</h1>
         <p>Posts belong to an account: your Facebook Page and Instagram, or just your phone for by-hand platforms.</p>
         <a className="btn primary" href="#/accounts" style={{ alignSelf: 'flex-start' }}>Add account<span className="knob"><Arrow /></span></a>
+        <FlightPath />
       </section>
     )
   }
@@ -208,7 +209,7 @@ export default function Composer({ num }: { num?: number }) {
 
   return (
     <>
-      <header className="hero rise">
+      <header className="hero sky rise">
         <h1>{num ? `Edit post #${num}` : 'Write it once'}</h1>
         <p>Pick where it goes. PostPilot checks it now, not at post time.</p>
         {restored?.note && <p className="notice" role="status" style={{ fontSize: 14 }}>{restored.note}</p>}
@@ -231,6 +232,7 @@ export default function Composer({ num }: { num?: number }) {
           </div>
         )}
         {error && <p className="notice" role="alert">{error}</p>}
+        <FlightPath />
       </header>
 
       <form className="split" onSubmit={(e) => { e.preventDefault(); save('scheduled') }}

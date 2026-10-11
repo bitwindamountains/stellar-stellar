@@ -1,5 +1,5 @@
 import { useEffect, useState, type FormEvent } from 'react'
-import { Arrow } from '../icons'
+import { Arrow, FlightPath } from '../icons'
 import { supabase } from '../supabase'
 import type { Account } from '../types'
 
@@ -61,9 +61,10 @@ export default function Accounts() {
 
   return (
     <>
-      <header className="hero rise">
+      <header className="hero sky rise">
         <h1>Accounts</h1>
         <p>One account per brand. Tokens never live here: the publisher reads them from GitHub secrets by name.</p>
+        <FlightPath />
       </header>
 
       <div className="split">
