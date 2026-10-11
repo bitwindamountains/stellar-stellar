@@ -40,9 +40,9 @@ Each task: failing test, code, full suite + ruff green, one commit.
 - [x] 1.3 `validation.py`: rule list from blueprint 10.1 adjusted for assisted platforms
 
 ### Phase 2: Sheet layer
-- [ ] 2.1 `sheet.py`: header mapping, row parsing, cell-update building (pure, tested)
-- [ ] 2.2 `SheetRepository` (gspread: load, batch write) + `FakeRepository` for tests
-- [ ] 2.3 `init-sheet` command: tabs, headers, status/media dropdowns, `publish_at` format
+- [x] 2.1 `sheet.py`: header mapping, row parsing, cell-update building (pure, tested)
+- [x] 2.2 `SheetRepository` (gspread: load, batch write) + `FakeRepository` for tests
+- [x] 2.3 `init-sheet` command: tabs, headers, status/media dropdowns, `publish_at` format
 
 ### Phase 3: Platforms
 - [ ] 3.1 `graph.py`: pinned-version client, error classification, transient retry
