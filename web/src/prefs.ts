@@ -18,6 +18,7 @@ export interface SavedDraft {
   link: string
   mode: 'now' | 'later'
   publishAt: string
+  note?: string // shown once when the draft opens
 }
 
 function read<T>(key: string): T | null {

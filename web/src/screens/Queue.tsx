@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { retryNow } from '../actions'
 import { Arrow } from '../icons'
-import { awaitingHandoff, canRetry, chips, groupByDay, needsYou, statusLabel, timeOf, weekStrip } from '../postView'
+import { awaitingHandoff, canRetry, chips, groupByDay, mergePosts, needsYou, statusLabel, timeOf, weekStrip } from '../postView'
 import { supabase } from '../supabase'
 import { isAssisted, PLATFORM_CODES, type Account, type Post, type Run } from '../types'
 
@@ -23,10 +23,13 @@ export default function Queue() {
       supabase.from('posts').select('*').or(`publish_at.gte.${since},publish_at.is.null`).order('publish_at').limit(300),
       supabase.from('accounts').select('*').order('name'),
       supabase.from('runs').select('*').order('ran_at', { ascending: false }).limit(1),
-    ]).then(([p, a, r]) => {
-      const failed = p.error ?? a.error ?? r.error
+      // Unresolved posts stay visible however old, so a failure can't quietly drop out of "Needs you".
+      supabase.from('posts').select('*').in('status', ['failed', 'missed', 'partial', 'posting']).limit(100),
+      supabase.from('posts').select('*').neq('tg_message_id', '').is('assist_done_at', null).limit(100),
+    ]).then(([p, a, r, unresolved, handoffs]) => {
+      const failed = p.error ?? a.error ?? r.error ?? unresolved.error ?? handoffs.error
       if (failed) setError(failed.message)
-      setPosts((p.data as Post[]) ?? [])
+      setPosts(mergePosts(p.data, unresolved.data, handoffs.data))
       setAccounts((a.data as Account[]) ?? [])
       setRun(((r.data as Run[]) ?? [])[0] ?? null)
       setLoaded(true)

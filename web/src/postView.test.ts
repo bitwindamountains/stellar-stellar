@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { canRetry, chips, groupByDay, needsYou, statusLabel, weekStrip } from './postView'
+import { canRetry, chips, groupByDay, mediaWasRemoved, mergePosts, needsYou, statusLabel, weekStrip } from './postView'
 import type { Post } from './types'
 
 function post(over: Partial<Post>): Post {
@@ -75,5 +75,25 @@ describe('weekStrip', () => {
     expect(strip.map((d) => d.count)).toEqual([2, 0, 0, 0, 0, 0, 1])
     expect(strip[0].label).toBe('Today')
     expect(strip.map((d) => d.date)).toEqual([5, 6, 7, 8, 9, 10, 11])
+  })
+})
+
+describe('mediaWasRemoved', () => {
+  const bucket = 'https://p.supabase.co/storage/v1/object/public/media/'
+  const shared = { media_type: 'video' as const, media_urls: [bucket + 'u1/a.mp4'], tg_message_id: '9' }
+  it('is true once a by-hand post with our upload is marked done', () => {
+    expect(mediaWasRemoved(post({ ...shared, platforms: ['tiktok'], assist_done_at: '2026-10-05T10:00:00Z' }), bucket)).toBe(true)
+  })
+  it('is false before marking done, while automatic platforms wait, or for outside links', () => {
+    expect(mediaWasRemoved(post({ ...shared, platforms: ['tiktok'] }), bucket)).toBe(false)
+    expect(mediaWasRemoved(post({ ...shared, platforms: ['tiktok', 'facebook'], assist_done_at: '2026-10-05T10:00:00Z' }), bucket)).toBe(false)
+    expect(mediaWasRemoved(post({ ...shared, media_urls: ['https://cdn.example/a.mp4'], platforms: ['tiktok'], assist_done_at: '2026-10-05T10:00:00Z' }), bucket)).toBe(false)
+  })
+})
+
+describe('mergePosts', () => {
+  it('keeps one copy of each post across queries and tolerates failed queries', () => {
+    const merged = mergePosts([post({ num: 1 }), post({ num: 2 })], null, [post({ num: 2, status: 'failed' }), post({ num: 9 })])
+    expect(merged.map((p) => p.num).sort()).toEqual([1, 2, 9])
   })
 })
