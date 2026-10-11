@@ -32,18 +32,33 @@ html { scrollbar-color: rgba(21, 23, 27, 0.22) transparent; }
 /* Times and counts line up digit for digit. */
 .mono, dd, .week-day { font-variant-numeric: tabular-nums; }
 
-/* Ambient backdrop: two faint pools of light (brand blue, warm) and fine paper grain. Fixed, so scrolling
-   never repaints it; sign-in turns the light up a little because there's nothing else on screen. */
+/* Ambient backdrop, two fixed layers so scrolling never repaints them:
+   ::after  a mesh of light (brand blue, sky, warm) that drifts slowly; only its transform animates.
+   ::before a static dot grid and paper grain, strongest at the top and fading out down the page.
+   Sign-in turns the light up because there's nothing else on screen. */
+body::after {
+  content: ''; position: fixed; inset: -25%; z-index: -2; pointer-events: none;
+  --cool: rgba(43, 75, 216, 0.2); --sky: rgba(120, 170, 235, 0.22); --warm: rgba(232, 146, 96, 0.22);
+  background:
+    radial-gradient(38% 34% at 22% 20%, var(--cool), transparent 70%),
+    radial-gradient(30% 30% at 70% 26%, var(--sky), transparent 70%),
+    radial-gradient(34% 30% at 78% 78%, var(--warm), transparent 70%),
+    radial-gradient(26% 24% at 30% 76%, rgba(255, 255, 255, 0.9), transparent 70%);
+  animation: drift 48s ease-in-out infinite alternate; will-change: transform;
+}
 body::before {
   content: ''; position: fixed; inset: 0; z-index: -1; pointer-events: none;
-  --cool: rgba(43, 75, 216, 0.08); --warm: rgba(226, 140, 92, 0.09);
   background:
-    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 .045 0 0 0 0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E"),
-    radial-gradient(60vmax 42vmax at 6% -8%, var(--cool), transparent 70%),
-    radial-gradient(55vmax 40vmax at 104% 108%, var(--warm), transparent 70%),
-    radial-gradient(45vmax 30vmax at 72% 18%, rgba(255, 255, 255, 0.65), transparent 70%);
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 .05 0 0 0 0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E"),
+    radial-gradient(circle, rgba(21, 23, 27, 0.13) 1px, transparent 1.4px) 0 0 / 24px 24px;
+  mask-image: radial-gradient(120% 80% at 50% 0%, #000 20%, rgba(0, 0, 0, 0.25) 75%);
+  -webkit-mask-image: radial-gradient(120% 80% at 50% 0%, #000 20%, rgba(0, 0, 0, 0.25) 75%);
 }
-body:has(.auth)::before { --cool: rgba(43, 75, 216, 0.16); --warm: rgba(226, 140, 92, 0.2); }
+body:has(.auth)::after { --cool: rgba(43, 75, 216, 0.32); --sky: rgba(120, 170, 235, 0.3); --warm: rgba(232, 146, 96, 0.32); }
+@keyframes drift {
+  50% { transform: translate3d(4%, -3%, 0) rotate(6deg) scale(1.05); }
+  to { transform: translate3d(-3%, 4%, 0) rotate(-4deg) scale(1.02); }
+}
 
 .page { min-height: 100dvh; padding: 24px 24px calc(96px + env(safe-area-inset-bottom)); }
 .wrap { max-width: 1240px; margin: 0 auto; display: flex; flex-direction: column; gap: 64px; }
@@ -86,7 +101,13 @@ body:has(.auth)::before { --cool: rgba(43, 75, 216, 0.16); --warm: rgba(226, 140
 h2 { margin: 0; font-size: 18px; font-weight: 600; letter-spacing: -0.01em; }
 
 /* Double-bezel: outer tray + inner core */
-.tray { padding: 6px; border-radius: 32px; background: rgba(21, 23, 27, 0.035); box-shadow: 0 0 0 1px rgba(21, 23, 27, 0.05); }
+/* The tray is frosted glass over the backdrop; the core sits on it like a machined plate. */
+.tray {
+  padding: 6px; border-radius: 32px; background: rgba(255, 255, 255, 0.38);
+  backdrop-filter: blur(14px) saturate(160%); -webkit-backdrop-filter: blur(14px) saturate(160%);
+  box-shadow: 0 0 0 1px rgba(21, 23, 27, 0.06), inset 0 1px 0 rgba(255, 255, 255, 0.8),
+    0 40px 80px -48px rgba(34, 56, 168, 0.35);
+}
 .core {
   border-radius: 26px; background: var(--card); padding: 28px; display: flex; flex-direction: column; gap: 18px;
   box-shadow: inset 0 1px 1px rgba(255, 255, 255, 0.9), 0 30px 60px -40px rgba(21, 23, 27, 0.22);
@@ -285,13 +306,14 @@ button.chip:active { transform: scale(0.96); }
 @media (prefers-reduced-transparency: reduce) {
   .island::before { backdrop-filter: none; }
   .island::after { background: #fff; backdrop-filter: none; -webkit-backdrop-filter: none; }
+  .tray { background: #e9e9e4; backdrop-filter: none; -webkit-backdrop-filter: none; }
 }
 @media (prefers-contrast: more) {
-  body::before { display: none; }
+  body::before, body::after { display: none; }
   :root { --muted: #3b3f46; --hair: rgba(21, 23, 27, 0.4); }
   .island { box-shadow: 0 0 0 1px var(--ink); }
   .island::before { backdrop-filter: none; }
   .island::after { background: #fff; backdrop-filter: none; -webkit-backdrop-filter: none; }
   .tray, .step, .week-day, .chip.queued, .pill.scheduled, .pill.draft { box-shadow: 0 0 0 1px rgba(21, 23, 27, 0.5); }
 }
-@media (prefers-reduced-motion: reduce) { .skeleton { animation: none; opacity: 0.7; } }
+@media (prefers-reduced-motion: reduce) { .skeleton, body::after { animation: none; } .skeleton { opacity: 0.7; } }
