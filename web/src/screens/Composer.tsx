@@ -1,10 +1,11 @@
 import { useEffect, useState } from 'react'
+import { cleanVariants, isCustomized, textFor, type Variant, type Variants } from '../content'
 import { Alert, Arrow, Check } from '../icons'
 import { go } from '../route'
 import { supabase } from '../supabase'
 import { utcToZoned, zonedToUtc } from '../time'
 import { isAssisted, isDone, PLATFORM_CODES, PLATFORM_NAMES, PLATFORMS, type Account, type MediaType, type Platform, type Post } from '../types'
-import { hashtagCount, IG_CAPTION_MAX, validate } from '../validation'
+import { hashtagCount, IG_CAPTION_MAX, validate, YOUTUBE_TITLE_MAX } from '../validation'
 
 const ACCEPT = 'image/jpeg,image/png,image/webp,video/mp4,video/quicktime'
 const MAX_BYTES = 50 * 1024 * 1024 // matches the bucket's file_size_limit
@@ -16,6 +17,8 @@ export default function Composer({ num }: { num?: number }) {
   const [platforms, setPlatforms] = useState<Platform[]>(['facebook', 'instagram'])
   const [publishAt, setPublishAt] = useState('')
   const [caption, setCaption] = useState('')
+  const [variants, setVariants] = useState<Variants>({})
+  const [tab, setTab] = useState<'all' | Platform>('all')
   const [mediaType, setMediaType] = useState<MediaType>('none')
   const [mediaUrl, setMediaUrl] = useState('')
   const [link, setLink] = useState('')
@@ -43,6 +46,7 @@ export default function Composer({ num }: { num?: number }) {
       setPlatforms(p.platforms)
       setPublishAt(p.publish_at ? utcToZoned(p.publish_at, tz) : '')
       setCaption(p.caption)
+      setVariants((p.variants as Variants) ?? {})
       setMediaType(p.media_type)
       setMediaUrl(p.media_urls[0] ?? '')
       setLink(p.link)
@@ -50,10 +54,15 @@ export default function Composer({ num }: { num?: number }) {
   }, [num, accounts])
 
   const account = accounts?.find((a) => a.id === accountId)
-  const draft = { account, platforms, publishAt, caption, mediaType, mediaUrls: mediaUrl ? [mediaUrl] : [], link }
+  const draft = { account, platforms, publishAt, caption, variants, mediaType, mediaUrls: mediaUrl ? [mediaUrl] : [], link }
+  const editing = tab !== 'all' && platforms.includes(tab) ? tab : 'all' // a deselected platform's tab falls back
   const problems = validate(draft, true)
   const locked = post?.status === 'posting'
   const when = publishAt ? publishAt.slice(11, 16) : 'post time'
+
+  function setVariant(p: Platform, key: keyof Variant, value: string) {
+    setVariants((cur) => ({ ...cur, [p]: { ...cur[p], [key]: value } }))
+  }
 
   function toggle(p: Platform) {
     setPlatforms((cur) => (cur.includes(p) ? cur.filter((x) => x !== p) : [...cur, p]))
@@ -84,6 +93,7 @@ export default function Composer({ num }: { num?: number }) {
       platforms,
       publish_at: publishAt ? zonedToUtc(publishAt, account.timezone) : null,
       caption,
+      variants: cleanVariants(variants, platforms),
       media_type: mediaType,
       media_urls: mediaUrl ? [mediaUrl] : [],
       link,
@@ -141,14 +151,26 @@ export default function Composer({ num }: { num?: number }) {
       <form className="split" onSubmit={(e) => { e.preventDefault(); save('scheduled') }}>
         <section className="main tray rise" aria-label="Post">
           <fieldset className="core" disabled={locked} style={{ gap: 28, border: 0, margin: 0, minWidth: 0 }}>
-            <div className="field">
-              <span style={{ display: 'flex', justifyContent: 'space-between', gap: 12 }}>
-                <label htmlFor="caption">Caption</label>
-                <span className="mono" aria-live="polite">
-                  {caption.length.toLocaleString('en')} / {IG_CAPTION_MAX.toLocaleString('en')} · {hashtagCount(caption)} hashtags
-                </span>
-              </span>
-              <textarea id="caption" className="input" value={caption} onChange={(e) => setCaption(e.target.value)} />
+            <div className="field" style={{ gap: 12 }}>
+              <div role="group" aria-label="Edit the text for" className="filters" style={{ alignSelf: 'flex-start', flexWrap: 'wrap', borderRadius: 22 }}>
+                <button type="button" aria-pressed={editing === 'all'} onClick={() => setTab('all')}>All platforms</button>
+                {platforms.map((p) => (
+                  <button key={p} type="button" aria-pressed={editing === p} onClick={() => setTab(p)}>
+                    {PLATFORM_NAMES[p]}{isCustomized(variants, p) && <span aria-label=" (customized)" style={{ color: 'var(--accent)' }}> ●</span>}
+                  </button>
+                ))}
+              </div>
+              {editing === 'all' ? (
+                <>
+                  <span style={{ display: 'flex', justifyContent: 'space-between', gap: 12 }}>
+                    <label htmlFor="caption">Caption <span style={{ fontWeight: 400, color: 'var(--muted)' }}>· used everywhere unless a platform overrides it</span></label>
+                    <span className="mono" aria-live="polite">{caption.length.toLocaleString('en')} chars · {hashtagCount(caption)} hashtags</span>
+                  </span>
+                  <textarea id="caption" className="input" value={caption} onChange={(e) => setCaption(e.target.value)} />
+                </>
+              ) : (
+                <PlatformText p={editing} base={caption} variants={variants} set={setVariant} />
+              )}
             </div>
 
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: 16 }}>
@@ -263,5 +285,48 @@ export default function Composer({ num }: { num?: number }) {
         </aside>
       </form>
     </>
+  )
+}
+
+function PlatformText({ p, base, variants, set }: {
+  p: Platform
+  base: string
+  variants: Variants
+  set: (p: Platform, key: keyof Variant, value: string) => void
+}) {
+  const v = variants[p] ?? {}
+  const text = textFor(base, variants, p)
+  const limit = p === 'instagram' ? ` / ${IG_CAPTION_MAX.toLocaleString('en')}` : ''
+  const sub = { fontWeight: 400, color: 'var(--muted)' }
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+      {p === 'youtube' && (
+        <div className="field">
+          <span style={{ display: 'flex', justifyContent: 'space-between', gap: 12 }}>
+            <label htmlFor="v-title">YouTube title</label>
+            <span className="mono">{(v.title ?? '').length} / {YOUTUBE_TITLE_MAX}</span>
+          </span>
+          <input id="v-title" className="input" maxLength={YOUTUBE_TITLE_MAX + 20} value={v.title ?? ''} onChange={(e) => set(p, 'title', e.target.value)} />
+        </div>
+      )}
+      <div className="field">
+        <span style={{ display: 'flex', justifyContent: 'space-between', gap: 12 }}>
+          <label htmlFor="v-caption">Caption for {PLATFORM_NAMES[p]} <span style={sub}>· empty = main caption</span></label>
+          <span className="mono" aria-live="polite">{text.length.toLocaleString('en')}{limit} · {hashtagCount(text)} hashtags</span>
+        </span>
+        <textarea id="v-caption" className="input" placeholder={base || 'Main caption is empty'} value={v.caption ?? ''}
+          onChange={(e) => set(p, 'caption', e.target.value)} />
+      </div>
+      <div className="field">
+        <label htmlFor="v-tags">Hashtags for {PLATFORM_NAMES[p]} <span style={sub}>· added on a new line</span></label>
+        <input id="v-tags" className="input" placeholder="#kape #manilacafe" value={v.hashtags ?? ''} onChange={(e) => set(p, 'hashtags', e.target.value)} />
+      </div>
+      {isCustomized(variants, p) && (
+        <button type="button" onClick={() => { set(p, 'caption', ''); set(p, 'hashtags', ''); set(p, 'title', '') }}
+          style={{ alignSelf: 'flex-start', minHeight: 44, padding: 0, border: 0, background: 'none', color: 'var(--accent-ink)', fontSize: 14, cursor: 'pointer' }}>
+          Use the main caption for {PLATFORM_NAMES[p]}
+        </button>
+      )}
+    </div>
   )
 }

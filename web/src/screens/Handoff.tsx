@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { textFor, titleFor, type Variants } from '../content'
 import { Check, Logo } from '../icons'
 import { go } from '../route'
 import { supabase } from '../supabase'
@@ -13,9 +14,9 @@ const OPEN_URL: Partial<Record<Platform, string>> = {
 export default function Handoff({ num }: { num: number }) {
   const [post, setPost] = useState<Post | null>(null)
   const [error, setError] = useState('')
-  const [copied, setCopied] = useState(false)
+  const [copied, setCopied] = useState('') // which copy button last succeeded
   const [sharing, setSharing] = useState(false)
-  const [swapping, setSwapping] = useState(false)
+  const [swapping, setSwapping] = useState('')
 
   useEffect(() => {
     supabase.from('posts').select('*').eq('num', num).single().then(({ data, error }) => {
@@ -29,7 +30,10 @@ export default function Handoff({ num }: { num: number }) {
 
   const targets = post.platforms.filter(isAssisted)
   const media = post.media_urls[0]
-  const text = [post.caption, post.link].filter(Boolean).join('\n\n')
+  const variants = (post.variants ?? {}) as Variants
+  // Same text the publisher sends to Telegram: the platform's own caption, plus the link for your profile.
+  const textOf = (p: Platform) => [textFor(post.caption, variants, p), p === 'fb_profile' ? post.link : ''].filter(Boolean).join('\n\n')
+  const text = targets.length ? textOf(targets[0]) : post.caption
   const names = targets.map((p) => PLATFORM_NAMES[p]).join(' and ')
 
   async function shareMedia() {
@@ -48,12 +52,19 @@ export default function Handoff({ num }: { num: number }) {
     }
   }
 
-  async function copy() {
-    await navigator.clipboard.writeText(text)
+  async function copy(key: string, value: string) {
+    await navigator.clipboard.writeText(value)
     // Blur bridges the label swap so it reads as one change, not two overlapping words.
-    setSwapping(true)
-    setTimeout(() => { setCopied(true); setSwapping(false) }, 90)
+    setSwapping(key)
+    setTimeout(() => { setCopied(key); setSwapping('') }, 90)
   }
+
+  const copyButton = (key: string, label: string, value: string) => (
+    <button type="button" className="step" onClick={() => copy(key, value)}>
+      <span className={`swap${swapping === key ? ' swapping' : ''}`} style={{ flex: 1 }}>{copied === key ? 'Copied' : label}</span>
+      {copied === key && <Check />}
+    </button>
+  )
 
   async function done() {
     const { error } = await supabase.from('posts').update({ assist_done_at: new Date().toISOString() }).eq('num', num)
@@ -87,12 +98,14 @@ export default function Handoff({ num }: { num: number }) {
 
       <ol style={{ listStyle: 'none', margin: 0, padding: 0, display: 'flex', flexDirection: 'column', gap: 8 }}>
         {media && <li><button type="button" className="step" onClick={shareMedia} disabled={sharing}>{n('01')}{sharing ? 'Preparing…' : `Share ${post.media_type}`}</button></li>}
-        {text && <li><button type="button" className="step" onClick={copy}>{n(media ? '02' : '01')}<span className={`swap${swapping ? ' swapping' : ''}`} style={{ flex: 1 }}>{copied ? 'Caption copied' : 'Copy caption'}</span>{copied && <Check />}</button></li>}
-        <li style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
-          {targets.map((p) => OPEN_URL[p] && (
-            <a key={p} href={OPEN_URL[p]} target="_blank" rel="noopener" className="step" style={{ flex: '1 1 140px', width: 'auto' }}>Open {PLATFORM_NAMES[p]}</a>
-          ))}
-        </li>
+        {targets.map((p) => (
+          <li key={p} style={{ display: 'flex', flexDirection: 'column', gap: 8, paddingTop: 8 }}>
+            <span className="mono" style={{ paddingLeft: 4 }}>{PLATFORM_NAMES[p].toUpperCase()}</span>
+            {titleFor(variants, p) && copyButton(`${p}-title`, 'Copy title', titleFor(variants, p))}
+            {textOf(p) && copyButton(`${p}-text`, 'Copy caption', textOf(p))}
+            {OPEN_URL[p] && <a href={OPEN_URL[p]} target="_blank" rel="noopener" className="step">Open {PLATFORM_NAMES[p]}</a>}
+          </li>
+        ))}
       </ol>
 
       <div style={{ marginTop: 'auto', display: 'flex', flexDirection: 'column', gap: 10 }}>

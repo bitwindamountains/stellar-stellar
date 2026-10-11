@@ -47,6 +47,7 @@ export interface Post {
   ig_media_id: string
   ig_permalink: string
   tg_message_id: string
+  variants: Partial<Record<Platform, { caption?: string; hashtags?: string; title?: string }>>
   assist_done_at: string | null
   last_error: string
   posted_at: string | null

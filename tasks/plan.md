@@ -116,8 +116,8 @@ Decision (2026-10-11): replace the Google Sheet with Supabase; free-tier stack.
   30-minute run, so it works before the repo is on GitHub.
 
 ### Tasks
-- [ ] 11.1 `variants` column; publisher, validation, Telegram and Sheet path use per-platform text
-- [ ] 11.2 Composer platform tabs (caption override, hashtags, YouTube title) + handoff copy per platform
+- [x] 11.1 `variants` column; publisher, validation, Telegram and Sheet path use per-platform text
+- [x] 11.2 Composer platform tabs (caption override, hashtags, YouTube title) + handoff copy per platform
 - [ ] 11.3 Post now / Schedule toggle with time chips; Ctrl+Enter
 - [ ] 11.4 `dispatch` Supabase function that triggers the GitHub publish workflow (deploy needs the repo on GitHub)
 - [ ] 11.5 Sticky defaults, draft autosave, paste/drag media
