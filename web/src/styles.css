@@ -145,22 +145,42 @@ h2 { margin: 0; font-size: 18px; font-weight: 600; letter-spacing: -0.01em; }
 .contrail { stroke-dasharray: 18 82; animation: contrail 5.5s var(--ease) infinite; }
 @keyframes contrail { from { stroke-dashoffset: 18; } to { stroke-dashoffset: -82; } }
 /* Asteroid belt: platform rocks cross right to left behind the text. Each lane only translates and each
-   rock only rotates, so it stays on the compositor; the meteor tail trails behind without tumbling. */
+   rock only rotates, so it stays on the compositor; the tail trails behind without tumbling. Far debris is
+   smaller, slower, dimmer and a touch soft, which reads as depth. */
 .belt { position: absolute; inset: 0; z-index: -1; pointer-events: none; overflow: hidden; }
 .lane {
   position: absolute; left: 100%; display: flex; align-items: center;
   animation: fly linear infinite; will-change: transform;
 }
+/* Tapered tail: widest at the rock, fading to a point. */
 .lane::after {
-  content: ''; position: absolute; left: 55%; top: 50%; width: 140px; height: 2px; margin-top: -1px; z-index: -1;
-  border-radius: 2px; background: linear-gradient(90deg, rgba(255, 217, 194, 0.4), rgba(255, 217, 194, 0));
+  content: ''; position: absolute; left: 50%; top: 50%; width: 170px; height: 6px; margin-top: -3px; z-index: -1;
+  background: linear-gradient(90deg, rgba(255, 222, 200, 0.42), rgba(255, 222, 200, 0) 85%);
+  clip-path: polygon(0 0, 100% 50%, 0 100%);
 }
-.rock { display: block; opacity: 0.82; animation: tumble linear infinite; filter: drop-shadow(0 6px 10px rgba(5, 7, 20, 0.5)); }
+.rock {
+  display: block; opacity: 0.9; animation: tumble linear infinite;
+  filter: drop-shadow(-1px -1px 2px color-mix(in srgb, var(--tint) 60%, transparent)) drop-shadow(0 8px 12px rgba(5, 7, 20, 0.55));
+}
+.lane.far::after { display: none; }
+.lane.far .rock { opacity: 0.5; filter: blur(0.6px); }
 @keyframes fly { from { transform: translate3d(40px, 0, 0); } to { transform: translate3d(calc(-100vw - 220px), var(--dy), 0); } }
 @keyframes tumble { from { transform: rotate(calc(var(--spin) * -1)); } to { transform: rotate(var(--spin)); } }
+/* Shooting stars: a short streak every few seconds, invisible the rest of the cycle. */
+.meteor {
+  position: absolute; width: 110px; height: 1.5px; border-radius: 2px; opacity: 0;
+  background: linear-gradient(90deg, rgba(255, 255, 255, 0), #fff);
+  animation: shoot 8s ease-in infinite;
+}
+@keyframes shoot {
+  0%, 86% { opacity: 0; transform: rotate(152deg) translateX(0); }
+  88% { opacity: 1; }
+  100% { opacity: 0; transform: rotate(152deg) translateX(260px); }
+}
 .auth .belt { position: fixed; }
 .auth .lane { scale: 1.4; }
-.auth .lane::after { width: 200px; }
+.auth .lane.far { scale: 1; }
+.auth .lane::after { width: 220px; }
 .sky .filters { background: rgba(255, 255, 255, 0.08); box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.1); }
 .sky .filters button:not([aria-pressed='true']) { color: rgba(255, 255, 255, 0.74); }
 
@@ -356,8 +376,8 @@ button.chip:active { transform: scale(0.96); }
   .core { padding: 22px; }
   .sky { border-radius: 28px; }
   .flight { top: 4%; right: -6%; width: 78%; opacity: 0.55; }
-  .rock { opacity: 0.6; }
-  .lane:nth-child(2) { display: none; } /* three rocks are plenty on a phone */
+  .lane:not(.far) { scale: 0.72; } /* smaller rocks on a phone so they don't crowd the heading */
+  .lane:not(.far) .rock { opacity: 0.7; }
   .day { padding: 22px 20px 8px; }
   .rows { padding: 0 6px 10px; }
   .row { gap: 14px; padding: 14px; }
@@ -408,4 +428,5 @@ button.chip:active { transform: scale(0.96); }
   .contrail { animation: none; stroke-dasharray: none; }
   /* Rocks hold still where the negative delays left them, scattered across the sky. */
   .lane, .rock { animation-play-state: paused; }
+  .meteor { display: none; }
 }
