@@ -75,7 +75,7 @@ h2 { margin: 0; font-size: 18px; font-weight: 600; letter-spacing: -0.01em; }
   text-decoration: none; cursor: pointer; transition: transform 140ms var(--ease-out), background-color 150ms ease;
 }
 .btn:active { transform: scale(0.97); }
-.btn:disabled { opacity: 0.5; cursor: not-allowed; }
+.btn:disabled { opacity: 0.5; cursor: not-allowed; transform: none; }
 .btn.primary { background: var(--accent); color: #fff; padding-right: 6px; }
 .btn.light { background: #fff; color: var(--ink); padding-right: 6px; }
 .knob {
@@ -154,19 +154,29 @@ textarea.input { min-height: 140px; line-height: 1.55; resize: vertical; }
   font-weight: 500; text-align: left; text-decoration: none; cursor: pointer; transition: transform 140ms var(--ease-out);
 }
 .step:active { transform: scale(0.98); }
+.step:disabled { cursor: progress; transform: none; }
+/* Chips that are buttons (quick times) press like every other control. */
+button.chip { transition: background-color 150ms ease, color 150ms ease, transform 140ms var(--ease-out); }
+button.chip:active { transform: scale(0.96); }
 .swap { transition: filter 180ms ease, opacity 180ms ease; }
 .swap.swapping { filter: blur(2px); opacity: 0.6; }
 
 /* Skeleton rows while the queue loads */
 .skeleton { height: 88px; margin: 0 16px 8px; border-radius: 20px; background: var(--well); }
 .skeleton:first-child { margin-top: 16px; }
+.skeleton { animation: breathe 1.2s ease-in-out infinite alternate; }
+.skeleton:nth-child(2) { animation-delay: 150ms; }
+.skeleton:nth-child(3) { animation-delay: 300ms; }
 
 /* Hover only where a real pointer exists: taps on phones would leave these stuck on. */
 @media (hover: hover) and (pointer: fine) {
   .island a:not([aria-current='page']):hover, .island button:hover { background: rgba(21, 23, 27, 0.05); }
   .row:hover { background: #f7f7f3; }
-  .btn:hover .knob { transform: translate(2px, -1px); }
-  .btn.primary:hover { background: #2441c4; }
+  .btn:not(:disabled):hover .knob { transform: translate(2px, -1px); }
+  .step:not(:disabled):hover { background: #fafaf7; }
+  .tile:not(:has(input:checked)):hover { background: #efefea; }
+  button.chip.queued:not([aria-pressed='true']):hover { background: var(--well); }
+  .btn.primary:not(:disabled):hover { background: #2441c4; }
   .btn:not(.primary):not(.light):hover { background: #e4e4de; }
   .filters button:not([aria-pressed='true']):hover { color: var(--ink); }
 }
@@ -188,18 +198,16 @@ textarea.input { min-height: 140px; line-height: 1.55; resize: vertical; }
 .rows > li:nth-child(2) { animation-delay: 30ms; }
 .rows > li:nth-child(3) { animation-delay: 60ms; }
 .rows > li:nth-child(4) { animation-delay: 90ms; }
-.rows > li:nth-child(5) { animation-delay: 120ms; }
-.rows > li:nth-child(6) { animation-delay: 150ms; }
-.rows > li:nth-child(7) { animation-delay: 180ms; }
-.rows > li:nth-child(n + 8) { animation-delay: 210ms; }
+.rows > li:nth-child(n + 5) { animation-delay: 120ms; }
 @keyframes rise { from { opacity: 0; transform: translateY(8px); } }
 @keyframes fade { from { opacity: 0; } }
+@keyframes breathe { to { opacity: 0.45; } }
 
 /* Reduced motion: keep the fades that explain changes, drop movement and press scaling. */
 @media (prefers-reduced-motion: reduce) {
   .rise, .rows > li { animation: fade 160ms ease both; animation-delay: 0ms !important; }
   .btn:active, .row:active, .tile:active, .step:active, .filters button:active,
-  .island a:active, .island button:active { transform: none; }
+  .island a:active, .island button:active, button.chip:active { transform: none; }
 }
 
 @media (max-width: 767px) {
