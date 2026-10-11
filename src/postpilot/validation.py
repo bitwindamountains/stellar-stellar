@@ -1,5 +1,4 @@
 import re
-from html import escape
 
 from postpilot.models import ASSISTED_PLATFORMS, FACEBOOK, INSTAGRAM, MEDIA_TYPES, PLATFORMS, Account, Post
 from postpilot.timeutil import parse_local
@@ -7,7 +6,7 @@ from postpilot.timeutil import parse_local
 IG_CAPTION_MAX = 2200
 IG_HASHTAGS_MAX = 30
 TELEGRAM_MESSAGE_MAX = 4096
-TELEGRAM_OVERHEAD = 120  # platform label line, title label and <pre> tags around the text
+TELEGRAM_OVERHEAD = 60  # platform label line and title label (Telegram counts text after parsing tags)
 NON_JPEG = (".png", ".webp", ".gif")  # links with no extension get the benefit of the doubt
 YOUTUBE_TITLE_MAX = 100
 
@@ -62,7 +61,7 @@ def validate(post: Post, accounts: dict[str, Account]) -> list[str]:
     if INSTAGRAM in platforms:
         if media_type != "image":
             errors.append("Instagram needs an image (media_type image + media_urls)")
-        elif urls and urls[0].lower().split("?")[0].endswith(NON_JPEG):
+        elif urls and re.split(r"[?#]", urls[0].lower())[0].endswith(NON_JPEG):
             errors.append("Instagram needs a JPEG image (PNG, WebP and GIF are rejected at post time)")
         caption = post.text_for(INSTAGRAM)
         if len(caption) > IG_CAPTION_MAX:
@@ -76,11 +75,11 @@ def validate(post: Post, accounts: dict[str, Account]) -> list[str]:
     if {"tiktok", "youtube"} & set(platforms) and media_type != "video":
         errors.append("TikTok/YouTube need a video (media_type video + media_urls)")
     for p in set(ASSISTED_PLATFORMS) & set(platforms):
-        # Measure what Telegram receives: escaped text, the profile link, the title and the labels/tags.
+        # Telegram's 4,096 limit counts text after it parses the HTML: visible text, link, title, labels.
         text = post.text_for(p)
         if p == "fb_profile" and post.get("link"):
             text = f"{text}\n\n{post.get('link')}"
-        size = len(escape(text)) + len(escape(post.title_for(p))) + TELEGRAM_OVERHEAD
+        size = len(text) + len(post.title_for(p)) + TELEGRAM_OVERHEAD
         if size > TELEGRAM_MESSAGE_MAX:
             over = size - TELEGRAM_MESSAGE_MAX
             errors.append(f"{p} caption too long for the Telegram assist: shorten it by {over:,} characters")

@@ -5,13 +5,9 @@ import { PLATFORM_NAMES, type Account, type MediaType, type Platform } from './t
 export const IG_CAPTION_MAX = 2200
 export const IG_HASHTAGS_MAX = 30
 export const TELEGRAM_MESSAGE_MAX = 4096
-const TELEGRAM_OVERHEAD = 120 // platform label line, title label and <pre> tags around the text
+const TELEGRAM_OVERHEAD = 60 // platform label line and title label (Telegram counts text after parsing tags)
 const NON_JPEG = /\.(png|webp|gif)$/i // links with no extension get the benefit of the doubt
 
-/** Length after the HTML escaping Telegram messages get (&, <, > grow). */
-function escapedLength(s: string): number {
-  return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#x27;').length
-}
 export const YOUTUBE_TITLE_MAX = 100
 
 export interface Draft {
@@ -54,7 +50,7 @@ export function validate(d: Draft, requireTime: boolean): string[] {
     errors.push("Video to Facebook/Instagram isn't supported yet; use TikTok, YouTube or your profile for now")
   if (has('instagram')) {
     if (d.mediaType !== 'image') errors.push('Instagram needs an image')
-    else if (urls[0] && NON_JPEG.test(urls[0].split('?')[0])) errors.push('Instagram needs a JPEG image (PNG, WebP and GIF are rejected at post time)')
+    else if (urls[0] && NON_JPEG.test(urls[0].split(/[?#]/)[0])) errors.push('Instagram needs a JPEG image (PNG, WebP and GIF are rejected at post time)')
     if (text('instagram').length > IG_CAPTION_MAX)
       errors.push(`Instagram captions max ${IG_CAPTION_MAX.toLocaleString('en')} characters`)
     if (hashtagCount(text('instagram')) > IG_HASHTAGS_MAX) errors.push(`Instagram allows at most ${IG_HASHTAGS_MAX} hashtags`)
@@ -63,9 +59,9 @@ export function validate(d: Draft, requireTime: boolean): string[] {
   if ((has('tiktok') || has('youtube')) && d.mediaType !== 'video') errors.push('TikTok/YouTube need a video')
   for (const p of ['fb_profile', 'tiktok', 'youtube'] as const) {
     if (!has(p)) continue
-    // Measure what Telegram receives: escaped text, the profile link, the title and the labels/tags.
+    // Telegram's 4,096 limit counts text after it parses the HTML: visible text, link, title, labels.
     const body = p === 'fb_profile' && d.link ? `${text(p)}\n\n${d.link}` : text(p)
-    const size = escapedLength(body) + escapedLength(titleFor(d.variants, p)) + TELEGRAM_OVERHEAD
+    const size = body.length + titleFor(d.variants, p).length + TELEGRAM_OVERHEAD
     if (size > TELEGRAM_MESSAGE_MAX)
       errors.push(`${PLATFORM_NAMES[p]} caption too long for the phone handoff: shorten it by ${(size - TELEGRAM_MESSAGE_MAX).toLocaleString('en')} characters`)
   }

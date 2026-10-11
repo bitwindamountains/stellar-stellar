@@ -106,14 +106,9 @@ export function weekStrip(posts: Post[], now = new Date()) {
   })
 }
 
-/**
- * Whether the post's own upload has been deleted: Handoff removes it once the by-hand part is marked done
- * and no automatic platform still needs it. Outside links (not under `bucketPrefix`) are never removed.
- */
-export function mediaWasRemoved(post: Post, bucketPrefix: string): boolean {
-  const ours = post.media_urls.some((u) => u.startsWith(bucketPrefix))
-  const automaticPending = post.platforms.some((p) => !isAssisted(p) && !isDone(post, p))
-  return ours && !!post.assist_done_at && !automaticPending
+/** The post had media, but the handoff removed the upload and cleared its link (see Handoff.done). */
+export function mediaWasRemoved(post: Post): boolean {
+  return post.media_type !== 'none' && post.media_urls.length === 0
 }
 
 /** Combines query results into one list without duplicates (a post can match several queries). */

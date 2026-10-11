@@ -79,15 +79,10 @@ describe('weekStrip', () => {
 })
 
 describe('mediaWasRemoved', () => {
-  const bucket = 'https://p.supabase.co/storage/v1/object/public/media/'
-  const shared = { media_type: 'video' as const, media_urls: [bucket + 'u1/a.mp4'], tg_message_id: '9' }
-  it('is true once a by-hand post with our upload is marked done', () => {
-    expect(mediaWasRemoved(post({ ...shared, platforms: ['tiktok'], assist_done_at: '2026-10-05T10:00:00Z' }), bucket)).toBe(true)
-  })
-  it('is false before marking done, while automatic platforms wait, or for outside links', () => {
-    expect(mediaWasRemoved(post({ ...shared, platforms: ['tiktok'] }), bucket)).toBe(false)
-    expect(mediaWasRemoved(post({ ...shared, platforms: ['tiktok', 'facebook'], assist_done_at: '2026-10-05T10:00:00Z' }), bucket)).toBe(false)
-    expect(mediaWasRemoved(post({ ...shared, media_urls: ['https://cdn.example/a.mp4'], platforms: ['tiktok'], assist_done_at: '2026-10-05T10:00:00Z' }), bucket)).toBe(false)
+  it('is true only when a post with media has no link left', () => {
+    expect(mediaWasRemoved(post({ media_type: 'video', media_urls: [] }))).toBe(true)
+    expect(mediaWasRemoved(post({ media_type: 'video', media_urls: ['https://x/a.mp4'] }))).toBe(false)
+    expect(mediaWasRemoved(post({ media_type: 'none', media_urls: [] }))).toBe(false)
   })
 })
 
