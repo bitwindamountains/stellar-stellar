@@ -409,7 +409,7 @@ button.chip:active { transform: scale(0.96); }
     position: fixed; z-index: 10; left: 12px; right: 12px; bottom: calc(12px + env(safe-area-inset-bottom));
     top: auto; flex-wrap: nowrap; justify-content: space-between;
   }
-  .island .brand, .island .desktop-only { display: none; }
+  .island .brand { display: none; }
   .island a { flex: 1; justify-content: center; padding: 0 10px; }
   .island .btn.primary { flex: 1.4; padding-right: 4px; }
   .filters { scrollbar-width: none; align-self: stretch; }
