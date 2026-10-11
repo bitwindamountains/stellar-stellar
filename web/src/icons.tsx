@@ -136,6 +136,11 @@ export const Asteroids = () => (
   </div>
 )
 
+export const Exit = () => (
+  <svg width="16" height="16" viewBox="0 0 24 24" strokeWidth={1.6} {...base} aria-hidden="true" style={{ flex: 'none' }}>
+    <path d="M14 4h4a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2h-4M10 16l-4-4 4-4M6 12h10" />
+  </svg>
+)
 export const Plus = () => (
   <svg width="14" height="14" viewBox="0 0 24 24" strokeWidth={1.6} {...base} aria-hidden="true">
     <path d="M12 5v14M5 12h14" />
