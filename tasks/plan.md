@@ -31,7 +31,7 @@ Each task: failing test, code, full suite + ruff green, one commit.
 
 ### Phase 0: Setup
 - [x] 0.1 uv project, Typer CLI skeleton, ruff, pytest
-- [ ] 0.2 `config.py`: env reader, missing-var error lists names (never values); `.env.example`
+- [x] 0.2 `config.py`: env reader, missing-var error lists names (never values); `.env.example`
 - [ ] 0.3 `CLAUDE.md`, README stub
 
 ### Phase 1: Core model
