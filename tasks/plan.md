@@ -37,7 +37,7 @@ Each task: failing test, code, full suite + ruff green, one commit.
 ### Phase 1: Core model
 - [x] 1.1 `models.py`: `Account`, `Post` (from header + row values), platform constants, `done(platform)`
 - [x] 1.2 `timeutil.py`: parse `publish_at` in account tz to UTC
-- [ ] 1.3 `validation.py`: rule list from blueprint 10.1 adjusted for assisted platforms
+- [x] 1.3 `validation.py`: rule list from blueprint 10.1 adjusted for assisted platforms
 
 ### Phase 2: Sheet layer
 - [ ] 2.1 `sheet.py`: header mapping, row parsing, cell-update building (pure, tested)
