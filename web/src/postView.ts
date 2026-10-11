@@ -105,3 +105,20 @@ export function weekStrip(posts: Post[], now = new Date()) {
     }
   })
 }
+
+/**
+ * Whether the post's own upload has been deleted: Handoff removes it once the by-hand part is marked done
+ * and no automatic platform still needs it. Outside links (not under `bucketPrefix`) are never removed.
+ */
+export function mediaWasRemoved(post: Post, bucketPrefix: string): boolean {
+  const ours = post.media_urls.some((u) => u.startsWith(bucketPrefix))
+  const automaticPending = post.platforms.some((p) => !isAssisted(p) && !isDone(post, p))
+  return ours && !!post.assist_done_at && !automaticPending
+}
+
+/** Combines query results into one list without duplicates (a post can match several queries). */
+export function mergePosts(...lists: (unknown[] | null)[]): Post[] {
+  const byNum = new Map<number, Post>()
+  for (const list of lists) for (const p of (list ?? []) as Post[]) byNum.set(p.num, p)
+  return [...byNum.values()]
+}
