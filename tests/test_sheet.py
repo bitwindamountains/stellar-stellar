@@ -57,3 +57,32 @@ def test_init_requests_add_dropdowns_format_and_freeze():
     fmt = next(r["repeatCell"] for r in reqs if "repeatCell" in r)
     assert fmt["range"]["startColumnIndex"] == 1
     assert fmt["cell"]["userEnteredFormat"]["numberFormat"]["pattern"] == "yyyy-mm-dd hh:mm"
+
+
+class FakeSpreadsheet:
+    def __init__(self):
+        self.bodies = []
+
+    def values_batch_get(self, ranges):
+        return {
+            "valueRanges": [{"values": [["account", "status"], ["main", "draft"]]}, {"values": [["account"]]}]
+        }
+
+    def values_batch_update(self, body):
+        self.bodies.append(body)
+
+    def worksheet(self, title):
+        raise AssertionError("write must not fetch worksheet metadata")
+
+
+def test_repository_write_is_one_call_with_tab_prefixed_ranges():
+    from postpilot.sheet import SheetRepository
+
+    ss = FakeSpreadsheet()
+    repo = SheetRepository(ss)
+    repo.header = ["account", "status"]
+    repo.write({2: {"status": "posting"}})
+    repo.write({})
+    assert ss.bodies == [
+        {"valueInputOption": "RAW", "data": [{"range": "Posts!B2", "values": [["posting"]]}]}
+    ]

@@ -6,6 +6,8 @@ from gspread.utils import rowcol_to_a1
 from postpilot.config import Config
 from postpilot.models import ACCOUNT_COLUMNS, MEDIA_TYPES, POST_COLUMNS, STATUSES, Account, Post
 
+# Retries 429/5xx with backoff. Safe: every write sets fixed values, so repeating one changes nothing.
+BACKOFF = gspread.BackOffHTTPClient
 POSTS_TAB = "Posts"
 ACCOUNTS_TAB = "Accounts"
 
@@ -87,9 +89,11 @@ def init_requests(sheet_id: int, header: list[str]) -> list[dict]:
 def open_spreadsheet(cfg: Config) -> gspread.Spreadsheet:
     try:
         if cfg.service_account_json:
-            client = gspread.service_account_from_dict(json.loads(cfg.service_account_json))
+            client = gspread.service_account_from_dict(
+                json.loads(cfg.service_account_json), http_client=BACKOFF
+            )
         else:
-            client = gspread.service_account(filename=cfg.service_account_file)
+            client = gspread.service_account(filename=cfg.service_account_file, http_client=BACKOFF)
         return client.open_by_key(cfg.sheet_id)
     except json.JSONDecodeError:
         raise SheetError("GOOGLE_SERVICE_ACCOUNT_JSON is not valid JSON") from None
@@ -118,8 +122,10 @@ class SheetRepository:
         return posts_from_values(posts_values), accounts_from_values(account_values)
 
     def write(self, updates: dict[int, dict[str, str]]) -> None:
-        if updates:
-            self.spreadsheet.worksheet(POSTS_TAB).batch_update(cell_updates(self.header, updates))
+        # One request per write (Sheets quota is ~60/min); ranges carry the tab name so no metadata fetch.
+        data = [{**d, "range": f"{POSTS_TAB}!{d['range']}"} for d in cell_updates(self.header, updates)]
+        if data:
+            self.spreadsheet.values_batch_update({"valueInputOption": "RAW", "data": data})
 
 
 def init_sheet(spreadsheet: gspread.Spreadsheet) -> None:
