@@ -13,3 +13,11 @@ secrets/
 *.log
 .DS_Store
 Thumbs.db
+
+# Python
+.venv/
+__pycache__/
+*.pyc
+dist/
+.pytest_cache/
+.ruff_cache/
