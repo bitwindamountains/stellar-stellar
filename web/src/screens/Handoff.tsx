@@ -15,6 +15,7 @@ export default function Handoff({ num }: { num: number }) {
   const [error, setError] = useState('')
   const [copied, setCopied] = useState(false)
   const [sharing, setSharing] = useState(false)
+  const [swapping, setSwapping] = useState(false)
 
   useEffect(() => {
     supabase.from('posts').select('*').eq('num', num).single().then(({ data, error }) => {
@@ -49,7 +50,9 @@ export default function Handoff({ num }: { num: number }) {
 
   async function copy() {
     await navigator.clipboard.writeText(text)
-    setCopied(true)
+    // Blur bridges the label swap so it reads as one change, not two overlapping words.
+    setSwapping(true)
+    setTimeout(() => { setCopied(true); setSwapping(false) }, 90)
   }
 
   async function done() {
@@ -63,8 +66,6 @@ export default function Handoff({ num }: { num: number }) {
     go('/')
   }
 
-  const step = { width: '100%', minHeight: 56, display: 'flex', alignItems: 'center', gap: 14, padding: '0 16px', border: 0, borderRadius: 18,
-    background: '#fff', boxShadow: '0 0 0 1px rgba(21,23,27,0.06)', fontSize: 15, fontWeight: 500, textAlign: 'left', textDecoration: 'none', cursor: 'pointer' } as const
   const n = (i: string) => <span className="mono" style={{ width: 28 }}>{i}</span>
 
   return (
@@ -85,11 +86,11 @@ export default function Handoff({ num }: { num: number }) {
       </div>
 
       <ol style={{ listStyle: 'none', margin: 0, padding: 0, display: 'flex', flexDirection: 'column', gap: 8 }}>
-        {media && <li><button type="button" style={step} onClick={shareMedia} disabled={sharing}>{n('01')}{sharing ? 'Preparing…' : `Share ${post.media_type}`}</button></li>}
-        {text && <li><button type="button" style={step} onClick={copy}>{n(media ? '02' : '01')}<span style={{ flex: 1 }}>{copied ? 'Caption copied' : 'Copy caption'}</span>{copied && <Check />}</button></li>}
+        {media && <li><button type="button" className="step" onClick={shareMedia} disabled={sharing}>{n('01')}{sharing ? 'Preparing…' : `Share ${post.media_type}`}</button></li>}
+        {text && <li><button type="button" className="step" onClick={copy}>{n(media ? '02' : '01')}<span className={`swap${swapping ? ' swapping' : ''}`} style={{ flex: 1 }}>{copied ? 'Caption copied' : 'Copy caption'}</span>{copied && <Check />}</button></li>}
         <li style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
           {targets.map((p) => OPEN_URL[p] && (
-            <a key={p} href={OPEN_URL[p]} target="_blank" rel="noopener" style={{ ...step, flex: '1 1 140px', width: 'auto' }}>Open {PLATFORM_NAMES[p]}</a>
+            <a key={p} href={OPEN_URL[p]} target="_blank" rel="noopener" className="step" style={{ flex: '1 1 140px', width: 'auto' }}>Open {PLATFORM_NAMES[p]}</a>
           ))}
         </li>
       </ol>

@@ -10,7 +10,7 @@ const ACCEPT = 'image/jpeg,image/png,image/webp,video/mp4,video/quicktime'
 const MAX_BYTES = 50 * 1024 * 1024 // matches the bucket's file_size_limit
 
 export default function Composer({ num }: { num?: number }) {
-  const [accounts, setAccounts] = useState<Account[]>([])
+  const [accounts, setAccounts] = useState<Account[] | null>(null) // null = still loading
   const [post, setPost] = useState<Post | null>(null)
   const [accountId, setAccountId] = useState<number | ''>('')
   const [platforms, setPlatforms] = useState<Platform[]>(['facebook', 'instagram'])
@@ -33,7 +33,7 @@ export default function Composer({ num }: { num?: number }) {
   }, [num])
 
   useEffect(() => {
-    if (!num || accounts.length === 0) return
+    if (!num || !accounts?.length) return
     supabase.from('posts').select('*').eq('num', num).single().then(({ data, error }) => {
       if (error) return setError(error.message)
       const p = data as Post
@@ -49,7 +49,7 @@ export default function Composer({ num }: { num?: number }) {
     })
   }, [num, accounts])
 
-  const account = accounts.find((a) => a.id === accountId)
+  const account = accounts?.find((a) => a.id === accountId)
   const draft = { account, platforms, publishAt, caption, mediaType, mediaUrls: mediaUrl ? [mediaUrl] : [], link }
   const problems = validate(draft, true)
   const locked = post?.status === 'posting'
@@ -106,6 +106,8 @@ export default function Composer({ num }: { num?: number }) {
     go('/')
   }
 
+  // Wait for accounts before choosing a screen, so the empty state never flashes on load.
+  if (accounts === null) return null
   if (accounts.length === 0 && !error) {
     return (
       <section className="hero rise">
@@ -163,7 +165,7 @@ export default function Composer({ num }: { num?: number }) {
                         onChange={(e) => e.target.files?.[0] && upload(e.target.files[0])} />
                     </label>
                     <span style={{ fontSize: 13, color: 'var(--muted)' }}>
-                      {busy === 'upload' ? 'Uploading…' : mediaUrl ? 'Uploaded. Pick another file to replace it.' : 'JPG, PNG, WebP, MP4 or MOV, up to 50 MB'}
+                      {busy === 'upload' ? 'Uploading…' : mediaUrl ? 'Uploaded.' : 'JPG, PNG, WebP, MP4 or MOV, up to 50 MB'}
                     </span>
                     {mediaUrl && (
                       <button type="button" onClick={() => { setMediaUrl(''); setMediaType('none') }}
@@ -198,9 +200,7 @@ export default function Composer({ num }: { num?: number }) {
                 {PLATFORMS.map((p) => {
                   const on = platforms.includes(p)
                   return (
-                    <label key={p} style={{ display: 'flex', flexDirection: 'column', gap: 10, padding: 16, borderRadius: 18, cursor: 'pointer',
-                      background: on ? '#fff' : 'var(--well)', boxShadow: on ? 'inset 0 0 0 1.5px var(--ink)' : 'inset 0 0 0 1px var(--hair)',
-                      transition: 'box-shadow 400ms var(--ease), background-color 400ms var(--ease)' }}>
+                    <label key={p} className="tile">
                       <span style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
                         <span style={{ fontSize: 15, fontWeight: 500 }}>{PLATFORM_NAMES[p]}</span>
                         <input type="checkbox" checked={on} onChange={() => toggle(p)} style={{ width: 20, height: 20, accentColor: 'var(--ink)' }} />
