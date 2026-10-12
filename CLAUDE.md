@@ -14,7 +14,8 @@ Original blueprint: 04_PostPilot_Blueprint.md (where it disagrees with the plan,
 - Publisher: `python -m uv sync` · `python -m uv run pytest -q` · `python -m uv run ruff check . && python -m uv run ruff format .`
 - Dry run: `python -m uv run --env-file .env postpilot publish --dry-run` (real runs outside Actions need `--local`)
 - Web (in `web/`): `npm run dev` · `npm test` · `npm run build` (runs `tsc --noEmit` first)
-- Supabase project: `tfkazskwrarwbjdtlqed` (Seoul), shared with another app's `rentflow` schema: never touch `rentflow`.
+- Supabase project: `wsclesrylegjsyfxaamr` ("personal privonly", Mumbai), PostPilot only, sign-ups off. The old project
+  `tfkazskwrarwbjdtlqed` belongs to `rentflow` (public apps): never touch it.
 
 ## Rules
 - Never publish for real while developing unless I explicitly say so; default to --dry-run.
