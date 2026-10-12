@@ -9,7 +9,7 @@ Nothing has posted for real yet: go-live needs your accounts and keys (below).
 | Part | State |
 |---|---|
 | Publisher (Python, GitHub Actions every 30 min) | Done. 127 tests. Scheduled runs skip until configured. |
-| Supabase schema + RLS | Applied to project `tfkazskwrarwbjdtlqed`; RLS verified with simulated users. |
+| Supabase schema + RLS | Applied to project `wsclesrylegjsyfxaamr` (private, own project); RLS verified with simulated users. |
 | `dispatch` function (instant Post now) | Deployed (v2), rejects anyone not signed in. Needs `GITHUB_TOKEN`/`GITHUB_REPO` secrets. |
 | Web app (PWA) | Done. 27 tests. Runs locally (`web/.env` set). Not deployed yet. |
 | GitHub repo | `bitwindamountains/PostPilot`, private. Secret set: `SUPABASE_URL`. |
