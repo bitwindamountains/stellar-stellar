@@ -26,6 +26,7 @@ function reply(body: Record<string, unknown>, status = 200): Response {
 
 function backToApp(params: Record<string, string>): Response {
   const app = env('WEB_APP_URL').replace(/\/$/, '')
+  if (!app) return reply({ ...params, note: 'Set the WEB_APP_URL secret so this page returns to the app' }, 400)
   return Response.redirect(`${app}/#/accounts?${new URLSearchParams(params)}`, 303)
 }
 
