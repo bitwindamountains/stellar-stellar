@@ -5,10 +5,10 @@ from datetime import UTC, datetime
 import httpx
 import typer
 
-from postpilot import facebook, instagram, telegram
+from postpilot import facebook, instagram, oauth, telegram, tiktok, x
 from postpilot.config import Config, ConfigError, load_config
 from postpilot.graph import GraphClient
-from postpilot.models import API_PLATFORMS, DEFAULT_TIMEZONE, PlatformError, StoreError
+from postpilot.models import DEFAULT_TIMEZONE, PlatformError, StoreError
 from postpilot.nudge import nudge_window
 from postpilot.runner import run
 from postpilot.sheet import SheetError, SheetRepository, init_sheet, open_spreadsheet
@@ -92,14 +92,24 @@ def publish(
     repo = _repository(cfg)
     http = httpx.Client(timeout=30)
 
-    def publisher(module):
+    now = _now()
+    token = _tokens(repo, cfg, http, now)
+
+    def meta(module):
         def publish_one(post, account):
-            token = cfg.env.get(account.token_env)
-            if not token:
-                raise PlatformError("auth", f"{account.token_env} is not set (add it as a GitHub secret)")
-            return module.publish(GraphClient(cfg.meta_graph_version, token, http=http), account, post)
+            graph = GraphClient(cfg.meta_graph_version, token(account, "meta"), http=http)
+            return module.publish(graph, account, post)
 
         return publish_one
+
+    publishers = {
+        "facebook": meta(facebook),
+        "instagram": meta(instagram),
+        "x": lambda post, account: x.publish(http, token(account, "x"), post),
+        "tiktok": lambda post, account: tiktok.publish(
+            http, token(account, "tiktok"), post, cfg.tiktok_privacy
+        ),
+    }
 
     assist = None
     if cfg.telegram_bot_token and cfg.telegram_chat_id:
@@ -111,11 +121,10 @@ def publish(
             )
 
     started = time.monotonic()
-    now = _now()
     try:
         report = run(
             repo,
-            {"facebook": publisher(facebook), "instagram": publisher(instagram)},
+            publishers,
             assist,
             cfg,
             now,
@@ -159,7 +168,9 @@ def doctor() -> None:
     typer.echo(f"OK   store: {len(posts)} active post(s), {len(accounts)} account(s)")
     for account in accounts.values():
         used = {p for post in posts if post.get("account") == account.name for p in post.platforms}
-        if not used & set(API_PLATFORMS):
+        # Connected logins are checked when they post; this checks the GitHub-secret Meta tokens.
+        # (with a Facebook connection the publisher ignores token_env, so it isn't checked either)
+        if not used & {"facebook", "instagram"} or not account.token_env or "meta" in account.connected:
             continue
 
         def token_check(account=account):
@@ -173,9 +184,61 @@ def doctor() -> None:
     if cfg.telegram_bot_token and cfg.telegram_chat_id:
         check("telegram", lambda: "bot @" + telegram.bot_name(http, cfg.telegram_bot_token))
     else:
-        typer.echo("SKIP telegram: not configured (needed for fb_profile, tiktok, youtube rows)")
+        typer.echo("SKIP telegram: not configured (needed for fb_profile, tiktok, youtube, shopee rows)")
     if problems:
         raise typer.Exit(1)
+
+
+def _tokens(repo, cfg: Config, http: httpx.Client, now: datetime):
+    """token(account, connection) -> access token: a saved login (refreshed near expiry) or, for Meta,
+    the GitHub secret named by token_env. Each login is read and refreshed at most once per run, and a
+    failure is remembered so later posts don't repeat the call (a repeated refresh could spend a token)."""
+    cache: dict[tuple[str, str], str | PlatformError] = {}
+
+    def token(account, kind: str) -> str:
+        key = (account.name, kind)
+        if key not in cache:
+            try:
+                cache[key] = lookup(account, kind)
+            except PlatformError as e:
+                cache[key] = e
+        found = cache[key]
+        if isinstance(found, PlatformError):
+            raise found
+        return found
+
+    def lookup(account, kind: str) -> str:
+        if kind in account.connected:
+            try:
+                found = repo.tokens(account.name, kind)
+            except StoreError as e:
+                raise PlatformError("transient", str(e)) from None
+            if found is None:
+                raise PlatformError("auth", f"{kind} login is missing: reconnect it on the Accounts page")
+            tokens, expires_at = found
+            if oauth.needs_refresh(expires_at, now):
+                tokens, expires_at = oauth.refresh(http, kind, tokens.get("refresh_token", ""), cfg.env, now)
+                try:
+                    still_connected = repo.save_tokens(account.name, kind, tokens, expires_at)
+                except StoreError:
+                    # X rotates refresh tokens: post now with the new one; the next run asks to reconnect.
+                    typer.echo(
+                        f"Couldn't save the refreshed {kind} login for account {account.name}", err=True
+                    )
+                else:
+                    if not still_connected:
+                        raise PlatformError("auth", f"{kind} was disconnected while posting: not posted")
+            return tokens["access_token"]
+        if kind == "meta" and account.token_env:
+            value = cfg.env.get(account.token_env)
+            if not value:
+                raise PlatformError("auth", f"{account.token_env} is not set (add it as a GitHub secret)")
+            return value
+        raise PlatformError(
+            "auth", f"No {kind} login for account {account.name}: connect it on the Accounts page"
+        )
+
+    return token
 
 
 def _nudge_if_empty(repo, cfg: Config, http: httpx.Client, now: datetime) -> None:

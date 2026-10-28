@@ -3,13 +3,24 @@ from dataclasses import dataclass
 
 FACEBOOK = "facebook"
 INSTAGRAM = "instagram"
-API_PLATFORMS = (FACEBOOK, INSTAGRAM)
-# No usable posting API for these yet: PostPilot sends them to Telegram for a manual share.
-ASSISTED_PLATFORMS = ("fb_profile", "tiktok", "youtube")
-PLATFORMS = API_PLATFORMS + ASSISTED_PLATFORMS
+X = "x"
+TIKTOK = "tiktok"
+SHOPEE = "shopee"
+API_PLATFORMS = (FACEBOOK, INSTAGRAM, X, TIKTOK)
+# Sent to Telegram for a manual share. TikTok is in both: it goes by hand until the account connects TikTok.
+ASSISTED_PLATFORMS = ("fb_profile", TIKTOK, "youtube", SHOPEE)
+PLATFORMS = tuple(dict.fromkeys(API_PLATFORMS + ASSISTED_PLATFORMS))
 
-ID_COLUMN = {FACEBOOK: "fb_post_id", INSTAGRAM: "ig_media_id"}
-PERMALINK_COLUMN = {FACEBOOK: "fb_permalink", INSTAGRAM: "ig_permalink"}
+ID_COLUMN = {FACEBOOK: "fb_post_id", INSTAGRAM: "ig_media_id", X: "x_post_id", TIKTOK: "tiktok_id"}
+PERMALINK_COLUMN = {
+    FACEBOOK: "fb_permalink",
+    INSTAGRAM: "ig_permalink",
+    X: "x_permalink",
+    TIKTOK: "tiktok_permalink",
+}
+SENT_BY_HAND = (
+    "telegram"  # TikTok's ID when it went out through Telegram: still done, never auto-posted later
+)
 
 STATUSES = ("draft", "scheduled", "posting", "posted", "partial", "failed", "missed")
 MEDIA_TYPES = ("none", "image", "video")
@@ -29,6 +40,10 @@ POST_COLUMNS = (
     "fb_permalink",
     "ig_media_id",
     "ig_permalink",
+    "x_post_id",
+    "x_permalink",
+    "tiktok_id",
+    "tiktok_permalink",
     "tg_message_id",
     "last_error",
     "posted_at",
@@ -44,6 +59,13 @@ class Account:
     ig_user_id: str
     token_env: str
     timezone: str
+    connected: frozenset[str] = frozenset()  # saved logins: "meta" (Facebook+Instagram), "x", "tiktok"
+
+    def by_api(self, platform: str) -> bool:
+        """TikTok posts automatically only once connected; the other API platforms always do."""
+        if platform == TIKTOK:
+            return TIKTOK in self.connected
+        return platform in API_PLATFORMS
 
     @classmethod
     def from_cells(cls, cells: dict[str, str]) -> "Account":

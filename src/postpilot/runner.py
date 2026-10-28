@@ -5,10 +5,10 @@ from typing import Protocol
 
 from postpilot.config import Config
 from postpilot.models import (
-    API_PLATFORMS,
     ASSISTED_PLATFORMS,
     ID_COLUMN,
     PERMALINK_COLUMN,
+    SENT_BY_HAND,
     Account,
     PlatformError,
     Post,
@@ -70,7 +70,7 @@ def run(
     # One batch: close out rows that won't publish, then claim the due ones.
     updates: dict[int, dict[str, str]] = {}
     for post in s.missed:
-        why = f"Not posted: over {cfg.late_grace_minutes} min late. Set new publish_at, status scheduled."
+        why = f"Not posted: more than {cfg.late_grace_minutes} minutes late. Edit it to post now or later."
         updates[post.row] = {"status": "missed", "last_error": why}
         report.missed.append(post.row)
     for post in s.exhausted:
@@ -125,7 +125,7 @@ def _publish_row(post, account, publishers, assist, write, cfg, stamp, report, d
     errors: list[tuple[str, PlatformError]] = []
     done_now: list[str] = []
     for platform in post.platforms:
-        if platform not in API_PLATFORMS or post.done(platform):
+        if not account.by_api(platform) or post.done(platform):
             continue
         try:
             result = publishers[platform](post, account)
@@ -140,7 +140,9 @@ def _publish_row(post, account, publishers, assist, write, cfg, stamp, report, d
         save({ID_COLUMN[platform]: result.id, PERMALINK_COLUMN[platform]: result.permalink})
         done_now.append(platform)
 
-    assisted = [p for p in post.platforms if p in ASSISTED_PLATFORMS and not post.done(p)]
+    assisted = [
+        p for p in post.platforms if p in ASSISTED_PLATFORMS and not account.by_api(p) and not post.done(p)
+    ]
     if assisted:
         if assist is None:
             errors.append(
@@ -148,7 +150,8 @@ def _publish_row(post, account, publishers, assist, write, cfg, stamp, report, d
             )
         else:
             try:
-                save({"tg_message_id": assist(post, assisted)})
+                by_hand = {ID_COLUMN[p]: SENT_BY_HAND for p in assisted if p in ID_COLUMN}
+                save({"tg_message_id": assist(post, assisted), **by_hand})
                 done_now += assisted
             except PlatformError as e:
                 errors.append(("telegram", e))

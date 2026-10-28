@@ -1,25 +1,26 @@
 import { useEffect, useState } from 'react'
 import { textFor, titleFor, type Variants } from '../content'
-import { Check, Logo } from '../icons'
+import { Check, FlightPath, Logo } from '../icons'
 import { go } from '../route'
 import { supabase } from '../supabase'
-import { isAssisted, isDone, PLATFORM_NAMES, type Platform, type Post } from '../types'
+import { ACCOUNT_SELECT, isDone, sentByHand, PLATFORM_NAMES, type Account, type Platform, type Post } from '../types'
 
 const OPEN_URL: Partial<Record<Platform, string>> = {
   tiktok: 'https://www.tiktok.com/upload',
   youtube: 'https://studio.youtube.com',
   fb_profile: 'https://www.facebook.com',
+  shopee: 'https://shopee.ph',
 }
 
 export default function Handoff({ num }: { num: number }) {
-  const [post, setPost] = useState<Post | null>(null)
+  const [post, setPost] = useState<(Post & { account?: Account }) | null>(null)
   const [error, setError] = useState('')
   const [copied, setCopied] = useState('') // which copy button last succeeded
   const [sharing, setSharing] = useState(false)
   const [swapping, setSwapping] = useState('')
 
   useEffect(() => {
-    supabase.from('posts').select('*').eq('num', num).single().then(({ data, error }) => {
+    supabase.from('posts').select(`*, account:accounts(${ACCOUNT_SELECT})`).eq('num', num).single().then(({ data, error }) => {
       if (error) setError(error.message)
       else setPost(data as Post)
     })
@@ -28,7 +29,7 @@ export default function Handoff({ num }: { num: number }) {
   if (error) return <Frame><p className="notice" role="alert">{error}</p></Frame>
   if (!post) return <Frame />
 
-  const targets = post.platforms.filter(isAssisted)
+  const targets = post.platforms.filter((p) => sentByHand(post, p, post.account))
   const media = post.media_urls[0]
   const variants = (post.variants ?? {}) as Variants
   // Same text the publisher sends to Telegram: the platform's own caption, plus the link for your profile.
@@ -53,22 +54,29 @@ export default function Handoff({ num }: { num: number }) {
   }
 
   async function copy(key: string, value: string) {
-    await navigator.clipboard.writeText(value)
+    let result = key
+    try {
+      await navigator.clipboard.writeText(value)
+    } catch {
+      result = `${key}:failed` // no clipboard permission (or not https): say so instead of failing silently
+    }
     // Blur bridges the label swap so it reads as one change, not two overlapping words.
     setSwapping(key)
-    setTimeout(() => { setCopied(key); setSwapping('') }, 90)
+    setTimeout(() => { setCopied(result); setSwapping('') }, 90)
+    // Revert so a second tap visibly copies again.
+    setTimeout(() => setCopied((c) => (c === result ? '' : c)), 1800)
   }
 
   const copyButton = (key: string, label: string, value: string) => (
     <button type="button" className="step" onClick={() => copy(key, value)}>
-      <span className={`swap${swapping === key ? ' swapping' : ''}`} style={{ flex: 1 }}>{copied === key ? 'Copied' : label}</span>
+      <span className={`swap${swapping === key ? ' swapping' : ''}`} style={{ flex: 1 }}>{copied === key ? 'Copied' : copied === `${key}:failed` ? "Couldn't copy: select the text above" : label}</span>
       {copied === key && <Check />}
     </button>
   )
 
   async function done() {
     // Free-plan storage is 1 GB: once nothing else needs the upload, remove it. Pasted outside links are left alone.
-    const automaticPending = post!.platforms.some((p) => !isAssisted(p) && !isDone(post!, p))
+    const automaticPending = post!.platforms.some((p) => !sentByHand(post!, p, post!.account) && !isDone(post!, p))
     const prefix = supabase.storage.from('media').getPublicUrl('').data.publicUrl
     let removed = automaticPending ? [] : post!.media_urls.filter((u) => u.startsWith(prefix))
     if (removed.length) {
@@ -85,16 +93,16 @@ export default function Handoff({ num }: { num: number }) {
     go('/')
   }
 
-  const n = (i: string) => <span className="mono" style={{ width: 28 }}>{i}</span>
 
   return (
     <Frame>
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-        <span className="eyebrow" style={{ background: 'var(--accent-tint)', color: 'var(--accent-ink)' }}>
-          {post.assist_done_at ? 'Done' : 'Post by hand'}
-        </span>
+      <header className="sky compact" style={{ display: 'flex', flexDirection: 'column', gap: 10, padding: 24, borderRadius: 28 }}>
         <h1 style={{ margin: 0, fontSize: 34, lineHeight: 1.02, fontWeight: 600, letterSpacing: '-0.035em' }}>Post to {names || 'your apps'}</h1>
-      </div>
+        <p style={{ margin: 0, fontSize: 15, color: post.assist_done_at ? 'var(--accent-ink)' : 'var(--muted)' }}>
+          {post.assist_done_at ? 'Marked as posted.' : 'Share it from your phone, then tap I posted it.'}
+        </p>
+        <FlightPath />
+      </header>
 
       <div className="tray">
         <div className="core flush">
@@ -105,7 +113,7 @@ export default function Handoff({ num }: { num: number }) {
       </div>
 
       <ol style={{ listStyle: 'none', margin: 0, padding: 0, display: 'flex', flexDirection: 'column', gap: 8 }}>
-        {media && <li><button type="button" className="step" onClick={shareMedia} disabled={sharing}>{n('01')}{sharing ? 'Preparing…' : `Share ${post.media_type}`}</button></li>}
+        {media && <li><button type="button" className="step" onClick={shareMedia} disabled={sharing}>{sharing ? 'Preparing…' : `Share ${post.media_type}`}</button></li>}
         {targets.map((p) => (
           <li key={p} style={{ display: 'flex', flexDirection: 'column', gap: 8, paddingTop: 8 }}>
             <span className="mono" style={{ paddingLeft: 4 }}>{PLATFORM_NAMES[p].toUpperCase()}</span>
