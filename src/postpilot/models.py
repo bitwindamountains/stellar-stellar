@@ -10,6 +10,8 @@ API_PLATFORMS = (FACEBOOK, INSTAGRAM, X, TIKTOK)
 # Sent to Telegram for a manual share. TikTok is in both: it goes by hand until the account connects TikTok.
 ASSISTED_PLATFORMS = ("fb_profile", TIKTOK, "youtube", SHOPEE)
 PLATFORMS = tuple(dict.fromkeys(API_PLATFORMS + ASSISTED_PLATFORMS))
+# Uploaded by API as a draft (TikTok inbox): you still finish it in the app, with the caption from Telegram.
+FINISH_IN_APP = (TIKTOK,)
 
 ID_COLUMN = {FACEBOOK: "fb_post_id", INSTAGRAM: "ig_media_id", X: "x_post_id", TIKTOK: "tiktok_id"}
 PERMALINK_COLUMN = {

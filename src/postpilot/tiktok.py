@@ -20,12 +20,8 @@ def classify(status: int, body: dict) -> PlatformError:
         )
     if code in RATE_CODES or status == 429:
         return PlatformError("rate", f"TikTok rate limit reached, will retry next run: {message}")
-    if code == "unaudited_client_can_only_post_to_private_accounts":
-        return PlatformError(
-            "permanent",
-            "TikTok only lets unapproved apps post to private TikTok accounts: set your TikTok account to "
-            "private until TikTok approves the app",
-        )
+    if code == "spam_risk_too_many_pending_share":
+        return PlatformError("rate", "Too many TikTok drafts waiting: post or delete some in TikTok")
     if status >= 500:
         return PlatformError("transient", f"TikTok had a temporary problem: {message}")
     return PlatformError("permanent", f"TikTok rejected the post: {message} ({code or status})")
@@ -48,7 +44,6 @@ def publish(
     http: httpx.Client,
     token: str,
     post: Post,
-    privacy: str = "SELF_ONLY",
     sleep: Callable[[float], None] = time.sleep,
     checks: int = 12,
 ) -> PublishResult:
@@ -68,11 +63,12 @@ def publish(
             json=body,
         )["data"]
 
-    # An initialised upload that never receives bytes just expires, so init may retry.
+    # Drafts: the video lands in your TikTok inbox and you post it from the app (no app audit needed, and
+    # caption/privacy are set there). An initialised upload that never receives bytes just expires, so init
+    # may retry.
     init = api(
-        "post/publish/video/init/",
+        "post/publish/inbox/video/init/",
         safe=True,
-        post_info={"title": post.text_for("tiktok"), "privacy_level": privacy},
         source_info={
             "source": "FILE_UPLOAD",
             "video_size": size,
@@ -88,7 +84,7 @@ def publish(
             init["upload_url"],
             service="TikTok",
             classify=classify,
-            safe=False,  # once the bytes arrive TikTok posts it: never upload twice on an unclear answer
+            safe=False,  # once the bytes arrive it's in your inbox: never upload twice on an unclear answer
             content=video[start:end],
             headers={"Content-Type": mime or "video/mp4", "Content-Range": f"bytes {start}-{end - 1}/{size}"},
             timeout=300,
@@ -98,11 +94,11 @@ def publish(
             status = api("post/publish/status/fetch/", safe=True, publish_id=publish_id)
         except PlatformError:
             break  # it was uploaded: keep the ID so it is never posted twice
-        if status.get("status") == "PUBLISH_COMPLETE":
+        if status.get("status") in ("SEND_TO_USER_INBOX", "PUBLISH_COMPLETE"):
             break
         if status.get("status") == "FAILED":
             reason = status.get("fail_reason") or "no reason given"
-            raise PlatformError("permanent", f"TikTok didn't publish the video: {reason}")
+            raise PlatformError("permanent", f"TikTok didn't take the video: {reason}")
         if check < checks - 1:
             sleep(5)
     # Still processing after the checks is fine: TikTok finishes it on its own.

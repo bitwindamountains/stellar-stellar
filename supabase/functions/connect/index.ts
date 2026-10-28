@@ -83,7 +83,7 @@ function authorizeUrl(platform: Platform, state: string, codeChallenge: string):
   }
   return `https://www.tiktok.com/v2/auth/authorize/?${new URLSearchParams({
     client_key: env('TIKTOK_CLIENT_KEY'), response_type: 'code', redirect_uri: REDIRECT_URI, state,
-    scope: 'user.info.basic,video.publish',
+    scope: 'user.info.basic,video.upload', // drafts: no app audit needed
   })}`
 }
 

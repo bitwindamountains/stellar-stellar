@@ -54,8 +54,8 @@ Design: `docs/superpowers/specs/2026-10-28-connect-and-post-design.md`. Code + t
    - Meta (developers.facebook.com): Facebook Login for Business; you as admin can use it in Development mode.
    - X (developer.x.com): OAuth 2.0, confidential client, read+write; buy pay-per-use credits and set a spend cap
      (~$0.015 a post, $0.20 with a link).
-   - TikTok (developers.tiktok.com): Login Kit + Content Posting API. Posts stay private until the app passes audit;
-     then set the GitHub variable `TIKTOK_PRIVACY_LEVEL=PUBLIC_TO_EVERYONE`.
+   - TikTok (developers.tiktok.com): Login Kit + Content Posting API with the `video.upload` scope (drafts). Videos
+     land in your TikTok inbox and the caption comes to Telegram; no app audit needed for that.
 3. Edge Function secrets: `WEB_APP_URL, META_APP_ID, META_APP_SECRET, X_CLIENT_ID, X_CLIENT_SECRET,
    TIKTOK_CLIENT_KEY, TIKTOK_CLIENT_SECRET`. GitHub secrets: `X_CLIENT_ID, X_CLIENT_SECRET, TIKTOK_CLIENT_KEY,
    TIKTOK_CLIENT_SECRET` (the publisher refreshes X/TikTok logins).

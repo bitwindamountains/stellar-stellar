@@ -100,6 +100,16 @@ export function sentByHand(post: Post, p: Platform, account?: Account): boolean 
   return byHand('tiktok', account)
 }
 
+/** Uploaded to your TikTok drafts (inbox): you finish it in TikTok with the caption. Same as FINISH_IN_APP. */
+export function isDraft(post: Post, p: Platform): boolean {
+  return p === 'tiktok' && post.tiktok_id !== '' && post.tiktok_id !== SENT_BY_HAND
+}
+
+/** Something for you to do on your phone: posting by hand, or finishing a draft. */
+export function needsFinishing(post: Post, p: Platform, account?: Account): boolean {
+  return sentByHand(post, p, account) || isDraft(post, p)
+}
+
 /** Live on a platform that posted it automatically: such a post must not be deleted from the app. */
 export function postedByApi(post: Post): boolean {
   return !!(post.fb_post_id || post.ig_media_id || post.x_post_id || (post.tiktok_id && post.tiktok_id !== SENT_BY_HAND))
