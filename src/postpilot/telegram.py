@@ -5,7 +5,7 @@ import httpx
 from postpilot.models import PlatformError, Post
 
 API = "https://api.telegram.org"
-NAMES = {"fb_profile": "Facebook (personal)", "tiktok": "TikTok", "youtube": "YouTube"}
+NAMES = {"fb_profile": "Facebook (personal)", "tiktok": "TikTok", "youtube": "YouTube", "shopee": "Shopee"}
 
 
 def send_assist(

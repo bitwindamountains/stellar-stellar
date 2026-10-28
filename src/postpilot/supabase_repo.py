@@ -29,9 +29,17 @@ class SupabaseRepository:
         rows = self._request(
             "GET", "accounts", params={"select": "id,fb_page_id,ig_user_id,token_env,timezone"}
         )
+        connected: dict[str, set[str]] = {}
+        for c in self._request("GET", "connections", params={"select": "account_id,platform"}):
+            connected.setdefault(str(c["account_id"]), set()).add(c["platform"])
         accounts = {
             str(a["id"]): Account(
-                str(a["id"]), a["fb_page_id"], a["ig_user_id"], a["token_env"], a["timezone"]
+                str(a["id"]),
+                a["fb_page_id"],
+                a["ig_user_id"],
+                a["token_env"],
+                a["timezone"],
+                frozenset(connected.get(str(a["id"]), ())),
             )
             for a in rows
         }
@@ -69,6 +77,35 @@ class SupabaseRepository:
             ("status", "not.in.(failed,missed)"),
         ]
         return len(self._request("GET", "posts", params=params))
+
+    def tokens(self, account: str, platform: str) -> tuple[dict, str] | None:
+        """A saved login's tokens (decrypted from Vault) and expiry ('' = never), or None if not connected."""
+        rows = self._request(
+            "POST",
+            "rpc/connection_tokens",
+            json={"p_account": int(account), "p_platform": platform},
+            returning=True,
+        )
+        if not rows:
+            return None
+        try:
+            tokens = json.loads(rows[0]["tokens"])
+        except (TypeError, ValueError):
+            raise StoreError(f"Saved {platform} login is unreadable: reconnect it") from None
+        return tokens, rows[0]["expires_at"] or ""
+
+    def save_tokens(self, account: str, platform: str, tokens: dict, expires_at: str) -> None:
+        self._request(
+            "POST",
+            "rpc/save_connection",
+            json={
+                "p_account": int(account),
+                "p_platform": platform,
+                "p_handle": "",  # keeps the handle shown in the app
+                "p_tokens": json.dumps(tokens),
+                "p_expires_at": expires_at or None,
+            },
+        )
 
     def record_run(self, **counts) -> None:
         self._request("POST", "runs", json=counts)
