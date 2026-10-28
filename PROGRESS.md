@@ -1,17 +1,17 @@
 # PostPilot progress
 
-_Last updated: 2026-10-12_
+_Last updated: 2026-10-28_
 
 ## Where things stand
-Code is complete for personal use and merged to `main` (PRs #1–#3). PR #4 (web polish) is open.
-Nothing has posted for real yet: go-live needs your accounts and keys (below).
+Everything is merged to `main` (PRs #1–#7) and the web app is live. Nothing has posted for real yet: go-live
+needs your developer apps and keys (below). Next up: the TikTok developer app (walkthrough below).
 
 | Part | State |
 |---|---|
-| Publisher (Python, GitHub Actions every 30 min) | Done. 127 tests. Scheduled runs skip until configured. |
+| Publisher (Python, GitHub Actions every 30 min) | Done. 186 tests. FB, IG, X automatic; TikTok to drafts. |
 | Supabase schema + RLS | Applied to project `wsclesrylegjsyfxaamr` (private, own project); RLS verified with simulated users. |
 | `dispatch` function (instant Post now) | Deployed (v2), rejects anyone not signed in. Needs `GITHUB_TOKEN`/`GITHUB_REPO` secrets. |
-| Web app (PWA) | Done. 27 tests. Runs locally (`web/.env` set). Not deployed yet. |
+| Web app (PWA) | Done. 34 tests. Live on Cloudflare Workers. |
 | GitHub repo | `bitwindamountains/PostPilot`, private. Secret set: `SUPABASE_URL`. |
 
 ## Done
@@ -24,6 +24,10 @@ Nothing has posted for real yet: go-live needs your accounts and keys (below).
   JPEG for Instagram, delete/save never touch a post being published, unresolved posts always visible, Telegram
   length counted like Telegram, and more. See PR #3.
 - **Polish (PR #4)**: account rows layout fix, quieter visuals, phone layout fixes, plain wording.
+- **Connect logins (PR #5)**: Connect buttons (Meta, X, TikTok) via the `connect` function, tokens in Vault,
+  X posting, Shopee by hand. Code review (10 fixes) done.
+- **Deploy (PR #6)** and **TikTok drafts (PR #7)**: TikTok uploads to your inbox (`video.upload`, no app audit
+  for Direct Post); the caption comes to Telegram and the handoff page; you finish it in TikTok.
 
 ## Live (2026-10-28)
 - Web app: https://postpilot.postpilot-web.workers.dev (Cloudflare Workers static assets; redeploy from `web/`:
@@ -45,17 +49,21 @@ Nothing has posted for real yet: go-live needs your accounts and keys (below).
    add the URL in Supabase → Authentication → URL Configuration.
 5. Run the `publish` workflow manually (dry run by default), then one real post.
 
-## Connect logins (branch `feat/connect-accounts`, needs you)
-Design: `docs/superpowers/specs/2026-10-28-connect-and-post-design.md`. Code + tests done; not live yet.
+## Connect logins (live code, needs you)
+Design: `docs/superpowers/specs/2026-10-28-connect-and-post-design.md`.
 1. Done 2026-10-28: project restored, `20261028000000_connections.sql` applied (Vault round trip, grants and RLS
-   checked), `connect` deployed (v2, JWT verification off; it checks the user itself). Free projects pause after a
+   checked), `connect` deployed (v3, TikTok scope `video.upload`, JWT verification off; it checks the user itself). Free projects pause after a
    week idle: restore from the dashboard if runs start failing.
 2. Make the developer apps; the redirect URI is `https://wsclesrylegjsyfxaamr.supabase.co/functions/v1/connect`:
    - Meta (developers.facebook.com): Facebook Login for Business; you as admin can use it in Development mode.
    - X (developer.x.com): OAuth 2.0, confidential client, read+write; buy pay-per-use credits and set a spend cap
      (~$0.015 a post, $0.20 with a link).
-   - TikTok (developers.tiktok.com): Login Kit + Content Posting API with the `video.upload` scope (drafts). Videos
-     land in your TikTok inbox and the caption comes to Telegram; no app audit needed for that.
+   - TikTok (developers.tiktok.com): app with platform Web (`https://postpilot.postpilot-web.workers.dev`),
+     products Login Kit (redirect URI above) + Content Posting API (Direct Post off), scopes `user.info.basic,
+     video.upload` only. Start in Sandbox and add your TikTok account as a target user; sandbox has its own
+     client key/secret. Open question: TikTok's docs disagree on whether sandbox allows `video.upload`. If
+     Connect or the upload fails on scope/permission, submit the production app for review (needs privacy and
+     terms URLs, which the app doesn't have yet, plus a screen recording). At most 5 pending drafts per 24 h.
 3. Edge Function secrets: `WEB_APP_URL, META_APP_ID, META_APP_SECRET, X_CLIENT_ID, X_CLIENT_SECRET,
    TIKTOK_CLIENT_KEY, TIKTOK_CLIENT_SECRET`. GitHub secrets: `X_CLIENT_ID, X_CLIENT_SECRET, TIKTOK_CLIENT_KEY,
    TIKTOK_CLIENT_SECRET` (the publisher refreshes X/TikTok logins).
