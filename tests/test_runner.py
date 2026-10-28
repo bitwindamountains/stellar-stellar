@@ -221,15 +221,34 @@ def test_unconnected_tiktok_goes_to_telegram_and_counts_as_done():
     assert repo.row(2)["tg_message_id"] == "77"
 
 
-def test_connected_tiktok_posts_by_api_and_skips_telegram():
+def test_connected_tiktok_uploads_to_drafts_then_sends_its_caption():
     repo = FakeRepository(
         [row(platforms="tiktok,youtube", **VIDEO)], ACCOUNTS, connected={"main": {"tiktok"}}
     )
     platforms = Platforms(tiktok=[PublishResult("pub_1", "")])
     report = run(repo, {"tiktok": platforms.publisher("tiktok")}, platforms.assist, CFG, NOW)
     assert report.posted == [2]
-    assert platforms.calls == [("tiktok", 2), ("telegram", 2, ("youtube",))]
-    assert repo.row(2)["tiktok_id"] == "pub_1"
+    assert platforms.calls == [("tiktok", 2), ("telegram", 2, ("tiktok", "youtube"))]
+    assert repo.row(2)["tiktok_id"] == "pub_1"  # the upload ID stays: never uploaded twice
+    assert repo.row(2)["tg_message_id"] == "77"
+
+
+def test_draft_uploaded_on_a_retry_still_gets_its_caption_message():
+    retry = row(platforms="tiktok,youtube", status="partial", attempts="1", tg_message_id="5", **VIDEO)
+    repo = FakeRepository([retry], ACCOUNTS, connected={"main": {"tiktok"}})
+    platforms = Platforms(tiktok=[PublishResult("pub_1", "")])
+    run(repo, {"tiktok": platforms.publisher("tiktok")}, platforms.assist, CFG, NOW)
+    assert platforms.calls == [("tiktok", 2), ("telegram", 2, ("tiktok",))]
+
+
+def test_uploaded_draft_with_caption_sent_is_left_alone():
+    done = row(
+        platforms="tiktok", status="partial", attempts="1", tiktok_id="pub_1", tg_message_id="5", **VIDEO
+    )
+    repo = FakeRepository([done], ACCOUNTS, connected={"main": {"tiktok"}})
+    platforms = Platforms(tiktok=[])
+    report = run(repo, {"tiktok": platforms.publisher("tiktok")}, platforms.assist, CFG, NOW)
+    assert report.posted == [2] and platforms.calls == []
 
 
 def test_tiktok_sent_by_hand_is_never_posted_again_after_connecting():

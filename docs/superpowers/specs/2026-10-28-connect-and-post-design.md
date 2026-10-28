@@ -13,7 +13,7 @@ that allows it.
 |---|---|---|---|
 | Facebook Page + Instagram | Facebook Login (one connect covers both) | automatic (existing adapters) | IG image must be JPEG; personal FB profile still by hand (no API exists) |
 | X | OAuth 2.0 with PKCE | automatic: text, link, one image | Pay-per-use API since Feb 2026: about $0.015 per post, $0.20 with a link. Set a spend cap in the X console. |
-| TikTok | Login Kit | automatic video when connected, else Telegram handoff as today | Until TikTok audits the app, posts are **private (Only me)** (`TIKTOK_PRIVACY_LEVEL`, default `SELF_ONLY`) |
+| TikTok | Login Kit | when connected: video uploaded to your **TikTok drafts (inbox)**, caption to Telegram, you post it in TikTok; otherwise Telegram handoff as before | Changed 2026-10-28 (personal use): Direct Post needs a TikTok app audit and posts private-only until then; inbox upload (`video.upload`) needs no audit |
 | Shopee | none | by hand (Telegram + handoff page) | Shopee's Open Platform is for shop listings; no verified API for Feed/Video posts. Revisit if one appears. |
 
 ## Goals
@@ -45,7 +45,7 @@ come back and the account has no Page ID, the user types the Page ID first and r
   old TikTok handoffs backfilled with `tiktok_id = 'telegram'`.
 - **Secrets**: Edge Function: `META_APP_ID, META_APP_SECRET, X_CLIENT_ID, X_CLIENT_SECRET, TIKTOK_CLIENT_KEY,
   TIKTOK_CLIENT_SECRET, WEB_APP_URL`. GitHub: `X_CLIENT_ID, X_CLIENT_SECRET, TIKTOK_CLIENT_KEY,
-  TIKTOK_CLIENT_SECRET` (refresh) and optional variable `TIKTOK_PRIVACY_LEVEL`.
+  TIKTOK_CLIENT_SECRET` (refresh).
 
 ## Validation (mirrored in `web/src/validation.ts`)
 - X: needs X connected; weighted length ≤ 280 (links 23, CJK/emoji 2, like twitter-text); no video.

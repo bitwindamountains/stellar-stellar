@@ -3,7 +3,7 @@ import { retryNow } from '../actions'
 import { Arrow, Asteroids, Constellation, FlightPath, PlatformMark } from '../icons'
 import { awaitingHandoff, canRetry, chips, groupByDay, mergePosts, needsYou, statusLabel, timeOf, weekStrip } from '../postView'
 import { supabase } from '../supabase'
-import { ACCOUNT_SELECT, PLATFORM_CODES, sentByHand, type Account, type Post, type Run } from '../types'
+import { ACCOUNT_SELECT, needsFinishing, PLATFORM_CODES, sentByHand, type Account, type Post, type Run } from '../types'
 
 type Filter = 'all' | 'auto' | 'hand' | 'needs'
 
@@ -53,7 +53,7 @@ export default function Queue() {
     const keep: Record<Filter, (p: Post) => boolean> = {
       all: () => true,
       auto: (p) => p.platforms.some((x) => !sentByHand(p, x, accountOf(p))),
-      hand: (p) => p.platforms.some((x) => sentByHand(p, x, accountOf(p))),
+      hand: (p) => p.platforms.some((x) => needsFinishing(p, x, accountOf(p))),
       needs: needsYou,
     }
     return posts.filter(keep[filter])

@@ -106,9 +106,7 @@ def publish(
         "facebook": meta(facebook),
         "instagram": meta(instagram),
         "x": lambda post, account: x.publish(http, token(account, "x"), post),
-        "tiktok": lambda post, account: tiktok.publish(
-            http, token(account, "tiktok"), post, cfg.tiktok_privacy
-        ),
+        "tiktok": lambda post, account: tiktok.publish(http, token(account, "tiktok"), post),
     }
 
     assist = None
