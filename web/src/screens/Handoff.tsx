@@ -3,7 +3,7 @@ import { textFor, titleFor, type Variants } from '../content'
 import { Check, FlightPath, Logo } from '../icons'
 import { go } from '../route'
 import { supabase } from '../supabase'
-import { ACCOUNT_SELECT, isDone, sentByHand, PLATFORM_NAMES, type Account, type Platform, type Post } from '../types'
+import { ACCOUNT_SELECT, isDone, isDraft, needsFinishing, sentByHand, PLATFORM_NAMES, type Account, type Platform, type Post } from '../types'
 
 const OPEN_URL: Partial<Record<Platform, string>> = {
   tiktok: 'https://www.tiktok.com/upload',
@@ -29,7 +29,9 @@ export default function Handoff({ num }: { num: number }) {
   if (error) return <Frame><p className="notice" role="alert">{error}</p></Frame>
   if (!post) return <Frame />
 
-  const targets = post.platforms.filter((p) => sentByHand(post, p, post.account))
+  const targets = post.platforms.filter((p) => needsFinishing(post, p, post.account))
+  // A draft already has its video in TikTok: only by-hand platforms need the file shared.
+  const shareNeeded = targets.some((p) => !isDraft(post, p))
   const media = post.media_urls[0]
   const variants = (post.variants ?? {}) as Variants
   // Same text the publisher sends to Telegram: the platform's own caption, plus the link for your profile.
@@ -113,13 +115,15 @@ export default function Handoff({ num }: { num: number }) {
       </div>
 
       <ol style={{ listStyle: 'none', margin: 0, padding: 0, display: 'flex', flexDirection: 'column', gap: 8 }}>
-        {media && <li><button type="button" className="step" onClick={shareMedia} disabled={sharing}>{sharing ? 'Preparing…' : `Share ${post.media_type}`}</button></li>}
+        {media && shareNeeded && <li><button type="button" className="step" onClick={shareMedia} disabled={sharing}>{sharing ? 'Preparing…' : `Share ${post.media_type}`}</button></li>}
         {targets.map((p) => (
           <li key={p} style={{ display: 'flex', flexDirection: 'column', gap: 8, paddingTop: 8 }}>
             <span className="mono" style={{ paddingLeft: 4 }}>{PLATFORM_NAMES[p].toUpperCase()}</span>
+            {isDraft(post, p) && <p style={{ margin: 0, paddingLeft: 4, fontSize: 14, color: 'var(--muted)' }}>
+              The video is in your TikTok inbox. Open TikTok, tap the notification, paste the caption and post.</p>}
             {titleFor(variants, p) && copyButton(`${p}-title`, 'Copy title', titleFor(variants, p))}
             {textOf(p) && copyButton(`${p}-text`, 'Copy caption', textOf(p))}
-            {OPEN_URL[p] && <a href={OPEN_URL[p]} target="_blank" rel="noopener" className="step">Open {PLATFORM_NAMES[p]}</a>}
+            {OPEN_URL[p] && <a href={isDraft(post, p) ? 'https://www.tiktok.com/' : OPEN_URL[p]} target="_blank" rel="noopener" className="step">Open {PLATFORM_NAMES[p]}</a>}
           </li>
         ))}
       </ol>

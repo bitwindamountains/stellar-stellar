@@ -110,3 +110,18 @@ def test_identical_texts_share_one_message():
     http = httpx.Client(transport=httpx.MockTransport(record))
     send_assist(http, "T", "C", Post(row=7, cells={"caption": "Same"}), ["tiktok", "fb_profile"])
     assert len(calls) == 2 and "<b>TikTok, Facebook (personal)</b>" in calls[1]["text"]
+
+
+def test_tiktok_draft_is_labelled_and_its_video_not_resent():
+    calls = []
+
+    def record(request):
+        calls.append((request.url.path.rsplit("/", 1)[-1], json.loads(request.content)))
+        return ok(5)
+
+    cells = {"caption": "Hi", "media_type": "video", "media_urls": "https://x/a.mp4", "tiktok_id": "pub_1"}
+    http = httpx.Client(transport=httpx.MockTransport(record))
+    send_assist(http, "BOTTOKEN", "CHAT", Post(row=7, cells=cells), ["tiktok"])
+    assert [c[0] for c in calls] == ["sendMessage", "sendMessage"]  # the video is already in TikTok's inbox
+    assert "TikTok (video is in your TikTok inbox)" in calls[0][1]["text"]
+    assert "<pre>Hi</pre>" in calls[1][1]["text"]

@@ -207,7 +207,7 @@ export default function Composer({ num }: { num?: number }) {
     if (p === 'facebook') return { p, text: link && mediaUrl ? 'Posted to your Page with the link in the caption.' : 'Posted to your Page.' }
     if (p === 'instagram') return { p, text: 'Posted as a single image. Retries up to 3 times if Instagram is busy.' }
     if (p === 'x') return { p, text: link ? 'Posted to X with the link (X charges more for posts with links).' : 'Posted to X.' }
-    if (p === 'tiktok' && !byHand(p, account)) return { p, text: 'Uploaded to TikTok. Private (Only me) until TikTok approves the app.' }
+    if (p === 'tiktok' && !byHand(p, account)) return { p, text: 'Uploaded to your TikTok drafts; the caption comes to your phone. Finish it in TikTok.' }
     return { p, text: 'Sent to your phone with the caption ready to paste.' }
   })
 
@@ -362,7 +362,7 @@ export default function Composer({ num }: { num?: number }) {
                       </span>
                       <span className="mono" style={{ alignSelf: 'flex-start', padding: '4px 8px', borderRadius: 999, fontSize: 10, letterSpacing: '0.08em', textTransform: 'uppercase',
                         background: byHand(p, account) ? 'var(--accent-tint)' : '#e9eae5', color: byHand(p, account) ? 'var(--accent-ink)' : 'var(--ink)' }}>
-                        {byHand(p, account) ? 'By hand' : 'Automatic'}
+                        {byHand(p, account) ? 'By hand' : p === 'tiktok' ? 'To drafts' : 'Automatic'}
                       </span>
                     </label>
                   )

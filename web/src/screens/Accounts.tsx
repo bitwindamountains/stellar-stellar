@@ -10,7 +10,7 @@ const TOKEN_ENV = /^[A-Z][A-Z0-9_]{0,63}$/ // same rule as the database check
 const LOGINS: { c: Connection; name: string; note: string }[] = [
   { c: 'meta', name: 'Facebook + Instagram', note: 'Your Page, and the Instagram account linked to it' },
   { c: 'x', name: 'X', note: 'Posts text, links and one image' },
-  { c: 'tiktok', name: 'TikTok', note: 'Uploads videos (private until TikTok approves the app)' },
+  { c: 'tiktok', name: 'TikTok', note: 'Sends videos to your TikTok drafts; you finish them in TikTok' },
 ]
 const LOGIN_NAME = Object.fromEntries(LOGINS.map((l) => [l.c, l.name])) as Record<Connection, string>
 
