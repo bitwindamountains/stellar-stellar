@@ -29,8 +29,13 @@ def test_done_uses_platform_id_columns():
 
 
 def test_assisted_platforms_done_when_telegram_sent():
-    p = post(platforms="tiktok,youtube", tg_message_id="55")
+    p = post(platforms="tiktok,youtube", tg_message_id="55", tiktok_id="telegram")
     assert p.done("tiktok") and p.done("youtube")
+
+
+def test_tiktok_done_only_by_its_own_id():
+    # A Telegram message for another platform must not stop a TikTok API retry.
+    assert not post(platforms="tiktok,fb_profile", tg_message_id="55").done("tiktok")
 
 
 def test_missing_cells_read_as_empty():

@@ -47,8 +47,10 @@ const MARKS = {
   ig: <><rect x="5" y="5" width="14" height="14" rx="4" /><circle cx="12" cy="12" r="3.2" /><path d="M16.3 7.7h.01" /></>,
   yt: <><rect x="3" y="6.5" width="18" height="11" rx="3.5" /><path d="m10.5 9.6 4 2.4-4 2.4Z" /></>,
   tt: <path d="M13 5v9.5a3 3 0 1 1-3-3M13 5c.5 2 2 3.3 4 3.5" />,
+  x: <path d="M5.5 5 18.5 19M18.5 5 5.5 19" />,
+  sp: <><path d="M5 8.5h14l-1 11H6Z" /><path d="M9 8.5V7a3 3 0 0 1 6 0v1.5" /></>,
 }
-const MARK_OF: Record<Platform, keyof typeof MARKS> = { facebook: 'fb', fb_profile: 'fb', instagram: 'ig', youtube: 'yt', tiktok: 'tt' }
+const MARK_OF: Record<Platform, keyof typeof MARKS> = { facebook: 'fb', fb_profile: 'fb', instagram: 'ig', youtube: 'yt', tiktok: 'tt', x: 'x', shopee: 'sp' }
 export const PlatformMark = ({ platform }: { platform: Platform }) => (
   <svg viewBox="0 0 24 24" width="100%" height="100%" strokeWidth={2} {...base} aria-hidden="true">{MARKS[MARK_OF[platform]]}</svg>
 )

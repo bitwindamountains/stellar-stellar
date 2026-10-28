@@ -9,7 +9,7 @@ import { loadDefaults, loadDraft, rememberChoices, saveDraft } from '../prefs'
 import { go } from '../route'
 import { supabase } from '../supabase'
 import { quickTimes, utcToZoned, zonedToUtc } from '../time'
-import { isAssisted, isDone, PLATFORM_CODES, PLATFORM_NAMES, PLATFORMS, type Account, type MediaType, type Platform, type Post } from '../types'
+import { ACCOUNT_SELECT, byHand, isDone, postedByApi, PLATFORM_CODES, PLATFORM_NAMES, PLATFORMS, type Account, type MediaType, type Platform, type Post } from '../types'
 import { hashtagCount, IG_CAPTION_MAX, validate, YOUTUBE_TITLE_MAX } from '../validation'
 
 const ACCEPT = 'image/jpeg,image/png,image/webp,video/mp4,video/quicktime'
@@ -40,7 +40,7 @@ export default function Composer({ num }: { num?: number }) {
   const [tried, setTried] = useState(false)
 
   useEffect(() => {
-    supabase.from('accounts').select('*').order('name').then(({ data, error }) => {
+    supabase.from('accounts').select(ACCOUNT_SELECT).order('name').then(({ data, error }) => {
       if (error) {
         setAccounts([]) // leave the loading state so the error is shown instead of a blank screen
         return setError(`Couldn't load your accounts: ${error.message}. Reload to try again.`)
@@ -206,6 +206,8 @@ export default function Composer({ num }: { num?: number }) {
     if (post && isDone(post, p)) return { p, text: 'Already done. It will not be posted again.' }
     if (p === 'facebook') return { p, text: link && mediaUrl ? 'Posted to your Page with the link in the caption.' : 'Posted to your Page.' }
     if (p === 'instagram') return { p, text: 'Posted as a single image. Retries up to 3 times if Instagram is busy.' }
+    if (p === 'x') return { p, text: link ? 'Posted to X with the link (X charges more for posts with links).' : 'Posted to X.' }
+    if (p === 'tiktok' && !byHand(p, account)) return { p, text: 'Uploaded to TikTok. Private (Only me) until TikTok approves the app.' }
     return { p, text: 'Sent to your phone with the caption ready to paste.' }
   })
 
@@ -230,6 +232,7 @@ export default function Composer({ num }: { num?: number }) {
           <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 10 }}>
             {post.fb_permalink && <a className="btn light" href={post.fb_permalink} target="_blank" rel="noopener">View on Facebook<span className="knob"><Arrow /></span></a>}
             {post.ig_permalink && <a className="btn light" href={post.ig_permalink} target="_blank" rel="noopener">View on Instagram<span className="knob"><Arrow /></span></a>}
+            {post.x_permalink && <a className="btn light" href={post.x_permalink} target="_blank" rel="noopener">View on X<span className="knob"><Arrow /></span></a>}
             <button type="button" className="btn" onClick={postAgain}>Post again</button>
           </div>
         )}
@@ -340,7 +343,7 @@ export default function Composer({ num }: { num?: number }) {
                   )}
                 </div>
                 <div className="field">
-                  <label htmlFor="link">Link <span style={{ fontWeight: 400, color: 'var(--muted)' }}>· Facebook only</span></label>
+                  <label htmlFor="link">Link <span style={{ fontWeight: 400, color: 'var(--muted)' }}>· Facebook and X</span></label>
                   <input id="link" className="input" type="url" inputMode="url" placeholder="https://" value={link} onChange={(e) => setLink(e.target.value)} />
                 </div>
               </div>
@@ -358,8 +361,8 @@ export default function Composer({ num }: { num?: number }) {
                         <input type="checkbox" checked={on} onChange={() => toggle(p)} style={{ width: 20, height: 20, accentColor: 'var(--ink)' }} />
                       </span>
                       <span className="mono" style={{ alignSelf: 'flex-start', padding: '4px 8px', borderRadius: 999, fontSize: 10, letterSpacing: '0.08em', textTransform: 'uppercase',
-                        background: isAssisted(p) ? 'var(--accent-tint)' : '#e9eae5', color: isAssisted(p) ? 'var(--accent-ink)' : 'var(--ink)' }}>
-                        {isAssisted(p) ? 'By hand' : 'Automatic'}
+                        background: byHand(p, account) ? 'var(--accent-tint)' : '#e9eae5', color: byHand(p, account) ? 'var(--accent-ink)' : 'var(--ink)' }}>
+                        {byHand(p, account) ? 'By hand' : 'Automatic'}
                       </span>
                     </label>
                   )
@@ -368,7 +371,7 @@ export default function Composer({ num }: { num?: number }) {
             </fieldset>
 
             <div style={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'flex-end', gap: 12 }}>
-              {num && post && !post.fb_post_id && !post.ig_media_id && (
+              {num && post && !postedByApi(post) && (
                 <button type="button" className="btn" onClick={remove} style={{ marginRight: 'auto' }}>Delete</button>
               )}
               <button type="button" className="btn" disabled={busy !== ''} onClick={() => save('draft')}>Save draft</button>
@@ -405,7 +408,7 @@ export default function Composer({ num }: { num?: number }) {
                 <ol style={{ listStyle: 'none', margin: 0, padding: 0 }}>
                   {plan.map(({ p, text }, i) => (
                     <li key={p} style={{ display: 'flex', gap: 16, padding: '14px 0', borderTop: i ? '1px solid rgba(255,255,255,0.08)' : 0 }}>
-                      <span className="mono" style={{ width: 32, lineHeight: '20px', color: isAssisted(p) ? '#afc0ff' : '#c9cbcf' }}>{PLATFORM_CODES[p]}</span>
+                      <span className="mono" style={{ width: 32, lineHeight: '20px', color: byHand(p, account) ? '#afc0ff' : '#c9cbcf' }}>{PLATFORM_CODES[p]}</span>
                       <span style={{ fontSize: 14, lineHeight: 1.45 }}>{text}</span>
                     </li>
                   ))}
