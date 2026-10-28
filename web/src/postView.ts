@@ -1,9 +1,9 @@
-import { isAssisted, isDone, PLATFORM_CODES, PLATFORM_NAMES, type Platform, type Post } from './types'
+import { isDone, sentByHand, PLATFORM_CODES, PLATFORM_NAMES, type Platform, type Post } from './types'
 
 export type ChipState = 'done' | 'queued' | 'assist' | 'retry'
 
 export function chipState(post: Post, p: Platform): ChipState {
-  if (isDone(post, p)) return isAssisted(p) && !post.assist_done_at ? 'assist' : 'done'
+  if (isDone(post, p)) return sentByHand(post, p) && !post.assist_done_at ? 'assist' : 'done'
   if (['partial', 'failed'].includes(post.status) && post.last_error.includes(p)) return 'retry'
   return 'queued'
 }

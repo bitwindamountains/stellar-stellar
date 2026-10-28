@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { Account } from './types'
-import { hashtagCount, validate, type Draft } from './validation'
+import { hashtagCount, validate, xLength, type Draft } from './validation'
 
 const account: Account = { id: 1, name: 'Kape', fb_page_id: 'P', ig_user_id: 'I', token_env: 'META_TOKEN_KAPE', timezone: 'Asia/Manila' }
 const draft = (over: Partial<Draft>): Draft => ({
@@ -59,5 +59,30 @@ describe('validate (mirrors validation.py)', () => {
   })
   it('counts hashtags like the publisher', () => {
     expect(hashtagCount('#kape #manila_cafe no#tag #')).toBe(3)
+  })
+})
+
+describe('X and connected logins (mirrors validation.py)', () => {
+  const linked: Account = { ...account, token_env: '', connections: [{ platform: 'meta', handle: 'Kape' }, { platform: 'x', handle: '@kape' }, { platform: 'tiktok', handle: 'kape' }] }
+  it('counts like X', () => {
+    expect(xLength('hello')).toBe(5)
+    expect(xLength('see https://example.com/a/very/long/path?q=1')).toBe(27)
+    expect(xLength('日本')).toBe(4)
+    expect(xLength('ok 👍')).toBe(5)
+    expect(xLength('é')).toBe(1)
+  })
+  it('needs logins', () => {
+    expectError({ platforms: ['x'] }, 'connect X')
+    expect(validate(draft({ account: linked, platforms: ['facebook', 'x'] }), true)).toEqual([])
+  })
+  it('limits X', () => {
+    expectError({ account: linked, platforms: ['x'], caption: 'a'.repeat(281) }, '280')
+    expectError({ account: linked, platforms: ['x'], caption: 'a'.repeat(260), link: 'https://example.com' }, '280')
+    expectError({ account: linked, platforms: ['x'], mediaType: 'video', mediaUrls: ['https://x/a.mp4'] }, 'Video to X')
+    expect(validate(draft({ account: linked, platforms: ['x'], caption: 'a'.repeat(280) }), true)).toEqual([])
+  })
+  it('limits connected TikTok captions, Shopee goes by hand', () => {
+    expectError({ account: linked, platforms: ['tiktok'], mediaType: 'video', mediaUrls: ['https://x/a.mp4'], caption: 'x'.repeat(2201) }, '2,200')
+    expect(validate(draft({ platforms: ['shopee'] }), true)).toEqual([])
   })
 })

@@ -37,6 +37,21 @@ Nothing has posted for real yet: go-live needs your accounts and keys (below).
    add the URL in Supabase → Authentication → URL Configuration.
 5. Run the `publish` workflow manually (dry run by default), then one real post.
 
+## Connect logins (branch `feat/connect-accounts`, needs you)
+Design: `docs/superpowers/specs/2026-10-28-connect-and-post-design.md`. Code + tests done; not live yet.
+1. Restore the paused Supabase project, then apply `20261028000000_connections.sql` and deploy the `connect`
+   function with JWT verification **off** (it checks the user itself).
+2. Make the developer apps; the redirect URI is `https://wsclesrylegjsyfxaamr.supabase.co/functions/v1/connect`:
+   - Meta (developers.facebook.com): Facebook Login for Business; you as admin can use it in Development mode.
+   - X (developer.x.com): OAuth 2.0, confidential client, read+write; buy pay-per-use credits and set a spend cap
+     (~$0.015 a post, $0.20 with a link).
+   - TikTok (developers.tiktok.com): Login Kit + Content Posting API. Posts stay private until the app passes audit;
+     then set the GitHub variable `TIKTOK_PRIVACY_LEVEL=PUBLIC_TO_EVERYONE`.
+3. Edge Function secrets: `WEB_APP_URL, META_APP_ID, META_APP_SECRET, X_CLIENT_ID, X_CLIENT_SECRET,
+   TIKTOK_CLIENT_KEY, TIKTOK_CLIENT_SECRET`. GitHub secrets: `X_CLIENT_ID, X_CLIENT_SECRET, TIKTOK_CLIENT_KEY,
+   TIKTOK_CLIENT_SECRET` (the publisher refreshes X/TikTok logins).
+4. Accounts → pick an account → Connect each login. Shopee stays by hand (no posting API for apps).
+
 ## Not yet verified for real
 Email/password sign-in, uploads, publisher reads/writes against live Supabase, Post now triggering a run,
 Android share target, PNG→JPEG conversion on upload, the 4 pm nudge, copy buttons on a phone.

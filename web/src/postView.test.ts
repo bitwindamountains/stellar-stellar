@@ -1,23 +1,23 @@
 import { describe, expect, it } from 'vitest'
-import { canRetry, chips, groupByDay, mediaWasRemoved, mergePosts, needsYou, statusLabel, weekStrip } from './postView'
+import { canRetry, chipState, chips, groupByDay, mediaWasRemoved, mergePosts, needsYou, statusLabel, weekStrip } from './postView'
 import type { Post } from './types'
 
 function post(over: Partial<Post>): Post {
   return {
     num: 1, account_id: 1, platforms: ['facebook'], publish_at: null, caption: '', media_type: 'none', media_urls: [],
     link: '', status: 'scheduled', attempts: 0, claimed_at: null, fb_post_id: '', fb_permalink: '', ig_media_id: '',
-    ig_permalink: '', tg_message_id: '', variants: {}, assist_done_at: null, last_error: '', posted_at: null, ...over,
+    ig_permalink: '', x_post_id: '', x_permalink: '', tiktok_id: '', tiktok_permalink: '', tg_message_id: '', variants: {}, assist_done_at: null, last_error: '', posted_at: null, ...over,
   }
 }
 
 describe('chips', () => {
   it('maps platform states', () => {
     const p = post({ platforms: ['facebook', 'instagram', 'tiktok'], status: 'partial', fb_post_id: '1',
-      tg_message_id: '9', last_error: 'instagram: busy' })
+      tg_message_id: '9', tiktok_id: 'telegram', last_error: 'instagram: busy' })
     expect(chips(p).map((c) => c.state)).toEqual(['done', 'retry', 'assist'])
   })
   it('assisted platforms become done once marked posted', () => {
-    const p = post({ platforms: ['tiktok'], tg_message_id: '9', assist_done_at: '2026-10-05T10:00:00Z' })
+    const p = post({ platforms: ['tiktok'], tg_message_id: '9', tiktok_id: 'telegram', assist_done_at: '2026-10-05T10:00:00Z' })
     expect(chips(p)[0].state).toBe('done')
     expect(needsYou(p)).toBe(false)
   })
@@ -90,5 +90,12 @@ describe('mergePosts', () => {
   it('keeps one copy of each post across queries and tolerates failed queries', () => {
     const merged = mergePosts([post({ num: 1 }), post({ num: 2 })], null, [post({ num: 2, status: 'failed' }), post({ num: 9 })])
     expect(merged.map((p) => p.num).sort()).toEqual([1, 2, 9])
+  })
+})
+
+describe('TikTok by hand or automatic', () => {
+  it('a real TikTok ID means it posted automatically, not by hand', () => {
+    expect(chipState(post({ platforms: ['tiktok'], tiktok_id: 'v_pub_1' }), 'tiktok')).toBe('done')
+    expect(chipState(post({ platforms: ['tiktok'], tiktok_id: 'telegram', tg_message_id: '9' }), 'tiktok')).toBe('assist')
   })
 })
