@@ -1,6 +1,6 @@
 // Mirror of src/postpilot/validation.py for instant feedback. The publisher re-checks; keep messages in sync.
 import { textFor, titleFor, type Variants } from './content'
-import { PLATFORM_NAMES, type Account, type MediaType, type Platform } from './types'
+import { byHand, isConnected, PLATFORM_NAMES, type Account, type MediaType, type Platform } from './types'
 
 export const IG_CAPTION_MAX = 2200
 export const IG_HASHTAGS_MAX = 30
@@ -9,6 +9,25 @@ const TELEGRAM_OVERHEAD = 60 // platform label line and title label (Telegram co
 const NON_JPEG = /\.(png|webp|gif|heic|heif|avif|bmp|tiff?|svg)$/i // links with no extension get the benefit of the doubt
 
 export const YOUTUBE_TITLE_MAX = 100
+export const X_TEXT_MAX = 280
+export const TIKTOK_CAPTION_MAX = 2200
+const URL_RE = /https?:\/\/\S+/gi
+
+/** X's weighted count (twitter-text v3): links 23, Latin-range characters 1, others (CJK, emoji) 2. */
+export function xLength(text: string): number {
+  let size = 23 * (text.match(URL_RE)?.length ?? 0)
+  for (const ch of text.replace(URL_RE, '')) {
+    const cp = ch.codePointAt(0)!
+    const light = cp <= 4351 || (cp >= 8192 && cp <= 8205) || (cp >= 8208 && cp <= 8223) || (cp >= 8242 && cp <= 8247)
+    size += light ? 1 : 2
+  }
+  return size
+}
+
+/** The text the publisher sends to X: the caption, then the link. */
+export function xText(d: Pick<Draft, 'caption' | 'variants' | 'link'>): string {
+  return [textFor(d.caption, d.variants, 'x'), d.link].filter(Boolean).join('\n\n')
+}
 
 export interface Draft {
   account: Account | undefined
@@ -35,7 +54,8 @@ export function validate(d: Draft, requireTime: boolean): string[] {
   if (d.account) {
     if (has('facebook') && !d.account.fb_page_id) errors.push(`Account '${d.account.name}' has no Facebook Page ID`)
     if (has('instagram') && !d.account.ig_user_id) errors.push(`Account '${d.account.name}' has no Instagram user ID`)
-    if (api && !d.account.token_env) errors.push(`Account '${d.account.name}' has no token secret name`)
+    if (api && !d.account.token_env && !isConnected(d.account, 'meta')) errors.push(`Account '${d.account.name}' isn't linked to Facebook: connect it on the Accounts page`)
+    if (has('x') && !isConnected(d.account, 'x')) errors.push(`Account '${d.account.name}' isn't linked to X: connect X on the Accounts page`)
   }
   if (requireTime && !d.publishAt) errors.push('Set when to post')
 
@@ -57,7 +77,14 @@ export function validate(d: Draft, requireTime: boolean): string[] {
   }
   if (has('facebook') && !(text('facebook') || d.link || urls.length)) errors.push('Facebook post is empty: add a caption, link or image')
   if ((has('tiktok') || has('youtube')) && d.mediaType !== 'video') errors.push('TikTok/YouTube need a video')
-  for (const p of ['fb_profile', 'tiktok', 'youtube'] as const) {
+  if (has('x')) {
+    if (d.mediaType === 'video') errors.push("Video to X isn't supported yet; use an image or text")
+    const size = xLength(xText(d))
+    if (size > X_TEXT_MAX) errors.push(`X posts max ${X_TEXT_MAX} characters (this one counts ${size.toLocaleString('en')})`)
+  }
+  if (has('tiktok') && !byHand('tiktok', d.account) && text('tiktok').length > TIKTOK_CAPTION_MAX)
+    errors.push(`TikTok captions max ${TIKTOK_CAPTION_MAX.toLocaleString('en')} characters`)
+  for (const p of ['fb_profile', 'tiktok', 'youtube', 'shopee'] as const) {
     if (!has(p)) continue
     // Telegram's 4,096 limit counts text after it parses the HTML: visible text, link, title, labels.
     const body = p === 'fb_profile' && d.link ? `${text(p)}\n\n${d.link}` : text(p)

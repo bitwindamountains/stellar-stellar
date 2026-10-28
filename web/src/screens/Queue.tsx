@@ -3,7 +3,7 @@ import { retryNow } from '../actions'
 import { Arrow, Asteroids, Constellation, FlightPath, PlatformMark } from '../icons'
 import { awaitingHandoff, canRetry, chips, groupByDay, mergePosts, needsYou, statusLabel, timeOf, weekStrip } from '../postView'
 import { supabase } from '../supabase'
-import { isAssisted, PLATFORM_CODES, type Account, type Post, type Run } from '../types'
+import { PLATFORM_CODES, sentByHand, type Account, type Post, type Run } from '../types'
 
 type Filter = 'all' | 'auto' | 'hand' | 'needs'
 
@@ -51,8 +51,8 @@ export default function Queue() {
   const shown = useMemo(() => {
     const keep: Record<Filter, (p: Post) => boolean> = {
       all: () => true,
-      auto: (p) => p.platforms.some((x) => !isAssisted(x)),
-      hand: (p) => p.platforms.some(isAssisted),
+      auto: (p) => p.platforms.some((x) => !sentByHand(p, x)),
+      hand: (p) => p.platforms.some((x) => sentByHand(p, x)),
       needs: needsYou,
     }
     return posts.filter(keep[filter])
