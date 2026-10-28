@@ -133,6 +133,12 @@ def test_x_needs_a_connection():
         ("日本", 4),
         ("ok 👍", 5),
         ("é", 1),
+        ("\U0001f44d\U0001f3fd", 2),  # thumbs up, skin tone
+        ("\U0001f468‍\U0001f469‍\U0001f467", 2),  # family (joined emoji)
+        ("\U0001f1f5\U0001f1ed", 2),  # flag
+        ("❤️", 2),  # red heart: the variation selector adds nothing
+        ("visit shop.example.com today", 6 + 23 + 6),
+        ("e.g. this", 9),
     ],
 )
 def test_x_length_is_weighted_like_x(text, length):

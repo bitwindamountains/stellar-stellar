@@ -137,7 +137,7 @@ def test_tiktok_still_processing_keeps_the_id():
 def test_tiktok_unaudited_app_explains_privacy():
     body = {"error": {"code": "unaudited_client_can_only_post_to_private_accounts", "message": "m"}}
     err = tiktok.classify(403, body)
-    assert err.kind == "permanent" and "SELF_ONLY" in str(err)
+    assert err.kind == "permanent" and "set your TikTok account to private" in str(err)
 
 
 # --- refresh ---
@@ -171,4 +171,38 @@ def test_refused_refresh_asks_to_reconnect():
 def test_needs_refresh():
     assert not oauth.needs_refresh("", NOW)
     assert oauth.needs_refresh("2026-10-28T10:04:00+00:00", NOW)
+    assert oauth.needs_refresh("2026-10-28T10:14:00+00:00", NOW)  # would expire during the run
     assert not oauth.needs_refresh("2026-10-28T11:00:00+00:00", NOW)
+
+
+@pytest.mark.parametrize(
+    ("status", "kind"), [(429, "rate"), (408, "transient"), (503, "transient"), (400, "auth")]
+)
+def test_refresh_errors(status, kind):
+    http, calls = client(lambda r: httpx.Response(status, json={}))
+    with pytest.raises(PlatformError) as e:
+        oauth.refresh(http, "x", "R1", {"X_CLIENT_ID": "cid"}, NOW)
+    assert e.value.kind == kind
+    assert len(calls) == 1  # never resent: X may already have rotated the refresh token
+
+
+def test_tiktok_chunks_follow_tiktok_rules():
+    assert tiktok._chunks(10) == [(0, 10)]
+    assert tiktok._chunks(64 * 2**20) == [(0, 64 * 2**20)]
+    size = 105 * 2**20 + 123
+    chunks = tiktok._chunks(size)
+    assert len(chunks) == size // tiktok.CHUNK == 10
+    assert chunks[0] == (0, tiktok.CHUNK) and chunks[-1][1] == size
+    assert all(a[1] == b[0] for a, b in zip(chunks, chunks[1:], strict=False))
+    assert chunks[-1][1] - chunks[-1][0] < 128 * 2**20
+
+
+def test_tiktok_big_video_uploads_every_chunk(monkeypatch):
+    monkeypatch.setattr(tiktok, "SINGLE_CHUNK_MAX", 4)
+    monkeypatch.setattr(tiktok, "CHUNK", 4)
+    http, calls = client(tiktok_handler(["PUBLISH_COMPLETE"]))
+    tiktok.publish(http, "TOK", post(**VIDEO), sleep=lambda s: None)
+    init = json.loads(calls[1].content)["source_info"]
+    assert (init["chunk_size"], init["total_chunk_count"]) == (4, 2)
+    puts = [c.headers["Content-Range"] for c in calls if c.url.host == "upload.test"]
+    assert puts == ["bytes 0-3/10", "bytes 4-9/10"]

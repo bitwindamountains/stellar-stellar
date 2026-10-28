@@ -23,11 +23,25 @@ def classify(status: int, body: dict) -> PlatformError:
     if code == "unaudited_client_can_only_post_to_private_accounts":
         return PlatformError(
             "permanent",
-            "TikTok hasn't approved the app for public posts yet: set TIKTOK_PRIVACY_LEVEL=SELF_ONLY",
+            "TikTok only lets unapproved apps post to private TikTok accounts: set your TikTok account to "
+            "private until TikTok approves the app",
         )
     if status >= 500:
         return PlatformError("transient", f"TikTok had a temporary problem: {message}")
     return PlatformError("permanent", f"TikTok rejected the post: {message} ({code or status})")
+
+
+SINGLE_CHUNK_MAX = 64 * 1024 * 1024
+CHUNK = 10 * 1024 * 1024
+
+
+def _chunks(size: int) -> list[tuple[int, int]]:
+    """TikTok's upload rules: one chunk up to 64 MB; otherwise 5-64 MB chunks, count = size // chunk,
+    and the last chunk takes the remainder."""
+    if size <= SINGLE_CHUNK_MAX:
+        return [(0, size)]
+    count = size // CHUNK
+    return [(i * CHUNK, size if i == count - 1 else (i + 1) * CHUNK) for i in range(count)]
 
 
 def publish(
@@ -40,6 +54,7 @@ def publish(
 ) -> PublishResult:
     video, mime = rest.download(http, post.media_urls[0], "TikTok")
     size = len(video)
+    chunks = _chunks(size)
 
     def api(path: str, *, safe: bool, **body) -> dict:
         return rest.call(
@@ -58,20 +73,26 @@ def publish(
         "post/publish/video/init/",
         safe=True,
         post_info={"title": post.text_for("tiktok"), "privacy_level": privacy},
-        source_info={"source": "FILE_UPLOAD", "video_size": size, "chunk_size": size, "total_chunk_count": 1},
+        source_info={
+            "source": "FILE_UPLOAD",
+            "video_size": size,
+            "chunk_size": chunks[0][1] - chunks[0][0],
+            "total_chunk_count": len(chunks),
+        },
     )
     publish_id = init["publish_id"]
-    rest.call(
-        http,
-        "PUT",
-        init["upload_url"],
-        service="TikTok",
-        classify=classify,
-        safe=False,  # once the bytes arrive TikTok posts it: never upload twice on an unclear answer
-        content=video,
-        headers={"Content-Type": mime or "video/mp4", "Content-Range": f"bytes 0-{size - 1}/{size}"},
-        timeout=300,
-    )
+    for start, end in chunks:
+        rest.call(
+            http,
+            "PUT",
+            init["upload_url"],
+            service="TikTok",
+            classify=classify,
+            safe=False,  # once the bytes arrive TikTok posts it: never upload twice on an unclear answer
+            content=video[start:end],
+            headers={"Content-Type": mime or "video/mp4", "Content-Range": f"bytes {start}-{end - 1}/{size}"},
+            timeout=300,
+        )
     for check in range(checks):
         try:
             status = api("post/publish/status/fetch/", safe=True, publish_id=publish_id)

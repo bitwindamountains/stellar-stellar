@@ -91,9 +91,18 @@ export function byHand(p: Platform, account: Account | undefined): boolean {
   return isAssisted(p) && !(p === 'tiktok' && isConnected(account, 'tiktok'))
 }
 
-/** Did (or will) this post go out by hand on p? TikTok counts once it has a real API ID. */
-export function sentByHand(post: Post, p: Platform): boolean {
-  return isAssisted(p) && !(p === 'tiktok' && post.tiktok_id !== '' && post.tiktok_id !== SENT_BY_HAND)
+/** Did (or will) this post go out by hand on p? Pass the account when known: it decides a TikTok not yet sent. */
+export function sentByHand(post: Post, p: Platform, account?: Account): boolean {
+  if (p !== 'tiktok') return isAssisted(p)
+  if (post.tiktok_id) return post.tiktok_id === SENT_BY_HAND
+  // The phone handoff already went out without TikTok, so TikTok is the automatic upload (maybe still retrying).
+  if (post.tg_message_id) return false
+  return byHand('tiktok', account)
+}
+
+/** Live on a platform that posted it automatically: such a post must not be deleted from the app. */
+export function postedByApi(post: Post): boolean {
+  return !!(post.fb_post_id || post.ig_media_id || post.x_post_id || (post.tiktok_id && post.tiktok_id !== SENT_BY_HAND))
 }
 
 /** Same rule as the publisher: a filled ID means the platform is done for this post. */

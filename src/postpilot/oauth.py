@@ -8,7 +8,7 @@ from postpilot.models import PlatformError
 
 X_TOKEN_URL = "https://api.x.com/2/oauth2/token"
 TIKTOK_TOKEN_URL = "https://open.tiktokapis.com/v2/oauth/token/"
-REFRESH_EARLY = timedelta(minutes=5)
+REFRESH_EARLY = timedelta(minutes=15)  # covers a whole run (10 min timeout)
 
 
 def needs_refresh(expires_at: str, now: datetime) -> bool:
@@ -18,7 +18,9 @@ def needs_refresh(expires_at: str, now: datetime) -> bool:
 
 def _classify(platform: str):
     def classify(status: int, body: dict) -> PlatformError:
-        if status >= 500:
+        if status == 429:
+            return PlatformError("rate", f"{platform} login service is rate limiting, will retry next run")
+        if status >= 500 or status == 408:
             return PlatformError("transient", f"{platform} login service had a temporary problem")
         # A refused refresh token won't work next run either.
         return PlatformError("auth", f"{platform} login expired: reconnect {platform} on the Accounts page")
@@ -41,6 +43,7 @@ def refresh(
             service="X",
             classify=_classify("X"),
             safe=True,
+            attempts=1,  # a refresh may rotate the token: never resend it within a run
             auth=(client_id, secret) if secret else None,
             data={"grant_type": "refresh_token", "refresh_token": refresh_token, "client_id": client_id},
         )
@@ -55,6 +58,7 @@ def refresh(
             service="TikTok",
             classify=_classify("TikTok"),
             safe=True,
+            attempts=1,  # a refresh may rotate the token: never resend it within a run
             data={
                 "client_key": key,
                 "client_secret": secret,

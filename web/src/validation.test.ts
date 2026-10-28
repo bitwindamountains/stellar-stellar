@@ -70,6 +70,12 @@ describe('X and connected logins (mirrors validation.py)', () => {
     expect(xLength('日本')).toBe(4)
     expect(xLength('ok 👍')).toBe(5)
     expect(xLength('é')).toBe(1)
+    expect(xLength('\u{1F44D}\u{1F3FD}')).toBe(2)
+    expect(xLength('\u{1F468}‍\u{1F469}‍\u{1F467}')).toBe(2)
+    expect(xLength('\u{1F1F5}\u{1F1ED}')).toBe(2)
+    expect(xLength('❤️')).toBe(2)
+    expect(xLength('visit shop.example.com today')).toBe(6 + 23 + 6)
+    expect(xLength('e.g. this')).toBe(9)
   })
   it('needs logins', () => {
     expectError({ platforms: ['x'] }, 'connect X')

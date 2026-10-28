@@ -11,13 +11,25 @@ const NON_JPEG = /\.(png|webp|gif|heic|heif|avif|bmp|tiff?|svg)$/i // links with
 export const YOUTUBE_TITLE_MAX = 100
 export const X_TEXT_MAX = 280
 export const TIKTOK_CAPTION_MAX = 2200
-const URL_RE = /https?:\/\/\S+/gi
+// X counts any link as 23, with or without https://. Same TLD list as validation.py (common ones only).
+const TLDS = 'com|net|org|info|biz|io|co|me|app|dev|ai|ly|gg|tv|xyz|shop|store|online|site|link|ph|sg|my|jp|us|uk|ca|au'
+const URL_RE = new RegExp(`https?:\\/\\/\\S+|\\b(?:[a-z0-9-]+\\.)+(?:${TLDS})\\b(?:\\/\\S*)?`, 'gi')
 
 /** X's weighted count (twitter-text v3): links 23, Latin-range characters 1, others (CJK, emoji) 2. */
 export function xLength(text: string): number {
   let size = 23 * (text.match(URL_RE)?.length ?? 0)
+  let joined = false
+  let flagOpen = false
   for (const ch of text.replace(URL_RE, '')) {
     const cp = ch.codePointAt(0)!
+    if (cp === 0x200d) { joined = true; continue } // zero-width joiner: the next emoji is part of the same picture
+    // variation selector, skin tone, keycap, flag tag: no weight of their own
+    if ((cp >= 0xfe00 && cp <= 0xfe0f) || (cp >= 0x1f3fb && cp <= 0x1f3ff) || cp === 0x20e3 || (cp >= 0xe0020 && cp <= 0xe007f)) continue
+    if (joined) { joined = false; continue }
+    if (cp >= 0x1f1e6 && cp <= 0x1f1ff) { // two regional indicators make one flag
+      flagOpen = !flagOpen
+      if (!flagOpen) continue
+    } else flagOpen = false
     const light = cp <= 4351 || (cp >= 8192 && cp <= 8205) || (cp >= 8208 && cp <= 8223) || (cp >= 8242 && cp <= 8247)
     size += light ? 1 : 2
   }

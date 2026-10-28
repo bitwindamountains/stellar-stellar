@@ -159,6 +159,7 @@ def test_publish_nudges_on_empty_days(monkeypatch, live, at, expected):
 class TokenRepo:
     def __init__(self, found, fail_save=False):
         self.found, self.fail_save, self.reads, self.saved = found, fail_save, 0, []
+        self.still_connected = True
 
     def tokens(self, account, kind):
         self.reads += 1
@@ -168,6 +169,7 @@ class TokenRepo:
         if self.fail_save:
             raise cli.StoreError("down")
         self.saved.append((account, kind, tokens, expires_at))
+        return self.still_connected
 
 
 def token_helper(repo, monkeypatch, refreshed=None):
@@ -221,3 +223,28 @@ def test_unconnected_login_is_an_auth_error(monkeypatch):
     with pytest.raises(cli.PlatformError) as e:
         token(account(), "x")
     assert e.value.kind == "auth" and "connect it" in str(e.value)
+
+
+def test_disconnect_during_refresh_stops_the_post(monkeypatch):
+    repo = TokenRepo(({"access_token": "OLD", "refresh_token": "R1"}, "2026-10-28T09:00:00+00:00"))
+    repo.still_connected = False
+    token, _ = token_helper(repo, monkeypatch, {"access_token": "NEW", "refresh_token": "R2"})
+    with pytest.raises(cli.PlatformError) as e:
+        token(account(connected={"x"}), "x")
+    assert "disconnected" in str(e.value)
+
+
+def test_failed_refresh_is_not_repeated_in_the_same_run(monkeypatch):
+    repo = TokenRepo(({"access_token": "OLD", "refresh_token": "R1"}, "2026-10-28T09:00:00+00:00"))
+    calls = []
+
+    def refused(http, kind, refresh_token, env, now):
+        calls.append(refresh_token)
+        raise cli.PlatformError("auth", "X login expired: reconnect X")
+
+    monkeypatch.setattr(cli.oauth, "refresh", refused)
+    token = cli._tokens(repo, cli.load_config(ENV), None, datetime(2026, 10, 28, 10, 0, tzinfo=UTC))
+    for _ in range(2):
+        with pytest.raises(cli.PlatformError):
+            token(account(connected={"x"}), "x")
+    assert calls == ["R1"]

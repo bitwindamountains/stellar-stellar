@@ -109,12 +109,18 @@ def test_tokens_none_when_not_connected():
     assert r.tokens("5", "tiktok") is None
 
 
-def test_save_tokens_calls_rpc():
-    r, calls = repo(lambda request: httpx.Response(204))
-    r.save_tokens("5", "x", {"access_token": "A", "refresh_token": "R"}, "2026-10-28T12:00:00+00:00")
+def test_save_tokens_only_updates_an_existing_login():
+    r, calls = repo(lambda request: httpx.Response(200, json=True))
+    tokens = {"access_token": "A", "refresh_token": "R"}
+    assert r.save_tokens("5", "x", tokens, "2026-10-28T12:00:00+00:00") is True
     body = json.loads(calls[0].content)
-    assert calls[0].url.path.endswith("/rpc/save_connection")
-    assert body["p_tokens"] == '{"access_token": "A", "refresh_token": "R"}' and body["p_handle"] == ""
+    assert calls[0].url.path.endswith("/rpc/update_connection_tokens")
+    assert body["p_tokens"] == '{"access_token": "A", "refresh_token": "R"}'
+
+
+def test_save_tokens_reports_a_disconnected_login():
+    r, _ = repo(lambda request: httpx.Response(200, json=False))
+    assert r.save_tokens("5", "x", {"access_token": "A"}, "") is False
 
 
 def test_write_patches_each_post_with_typed_values():

@@ -15,7 +15,11 @@ from postpilot.timeutil import parse_local
 
 X_TEXT_MAX = 280
 TIKTOK_CAPTION_MAX = 2200
-URL = re.compile(r"https?://\S+", re.IGNORECASE)
+# X counts any link as 23, with or without https://.
+# ponytail: common TLDs only (twitter-text has the full list); a rarer bare domain counts as plain text.
+TLDS = "com|net|org|info|biz|io|co|me|app|dev|ai|ly|gg|tv|xyz|shop|store|online|site|link"
+TLDS += "|ph|sg|my|jp|us|uk|ca|au"
+URL = re.compile(rf"https?://\S+|\b(?:[a-z0-9-]+\.)+(?:{TLDS})\b(?:/\S*)?", re.IGNORECASE)
 IG_CAPTION_MAX = 2200
 IG_HASHTAGS_MAX = 30
 TELEGRAM_MESSAGE_MAX = 4096
@@ -120,8 +124,23 @@ def validate(post: Post, accounts: dict[str, Account]) -> list[str]:
 def x_length(text: str) -> int:
     """X's weighted count (twitter-text v3): links 23, Latin-range characters 1, others (CJK, emoji) 2."""
     size = 23 * len(URL.findall(text))
+    joined = flag_open = False
     for ch in URL.sub("", text):
         cp = ord(ch)
+        if cp == 0x200D:  # zero-width joiner: the next emoji is part of the same picture
+            joined = True
+            continue
+        if 0xFE00 <= cp <= 0xFE0F or 0x1F3FB <= cp <= 0x1F3FF or cp == 0x20E3 or 0xE0020 <= cp <= 0xE007F:
+            continue  # variation selector, skin tone, keycap, flag tag: no weight of their own
+        if joined:
+            joined = False
+            continue
+        if 0x1F1E6 <= cp <= 0x1F1FF:  # two regional indicators make one flag
+            flag_open = not flag_open
+            if not flag_open:
+                continue
+        else:
+            flag_open = False
         light = cp <= 4351 or 8192 <= cp <= 8205 or 8208 <= cp <= 8223 or 8242 <= cp <= 8247
         size += 1 if light else 2
     return size

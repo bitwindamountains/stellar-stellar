@@ -94,17 +94,21 @@ class SupabaseRepository:
             raise StoreError(f"Saved {platform} login is unreadable: reconnect it") from None
         return tokens, rows[0]["expires_at"] or ""
 
-    def save_tokens(self, account: str, platform: str, tokens: dict, expires_at: str) -> None:
-        self._request(
-            "POST",
-            "rpc/save_connection",
-            json={
-                "p_account": int(account),
-                "p_platform": platform,
-                "p_handle": "",  # keeps the handle shown in the app
-                "p_tokens": json.dumps(tokens),
-                "p_expires_at": expires_at or None,
-            },
+    def save_tokens(self, account: str, platform: str, tokens: dict, expires_at: str) -> bool:
+        """Store refreshed tokens. False = the login was disconnected meanwhile (it is not re-created)."""
+        return (
+            self._request(
+                "POST",
+                "rpc/update_connection_tokens",
+                json={
+                    "p_account": int(account),
+                    "p_platform": platform,
+                    "p_tokens": json.dumps(tokens),
+                    "p_expires_at": expires_at or None,
+                },
+                returning=True,
+            )
+            is True
         )
 
     def record_run(self, **counts) -> None:
