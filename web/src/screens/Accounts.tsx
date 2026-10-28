@@ -1,15 +1,18 @@
 import { useEffect, useState, type FormEvent } from 'react'
-import { Arrow } from '../icons'
+import { Arrow, Asteroids, FlightPath } from '../icons'
+import { takeQuery } from '../route'
 import { supabase } from '../supabase'
-import type { Account } from '../types'
+import { ACCOUNT_SELECT, isConnected, type Account, type Connection } from '../types'
 
 const EMPTY = { name: '', fb_page_id: '', ig_user_id: '', token_env: '', timezone: 'Asia/Manila' }
 const TOKEN_ENV = /^[A-Z][A-Z0-9_]{0,63}$/ // same rule as the database check
 
-function suggestTokenEnv(name: string): string {
-  const slug = name.toUpperCase().replace(/[^A-Z0-9]+/g, '_').replace(/^_|_$/g, '')
-  return slug ? `META_TOKEN_${slug}` : ''
-}
+const LOGINS: { c: Connection; name: string; note: string }[] = [
+  { c: 'meta', name: 'Facebook + Instagram', note: 'Your Page, and the Instagram account linked to it' },
+  { c: 'x', name: 'X', note: 'Posts text, links and one image' },
+  { c: 'tiktok', name: 'TikTok', note: 'Uploads videos (private until TikTok approves the app)' },
+]
+const LOGIN_NAME = Object.fromEntries(LOGINS.map((l) => [l.c, l.name])) as Record<Connection, string>
 
 export default function Accounts() {
   const [accounts, setAccounts] = useState<Account[]>([])
@@ -17,13 +20,42 @@ export default function Accounts() {
   const [form, setForm] = useState(EMPTY)
   const [error, setError] = useState('')
   const [saved, setSaved] = useState('')
+  const [busy, setBusy] = useState<Connection | null>(null)
 
   async function load() {
-    const { data, error } = await supabase.from('accounts').select('*').order('name')
+    const { data, error } = await supabase.from('accounts').select(ACCOUNT_SELECT).order('name')
     if (error) setError(error.message)
     else setAccounts(data as Account[])
   }
-  useEffect(() => { load() }, [])
+  useEffect(() => {
+    // Back from a platform's login page (see supabase/functions/connect).
+    const q = takeQuery()
+    const connected = q.get('connected') as Connection | null
+    if (connected && LOGIN_NAME[connected]) setSaved(`${LOGIN_NAME[connected]} connected.`)
+    const failed = q.get('error')
+    if (failed) setError(failed)
+    load()
+  }, [])
+
+  async function connect(c: Connection) {
+    setBusy(c)
+    setError('')
+    const { data, error } = await supabase.functions.invoke('connect', { body: { platform: c, account_id: editing } })
+    if (error || !data?.url) {
+      const context = (error as { context?: Response } | null)?.context
+      const body = await context?.json().catch(() => null)
+      setBusy(null)
+      return setError(body?.error ?? "Couldn't start the login. Try again.")
+    }
+    window.location.href = data.url // the platform sends you back to this page
+  }
+
+  async function disconnect(c: Connection) {
+    const { error } = await supabase.from('connections').delete().eq('account_id', editing!).eq('platform', c)
+    if (error) return setError(error.message)
+    setSaved(`${LOGIN_NAME[c]} disconnected. To revoke it fully, remove PostPilot in that platform's settings too.`)
+    load()
+  }
 
   function edit(a: Account | null) {
     setEditing(a?.id ?? null)
@@ -36,7 +68,6 @@ export default function Accounts() {
     e.preventDefault()
     const row = { ...form, name: form.name.trim(), fb_page_id: form.fb_page_id.trim(), ig_user_id: form.ig_user_id.trim(), token_env: form.token_env.trim() }
     if (row.token_env && !TOKEN_ENV.test(row.token_env)) return setError('Token secret name: capital letters, digits and _ only, e.g. META_TOKEN_KAPE')
-    if ((row.fb_page_id || row.ig_user_id) && !row.token_env) return setError('Facebook/Instagram need a token secret name')
     try {
       new Intl.DateTimeFormat('en', { timeZone: row.timezone })
     } catch {
@@ -46,25 +77,25 @@ export default function Accounts() {
       ? await supabase.from('accounts').update(row).eq('id', editing)
       : await supabase.from('accounts').insert(row)
     if (error) return setError(error.message.includes('duplicate') ? 'You already have an account with that name' : error.message)
-    setSaved(row.token_env ? `Saved. Add a GitHub secret named ${row.token_env} holding this Page's token.` : 'Saved.')
-    setEditing(null)
-    setForm(EMPTY)
+    setSaved(row.token_env ? `Saved. Add a GitHub secret named ${row.token_env} holding this Page's token.` : 'Saved. Now connect its logins.')
+    if (!editing) {
+      // Stay on the new account so its Connect buttons show right away.
+      const { data } = await supabase.from('accounts').select('id').eq('name', row.name).single()
+      setEditing(data?.id ?? null)
+    }
     load()
   }
 
-  const set = (k: keyof typeof EMPTY) => (e: React.ChangeEvent<HTMLInputElement>) => setForm((f) => {
-    const next = { ...f, [k]: e.target.value }
-    // Keep the suggested secret name in step with the account name until the user types their own.
-    if (k === 'name' && (f.token_env === '' || f.token_env === suggestTokenEnv(f.name))) next.token_env = suggestTokenEnv(e.target.value)
-    return next
-  })
+  const set = (k: keyof typeof EMPTY) => (e: React.ChangeEvent<HTMLInputElement>) => setForm((f) => ({ ...f, [k]: e.target.value }))
+  const current = accounts.find((a) => a.id === editing)
 
   return (
     <>
-      <header className="hero rise">
-        <span className="eyebrow">Where posts go</span>
+      <header className="hero sky rise">
         <h1>Accounts</h1>
-        <p>One account per brand. Tokens never live here: the publisher reads them from GitHub secrets by name.</p>
+        <p>One account per brand. Connect its logins once; tokens stay on the server and never reach this app.</p>
+        <FlightPath />
+        <Asteroids />
       </header>
 
       <div className="split">
@@ -76,7 +107,7 @@ export default function Accounts() {
               <ul className="rows" style={{ paddingTop: 16 }}>
                 {accounts.map((a) => (
                   <li key={a.id}>
-                    <button type="button" className="row" onClick={() => edit(a)}
+                    <button type="button" className="row simple" onClick={() => edit(a)}
                       style={{ width: '100%', border: 0, background: editing === a.id ? '#f7f7f3' : 'transparent', textAlign: 'left', cursor: 'pointer' }}>
                       <span style={{ flex: '1 1 200px', display: 'flex', flexDirection: 'column', gap: 6 }}>
                         <span style={{ fontSize: 16, fontWeight: 500 }}>{a.name}</span>
@@ -85,6 +116,8 @@ export default function Accounts() {
                       <span style={{ display: 'flex', gap: 6 }}>
                         {a.fb_page_id && <span className="chip done">FB</span>}
                         {a.ig_user_id && <span className="chip done">IG</span>}
+                        {isConnected(a, 'x') && <span className="chip done">X</span>}
+                        {isConnected(a, 'tiktok') && <span className="chip done">TT</span>}
                         <span className="chip assist">By hand</span>
                       </span>
                     </button>
@@ -105,7 +138,7 @@ export default function Accounts() {
                 <input id="a-fb" className="input" inputMode="numeric" value={form.fb_page_id} onChange={set('fb_page_id')} /></div>
               <div className="field"><label htmlFor="a-ig">Instagram user ID <span style={{ fontWeight: 400, color: 'var(--muted)' }}>· optional</span></label>
                 <input id="a-ig" className="input" inputMode="numeric" value={form.ig_user_id} onChange={set('ig_user_id')} /></div>
-              <div className="field"><label htmlFor="a-token">Token secret name</label>
+              <div className="field"><label htmlFor="a-token">Token secret name <span style={{ fontWeight: 400, color: 'var(--muted)' }}>· optional, Connect replaces it</span></label>
                 <input id="a-token" className="input" autoCapitalize="characters" spellCheck={false} placeholder="META_TOKEN_KAPE" value={form.token_env} onChange={set('token_env')} /></div>
               <div className="field"><label htmlFor="a-tz">Time zone</label>
                 <input id="a-tz" className="input" list="tz-list" value={form.timezone} onChange={set('timezone')} />
@@ -118,7 +151,33 @@ export default function Accounts() {
               </div>
             </form>
           </section>
-          <button type="button" className="btn" onClick={() => supabase.auth.signOut()} style={{ alignSelf: 'flex-start' }}>Sign out</button>
+          {current && (
+            <section className="tray rise" aria-label={`Logins for ${current.name}`}>
+              <div className="core">
+                <h2>Logins</h2>
+                <ul style={{ listStyle: 'none', margin: 0, padding: 0, display: 'grid', gap: 14 }}>
+                  {LOGINS.map(({ c, name, note }) => {
+                    const login = current.connections?.find((x) => x.platform === c)
+                    return (
+                      <li key={c} style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between', gap: 10 }}>
+                        <span style={{ display: 'flex', flexDirection: 'column', gap: 4, flex: '1 1 160px' }}>
+                          <span style={{ fontSize: 15, fontWeight: 500 }}>{name}</span>
+                          <span style={{ fontSize: 13, color: 'var(--muted)' }}>{login ? `Connected as ${login.handle}` : note}</span>
+                        </span>
+                        {login
+                          ? <button className="btn" type="button" onClick={() => disconnect(c)}>Disconnect</button>
+                          : <button className="btn primary" type="button" disabled={busy !== null} onClick={() => connect(c)}>
+                              {busy === c ? 'Opening…' : 'Connect'}<span className="knob"><Arrow /></span></button>}
+                      </li>
+                    )
+                  })}
+                </ul>
+                <p style={{ margin: 0, fontSize: 13, color: 'var(--muted)' }}>
+                  Shopee, YouTube and your personal Facebook don't let apps post: those come to your phone to post by hand.
+                </p>
+              </div>
+            </section>
+          )}
         </aside>
       </div>
     </>

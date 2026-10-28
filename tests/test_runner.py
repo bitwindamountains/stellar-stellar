@@ -206,3 +206,47 @@ def test_post_made_invalid_after_load_fails_instead_of_publishing():
     go(repo, plats)
     assert plats.calls == []
     assert repo.row(2)["status"] == "failed" and "Instagram needs an image" in repo.row(2)["last_error"]
+
+
+VIDEO = {"media_type": "video", "media_urls": "https://x/a.mp4"}
+
+
+def test_unconnected_tiktok_goes_to_telegram_and_counts_as_done():
+    repo = FakeRepository([row(platforms="tiktok", **VIDEO)], ACCOUNTS)
+    platforms = Platforms()
+    report = go(repo, platforms)
+    assert report.posted == [2]
+    assert platforms.calls == [("telegram", 2, ("tiktok",))]
+    assert repo.row(2)["tiktok_id"] == "telegram"
+    assert repo.row(2)["tg_message_id"] == "77"
+
+
+def test_connected_tiktok_posts_by_api_and_skips_telegram():
+    repo = FakeRepository(
+        [row(platforms="tiktok,youtube", **VIDEO)], ACCOUNTS, connected={"main": {"tiktok"}}
+    )
+    platforms = Platforms(tiktok=[PublishResult("pub_1", "")])
+    report = run(repo, {"tiktok": platforms.publisher("tiktok")}, platforms.assist, CFG, NOW)
+    assert report.posted == [2]
+    assert platforms.calls == [("tiktok", 2), ("telegram", 2, ("youtube",))]
+    assert repo.row(2)["tiktok_id"] == "pub_1"
+
+
+def test_tiktok_sent_by_hand_is_never_posted_again_after_connecting():
+    sent = row(
+        platforms="tiktok", status="partial", attempts="1", tiktok_id="telegram", tg_message_id="5", **VIDEO
+    )
+    repo = FakeRepository([sent], ACCOUNTS, connected={"main": {"tiktok"}})
+    platforms = Platforms(tiktok=[])
+    report = run(repo, {"tiktok": platforms.publisher("tiktok")}, platforms.assist, CFG, NOW)
+    assert report.posted == [2]
+    assert platforms.calls == []
+
+
+def test_x_published_and_written_back():
+    repo = FakeRepository([row(platforms="x")], ACCOUNTS, connected={"main": {"x"}})
+    platforms = Platforms(x=[PublishResult("123", "https://x.com/i/status/123")])
+    report = run(repo, {"x": platforms.publisher("x")}, platforms.assist, CFG, NOW)
+    assert report.posted == [2]
+    assert repo.row(2)["x_post_id"] == "123"
+    assert repo.row(2)["x_permalink"] == "https://x.com/i/status/123"

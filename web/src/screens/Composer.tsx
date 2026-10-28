@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { cleanVariants, isCustomized, textFor, type Variant, type Variants } from '../content'
-import { Alert, Arrow, Check } from '../icons'
+import { Alert, Arrow, Asteroids, Check, FlightPath, launchNext } from '../icons'
 import { publishSoon } from '../actions'
 import { toJpeg } from '../media'
 import { mediaWasRemoved } from '../postView'
@@ -9,7 +9,7 @@ import { loadDefaults, loadDraft, rememberChoices, saveDraft } from '../prefs'
 import { go } from '../route'
 import { supabase } from '../supabase'
 import { quickTimes, utcToZoned, zonedToUtc } from '../time'
-import { isAssisted, isDone, PLATFORM_CODES, PLATFORM_NAMES, PLATFORMS, type Account, type MediaType, type Platform, type Post } from '../types'
+import { ACCOUNT_SELECT, byHand, isDone, postedByApi, PLATFORM_CODES, PLATFORM_NAMES, PLATFORMS, type Account, type MediaType, type Platform, type Post } from '../types'
 import { hashtagCount, IG_CAPTION_MAX, validate, YOUTUBE_TITLE_MAX } from '../validation'
 
 const ACCEPT = 'image/jpeg,image/png,image/webp,video/mp4,video/quicktime'
@@ -40,7 +40,7 @@ export default function Composer({ num }: { num?: number }) {
   const [tried, setTried] = useState(false)
 
   useEffect(() => {
-    supabase.from('accounts').select('*').order('name').then(({ data, error }) => {
+    supabase.from('accounts').select(ACCOUNT_SELECT).order('name').then(({ data, error }) => {
       if (error) {
         setAccounts([]) // leave the loading state so the error is shown instead of a blank screen
         return setError(`Couldn't load your accounts: ${error.message}. Reload to try again.`)
@@ -162,6 +162,7 @@ export default function Composer({ num }: { num?: number }) {
     if (conflict) return setError(PUBLISHING_NOW)
     rememberChoices(account.id, mediaType, platforms)
     if (!num) saveDraft(null)
+    if (status === 'scheduled' && mode === 'now') launchNext()
     go('/')
   }
 
@@ -191,11 +192,12 @@ export default function Composer({ num }: { num?: number }) {
   if (accounts === null) return null
   if (accounts.length === 0 && !error) {
     return (
-      <section className="hero rise">
-        <span className="eyebrow">First things first</span>
+      <section className="hero sky rise">
         <h1>Add an account</h1>
         <p>Posts belong to an account: your Facebook Page and Instagram, or just your phone for by-hand platforms.</p>
         <a className="btn primary" href="#/accounts" style={{ alignSelf: 'flex-start' }}>Add account<span className="knob"><Arrow /></span></a>
+        <FlightPath />
+        <Asteroids />
       </section>
     )
   }
@@ -204,14 +206,15 @@ export default function Composer({ num }: { num?: number }) {
     if (post && isDone(post, p)) return { p, text: 'Already done. It will not be posted again.' }
     if (p === 'facebook') return { p, text: link && mediaUrl ? 'Posted to your Page with the link in the caption.' : 'Posted to your Page.' }
     if (p === 'instagram') return { p, text: 'Posted as a single image. Retries up to 3 times if Instagram is busy.' }
+    if (p === 'x') return { p, text: link ? 'Posted to X with the link (X charges more for posts with links).' : 'Posted to X.' }
+    if (p === 'tiktok' && !byHand(p, account)) return { p, text: 'Uploaded to TikTok. Private (Only me) until TikTok approves the app.' }
     return { p, text: 'Sent to your phone with the caption ready to paste.' }
   })
 
   return (
     <>
-      <header className="hero rise">
-        <span className="eyebrow">{num ? `Post #${num}` : 'One post · every platform'}</span>
-        <h1>{num ? 'Edit post' : 'Write it once'}</h1>
+      <header className="hero sky rise">
+        <h1>{num ? `Edit post #${num}` : 'Write it once'}</h1>
         <p>Pick where it goes. PostPilot checks it now, not at post time.</p>
         {restored?.note && <p className="notice" role="status" style={{ fontSize: 14 }}>{restored.note}</p>}
         {restored && (restored.caption || restored.mediaUrl) && (
@@ -223,18 +226,20 @@ export default function Composer({ num }: { num?: number }) {
             </button>
           </p>
         )}
+        {locked && <p className="notice" role="status">This post is being published right now. Edit it after the run finishes.</p>}
+        {post?.last_error && <p className="notice" role="status">{post.last_error}</p>}
+        {post && (
+          <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 10 }}>
+            {post.fb_permalink && <a className="btn light" href={post.fb_permalink} target="_blank" rel="noopener">View on Facebook<span className="knob"><Arrow /></span></a>}
+            {post.ig_permalink && <a className="btn light" href={post.ig_permalink} target="_blank" rel="noopener">View on Instagram<span className="knob"><Arrow /></span></a>}
+            {post.x_permalink && <a className="btn light" href={post.x_permalink} target="_blank" rel="noopener">View on X<span className="knob"><Arrow /></span></a>}
+            <button type="button" className="btn" onClick={postAgain}>Post again</button>
+          </div>
+        )}
+        {error && <p className="notice" role="alert">{error}</p>}
+        <FlightPath />
+        <Asteroids />
       </header>
-
-      {locked && <p className="notice" role="status">This post is being published right now. Edit it after the run finishes.</p>}
-      {post?.last_error && <p className="notice" role="status">{post.last_error}</p>}
-      {post && (
-        <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 10 }}>
-          {post.fb_permalink && <a className="btn light" href={post.fb_permalink} target="_blank" rel="noopener">View on Facebook<span className="knob"><Arrow /></span></a>}
-          {post.ig_permalink && <a className="btn light" href={post.ig_permalink} target="_blank" rel="noopener">View on Instagram<span className="knob"><Arrow /></span></a>}
-          <button type="button" className="btn" onClick={postAgain}>Post again</button>
-        </div>
-      )}
-      {error && <p className="notice" role="alert">{error}</p>}
 
       <form className="split" onSubmit={(e) => { e.preventDefault(); save('scheduled') }}
         onKeyDown={(e) => {
@@ -256,7 +261,7 @@ export default function Composer({ num }: { num?: number }) {
         <section className="main tray rise" aria-label="Post">
           <fieldset className="core" disabled={locked} style={{ gap: 28, border: 0, margin: 0, minWidth: 0 }}>
             <div className="field" style={{ gap: 12 }}>
-              <div role="group" aria-label="Edit the text for" className="filters" style={{ alignSelf: 'flex-start', flexWrap: 'wrap', borderRadius: 22 }}>
+              <div role="group" aria-label="Edit the text for" className="filters" style={{ alignSelf: 'flex-start', maxWidth: '100%' }}>
                 <button type="button" aria-pressed={editing === 'all'} onClick={() => setTab('all')}>All platforms</button>
                 {platforms.map((p) => (
                   <button key={p} type="button" aria-pressed={editing === p} onClick={() => setTab(p)}>
@@ -266,7 +271,7 @@ export default function Composer({ num }: { num?: number }) {
               </div>
               {editing === 'all' ? (
                 <>
-                  <span style={{ display: 'flex', justifyContent: 'space-between', gap: 12 }}>
+                  <span style={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'space-between', gap: '4px 12px' }}>
                     <label htmlFor="caption">Caption <span style={{ fontWeight: 400, color: 'var(--muted)' }}>· used everywhere unless a platform overrides it</span></label>
                     <span className="mono" aria-live="polite">{caption.length.toLocaleString('en')} chars · {hashtagCount(caption)} hashtags</span>
                   </span>
@@ -338,7 +343,7 @@ export default function Composer({ num }: { num?: number }) {
                   )}
                 </div>
                 <div className="field">
-                  <label htmlFor="link">Link <span style={{ fontWeight: 400, color: 'var(--muted)' }}>· Facebook only</span></label>
+                  <label htmlFor="link">Link <span style={{ fontWeight: 400, color: 'var(--muted)' }}>· Facebook and X</span></label>
                   <input id="link" className="input" type="url" inputMode="url" placeholder="https://" value={link} onChange={(e) => setLink(e.target.value)} />
                 </div>
               </div>
@@ -356,8 +361,8 @@ export default function Composer({ num }: { num?: number }) {
                         <input type="checkbox" checked={on} onChange={() => toggle(p)} style={{ width: 20, height: 20, accentColor: 'var(--ink)' }} />
                       </span>
                       <span className="mono" style={{ alignSelf: 'flex-start', padding: '4px 8px', borderRadius: 999, fontSize: 10, letterSpacing: '0.08em', textTransform: 'uppercase',
-                        background: isAssisted(p) ? 'var(--accent-tint)' : '#e9eae5', color: isAssisted(p) ? 'var(--accent-ink)' : 'var(--ink)' }}>
-                        {isAssisted(p) ? 'By hand' : 'Automatic'}
+                        background: byHand(p, account) ? 'var(--accent-tint)' : '#e9eae5', color: byHand(p, account) ? 'var(--accent-ink)' : 'var(--ink)' }}>
+                        {byHand(p, account) ? 'By hand' : 'Automatic'}
                       </span>
                     </label>
                   )
@@ -366,7 +371,7 @@ export default function Composer({ num }: { num?: number }) {
             </fieldset>
 
             <div style={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'flex-end', gap: 12 }}>
-              {num && post && !post.fb_post_id && !post.ig_media_id && (
+              {num && post && !postedByApi(post) && (
                 <button type="button" className="btn" onClick={remove} style={{ marginRight: 'auto' }}>Delete</button>
               )}
               <button type="button" className="btn" disabled={busy !== ''} onClick={() => save('draft')}>Save draft</button>
@@ -399,11 +404,11 @@ export default function Composer({ num }: { num?: number }) {
           {platforms.length > 0 && (
             <section className="tray rise">
               <div className="core dark">
-                <span className="eyebrow" style={{ background: 'rgba(255,255,255,0.1)', color: '#fff' }}>{mode === 'now' ? 'When you post' : `At ${when}`}</span>
+                <h2 style={{ color: '#fff' }}>{mode === 'now' ? 'When you post' : `At ${when}`}</h2>
                 <ol style={{ listStyle: 'none', margin: 0, padding: 0 }}>
                   {plan.map(({ p, text }, i) => (
                     <li key={p} style={{ display: 'flex', gap: 16, padding: '14px 0', borderTop: i ? '1px solid rgba(255,255,255,0.08)' : 0 }}>
-                      <span className="mono" style={{ width: 32, lineHeight: '20px', color: isAssisted(p) ? '#afc0ff' : '#c9cbcf' }}>{PLATFORM_CODES[p]}</span>
+                      <span className="mono" style={{ width: 32, lineHeight: '20px', color: byHand(p, account) ? '#afc0ff' : '#c9cbcf' }}>{PLATFORM_CODES[p]}</span>
                       <span style={{ fontSize: 14, lineHeight: 1.45 }}>{text}</span>
                     </li>
                   ))}
@@ -431,7 +436,7 @@ function PlatformText({ p, base, variants, set }: {
     <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
       {p === 'youtube' && (
         <div className="field">
-          <span style={{ display: 'flex', justifyContent: 'space-between', gap: 12 }}>
+          <span style={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'space-between', gap: '4px 12px' }}>
             <label htmlFor="v-title">YouTube title</label>
             <span className="mono">{(v.title ?? '').length} / {YOUTUBE_TITLE_MAX}</span>
           </span>
@@ -439,7 +444,7 @@ function PlatformText({ p, base, variants, set }: {
         </div>
       )}
       <div className="field">
-        <span style={{ display: 'flex', justifyContent: 'space-between', gap: 12 }}>
+        <span style={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'space-between', gap: '4px 12px' }}>
           <label htmlFor="v-caption">Caption for {PLATFORM_NAMES[p]} <span style={sub}>· empty = main caption</span></label>
           <span className="mono" aria-live="polite">{text.length.toLocaleString('en')}{limit} · {hashtagCount(text)} hashtags</span>
         </span>

@@ -1,3 +1,5 @@
+from dataclasses import replace
+
 from postpilot.models import ACCOUNT_COLUMNS, POST_COLUMNS, Account, Post
 from postpilot.sheet import accounts_from_values, posts_from_values
 
@@ -5,13 +7,23 @@ from postpilot.sheet import accounts_from_values, posts_from_values
 class FakeRepository:
     """In-memory Posts/Accounts tabs that go through the same parsing as the real sheet."""
 
-    def __init__(self, posts: list[dict[str, str]], accounts: list[dict[str, str]]):
+    def __init__(
+        self,
+        posts: list[dict[str, str]],
+        accounts: list[dict[str, str]],
+        connected: dict[str, set[str]] | None = None,
+    ):
         self.posts = [list(POST_COLUMNS)] + [[p.get(c, "") for c in POST_COLUMNS] for p in posts]
         self.accounts = [list(ACCOUNT_COLUMNS)] + [[a.get(c, "") for c in ACCOUNT_COLUMNS] for a in accounts]
+        self.connected = connected or {}  # account name -> saved logins, like Supabase `connections`
         self.writes: list[dict[int, dict[str, str]]] = []
 
     def load(self) -> tuple[list[Post], dict[str, Account]]:
-        return posts_from_values(self.posts), accounts_from_values(self.accounts)
+        accounts = {
+            name: replace(a, connected=frozenset(self.connected.get(name, ())))
+            for name, a in accounts_from_values(self.accounts).items()
+        }
+        return posts_from_values(self.posts), accounts
 
     def write(self, updates: dict[int, dict[str, str]]) -> None:
         self.writes.append(updates)

@@ -1,6 +1,6 @@
 import type { Session } from '@supabase/supabase-js'
-import { useEffect, useState } from 'react'
-import { Logo, Plus } from './icons'
+import { useEffect, useRef, useState } from 'react'
+import { Exit, Logo, Plus } from './icons'
 import { useRoute } from './route'
 import Accounts from './screens/Accounts'
 import Composer from './screens/Composer'
@@ -19,6 +19,23 @@ export default function App() {
     return () => data.subscription.unsubscribe()
   }, [])
 
+  // Pointer parallax for the night-sky layers (desktop only): CSS reads --px/--py in -1..1. No React state,
+  // at most one write per frame.
+  useEffect(() => {
+    if (!matchMedia('(hover: hover) and (pointer: fine)').matches || matchMedia('(prefers-reduced-motion: reduce)').matches) return
+    let frame = 0
+    const move = (e: PointerEvent) => {
+      cancelAnimationFrame(frame)
+      frame = requestAnimationFrame(() => {
+        const s = document.documentElement.style
+        s.setProperty('--px', ((e.clientX / innerWidth) * 2 - 1).toFixed(3))
+        s.setProperty('--py', ((e.clientY / innerHeight) * 2 - 1).toFixed(3))
+      })
+    }
+    addEventListener('pointermove', move)
+    return () => { removeEventListener('pointermove', move); cancelAnimationFrame(frame) }
+  }, [])
+
   if (session === undefined) return null
   if (session === null) return <SignIn />
 
@@ -33,11 +50,11 @@ export default function App() {
           <a href="#/" className="brand"><Logo />PostPilot</a>
           <a href="#/" aria-current={screen === '' ? 'page' : undefined}>Queue</a>
           <a href="#/accounts" aria-current={screen === 'accounts' ? 'page' : undefined}>Accounts</a>
-          <button type="button" className="desktop-only" onClick={() => supabase.auth.signOut()}>Sign out</button>
           <a href="#/new" className="btn primary" aria-current={screen === 'new' ? 'page' : undefined}
             style={{ color: '#fff', minHeight: 44 }}>
             New post<span className="knob"><Plus /></span>
           </a>
+          <SignOut />
         </nav>
         {screen === 'new' && <Composer />}
         {screen === 'edit' && id && <Composer num={Number(id)} />}
@@ -45,5 +62,29 @@ export default function App() {
         {screen === '' && <Queue />}
       </div>
     </div>
+  )
+}
+
+// Visible but hard to hit by accident: set apart at the end of the nav, and it takes two taps. The first
+// arms it for 3 s; a second tap within 0.4 s (a double-tap slip) is ignored.
+function SignOut() {
+  const [armedAt, setArmedAt] = useState(0)
+  const timer = useRef(0)
+  useEffect(() => () => clearTimeout(timer.current), [])
+  function click() {
+    if (!armedAt) {
+      setArmedAt(Date.now())
+      timer.current = window.setTimeout(() => setArmedAt(0), 3000)
+    } else if (Date.now() - armedAt > 400) {
+      clearTimeout(timer.current)
+      supabase.auth.signOut()
+    }
+  }
+  return (
+    <button type="button" className={armedAt ? 'signout armed' : 'signout'} onClick={click}
+      aria-label={armedAt ? 'Tap again to sign out' : 'Sign out'}>
+      <Exit />
+      <span className="signout-text" aria-live="polite">{armedAt ? <><span className="signout-long">Tap again to sign out</span><span className="signout-short">Sure?</span></> : 'Sign out'}</span>
+    </button>
   )
 }
