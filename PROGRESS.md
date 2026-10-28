@@ -25,6 +25,14 @@ Nothing has posted for real yet: go-live needs your accounts and keys (below).
   length counted like Telegram, and more. See PR #3.
 - **Polish (PR #4)**: account rows layout fix, quieter visuals, phone layout fixes, plain wording.
 
+## Live (2026-10-28)
+- Web app: https://postpilot.postpilot-web.workers.dev (Cloudflare Workers static assets; redeploy from `web/`:
+  `npm run build && npx wrangler deploy`).
+- GitHub variables set: `META_GRAPH_VERSION=v23.0`, `WEB_APP_URL`. Scheduled publish runs are on; a dry run on main
+  read the live database cleanly.
+- Still to set: Supabase Edge Function secret `WEB_APP_URL` (needed for Connect), the platform app secrets, and
+  optionally `GITHUB_TOKEN`/`GITHUB_REPO` for instant Post now (otherwise posts go out within 30 minutes).
+
 ## Go-live checklist (needs you)
 1. Supabase: Authentication → turn off public sign-ups; Users → Add user (email + password, auto-confirm).
 2. GitHub → Settings → Secrets and variables → Actions:
