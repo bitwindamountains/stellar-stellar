@@ -39,3 +39,9 @@ jobs:
           WEB_APP_URL: ${{ vars.WEB_APP_URL }}
           # One line per account; the name must match Accounts.token_env.
           META_TOKEN_MAIN: ${{ secrets.META_TOKEN_MAIN }}
+          # Refreshing connected X/TikTok logins (the same app credentials as the `connect` Edge Function).
+          X_CLIENT_ID: ${{ secrets.X_CLIENT_ID }}
+          X_CLIENT_SECRET: ${{ secrets.X_CLIENT_SECRET }}
+          TIKTOK_CLIENT_KEY: ${{ secrets.TIKTOK_CLIENT_KEY }}
+          TIKTOK_CLIENT_SECRET: ${{ secrets.TIKTOK_CLIENT_SECRET }}
+          TIKTOK_PRIVACY_LEVEL: ${{ vars.TIKTOK_PRIVACY_LEVEL }}

@@ -3,7 +3,7 @@ import { retryNow } from '../actions'
 import { Arrow, Asteroids, Constellation, FlightPath, PlatformMark } from '../icons'
 import { awaitingHandoff, canRetry, chips, groupByDay, mergePosts, needsYou, statusLabel, timeOf, weekStrip } from '../postView'
 import { supabase } from '../supabase'
-import { isAssisted, PLATFORM_CODES, type Account, type Post, type Run } from '../types'
+import { ACCOUNT_SELECT, PLATFORM_CODES, sentByHand, type Account, type Post, type Run } from '../types'
 
 type Filter = 'all' | 'auto' | 'hand' | 'needs'
 
@@ -21,7 +21,7 @@ export default function Queue() {
     const since = new Date(Date.now() - 2 * 86_400_000).toISOString()
     Promise.all([
       supabase.from('posts').select('*').or(`publish_at.gte.${since},publish_at.is.null`).order('publish_at').limit(300),
-      supabase.from('accounts').select('*').order('name'),
+      supabase.from('accounts').select(ACCOUNT_SELECT).order('name'),
       supabase.from('runs').select('*').order('ran_at', { ascending: false }).limit(1),
       // Unresolved posts stay visible however old, so a failure can't quietly drop out of "Needs you".
       // Newest first up to 1,000 (Supabase's default row cap); a personal queue won't get near that.
@@ -49,14 +49,15 @@ export default function Queue() {
   }
 
   const shown = useMemo(() => {
+    const accountOf = (p: Post) => accounts.find((a) => a.id === p.account_id)
     const keep: Record<Filter, (p: Post) => boolean> = {
       all: () => true,
-      auto: (p) => p.platforms.some((x) => !isAssisted(x)),
-      hand: (p) => p.platforms.some(isAssisted),
+      auto: (p) => p.platforms.some((x) => !sentByHand(p, x, accountOf(p))),
+      hand: (p) => p.platforms.some((x) => sentByHand(p, x, accountOf(p))),
       needs: needsYou,
     }
     return posts.filter(keep[filter])
-  }, [posts, filter])
+  }, [posts, filter, accounts])
   const attention = posts.filter(needsYou)
   const days = groupByDay(shown)
 
