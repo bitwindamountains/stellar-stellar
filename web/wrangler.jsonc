@@ -1,0 +1,8 @@
+// The web app is static files on Cloudflare Workers (Pages is folding into Workers).
+// Deploy: npm run build && npx wrangler deploy  ->  https://postpilot.postpilot-web.workers.dev
+// Hash routes (#/accounts) mean no server-side routing is needed.
+{
+  "name": "postpilot",
+  "compatibility_date": "2026-10-01",
+  "assets": { "directory": "./dist" }
+}
