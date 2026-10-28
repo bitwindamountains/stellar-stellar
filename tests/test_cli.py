@@ -154,3 +154,70 @@ def test_publish_nudges_on_empty_days(monkeypatch, live, at, expected):
     assert len(sent) == expected
     if sent:
         assert "https://pp.example/#/new" in sent[0]
+
+
+class TokenRepo:
+    def __init__(self, found, fail_save=False):
+        self.found, self.fail_save, self.reads, self.saved = found, fail_save, 0, []
+
+    def tokens(self, account, kind):
+        self.reads += 1
+        return self.found
+
+    def save_tokens(self, account, kind, tokens, expires_at):
+        if self.fail_save:
+            raise cli.StoreError("down")
+        self.saved.append((account, kind, tokens, expires_at))
+
+
+def token_helper(repo, monkeypatch, refreshed=None):
+    calls = []
+
+    def fake_refresh(http, kind, refresh_token, env, now):
+        calls.append(refresh_token)
+        return refreshed, "2026-10-28T12:00:00+00:00"
+
+    monkeypatch.setattr(cli.oauth, "refresh", fake_refresh)
+    cfg = cli.load_config({**ENV, "T": "ENVTOKEN"})
+    return cli._tokens(repo, cfg, None, datetime(2026, 10, 28, 10, 0, tzinfo=UTC)), calls
+
+
+def account(**kw):
+    from postpilot.models import Account
+
+    return Account(
+        kw.get("name", "5"), "PAGE", "IG", kw.get("token_env", ""), "UTC", frozenset(kw.get("connected", ()))
+    )
+
+
+def test_expired_login_is_refreshed_saved_and_cached(monkeypatch):
+    repo = TokenRepo(({"access_token": "OLD", "refresh_token": "R1"}, "2026-10-28T09:00:00+00:00"))
+    token, calls = token_helper(repo, monkeypatch, {"access_token": "NEW", "refresh_token": "R2"})
+    acct = account(connected={"x"})
+    assert token(acct, "x") == "NEW" and token(acct, "x") == "NEW"
+    assert calls == ["R1"] and repo.reads == 1
+    assert repo.saved == [
+        ("5", "x", {"access_token": "NEW", "refresh_token": "R2"}, "2026-10-28T12:00:00+00:00")
+    ]
+
+
+def test_refreshed_login_still_posts_when_saving_fails(monkeypatch):
+    repo = TokenRepo(
+        ({"access_token": "OLD", "refresh_token": "R1"}, "2026-10-28T09:00:00+00:00"), fail_save=True
+    )
+    token, _ = token_helper(repo, monkeypatch, {"access_token": "NEW", "refresh_token": "R2"})
+    assert token(account(connected={"x"}), "x") == "NEW"
+
+
+def test_meta_connection_wins_over_token_env(monkeypatch):
+    repo = TokenRepo(({"access_token": "PAGETOKEN"}, ""))
+    token, calls = token_helper(repo, monkeypatch)
+    assert token(account(token_env="T", connected={"meta"}), "meta") == "PAGETOKEN" and calls == []
+    assert token(account(name="6", token_env="T"), "meta") == "ENVTOKEN"
+
+
+def test_unconnected_login_is_an_auth_error(monkeypatch):
+    token, _ = token_helper(TokenRepo(None), monkeypatch)
+    with pytest.raises(cli.PlatformError) as e:
+        token(account(), "x")
+    assert e.value.kind == "auth" and "connect it" in str(e.value)

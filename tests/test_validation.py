@@ -1,7 +1,7 @@
 import pytest
 
 from postpilot.models import Account, Post
-from postpilot.validation import validate
+from postpilot.validation import validate, x_length
 
 ACCOUNTS = {
     "main": Account("main", "PAGE1", "IG1", "META_TOKEN_MAIN", "Asia/Manila"),
@@ -104,3 +104,60 @@ def test_bad_timezone_reported_once():
         cells={"account": "tz", "platforms": "facebook", "publish_at": "2026-10-05 18:00", "caption": "x"},
     )
     assert validate(post, accounts) == ["Unknown time zone 'Mars/Base' in Accounts tab"]
+
+
+LINKED = {
+    "linked": Account("linked", "PAGE3", "IG3", "", "Asia/Manila", frozenset({"meta", "x", "tiktok"})),
+}
+
+
+def linked_errors(**cells):
+    base = {"account": "linked", "publish_at": "2026-10-05 18:00", "caption": "Hi"}
+    return validate(Post(row=2, cells={**base, **cells}), LINKED)
+
+
+def test_meta_connection_replaces_token_env():
+    assert linked_errors(platforms="facebook") == []
+
+
+def test_x_needs_a_connection():
+    assert any("connect X" in e for e in errors(platforms="x"))
+    assert linked_errors(platforms="x") == []
+
+
+@pytest.mark.parametrize(
+    ("text", "length"),
+    [
+        ("hello", 5),
+        ("see https://example.com/a/very/long/path?q=1", 4 + 23),
+        ("日本", 4),
+        ("ok 👍", 5),
+        ("é", 1),
+    ],
+)
+def test_x_length_is_weighted_like_x(text, length):
+    assert x_length(text) == length
+
+
+def test_x_limits():
+    assert any("280" in e for e in linked_errors(platforms="x", caption="a" * 281))
+    assert linked_errors(platforms="x", caption="a" * 280) == []
+    assert any("280" in e for e in linked_errors(platforms="x", caption="字" * 141))
+    video = linked_errors(platforms="x", media_type="video", media_urls="https://x/a.mp4")
+    assert any("Video to X" in e for e in video)
+
+
+def test_x_counts_the_link():
+    found = linked_errors(platforms="x", caption="a" * 260, link="https://example.com")
+    assert any("280" in e for e in found)
+
+
+def test_connected_tiktok_caption_limit():
+    video = {"platforms": "tiktok", "media_type": "video", "media_urls": "https://x/a.mp4"}
+    assert linked_errors(**video) == []
+    assert any("2,200" in e for e in linked_errors(**video, caption="x" * 2201))
+
+
+def test_shopee_is_by_hand_and_needs_no_media():
+    assert errors(platforms="shopee") == []
+    assert any("shopee" in e for e in errors(platforms="shopee", caption="x" * 4100))

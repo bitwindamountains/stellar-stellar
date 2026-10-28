@@ -55,6 +55,8 @@ def repo(handler):
 def serve(request):
     if request.url.path.endswith("/accounts"):
         return httpx.Response(200, json=ACCOUNTS)
+    if request.url.path.endswith("/connections"):
+        return httpx.Response(200, json=[{"account_id": 5, "platform": "x"}])
     if request.url.path.endswith("/posts") and request.method == "GET":
         return httpx.Response(200, json=POSTS)
     return httpx.Response(204)
@@ -80,9 +82,39 @@ def test_load_maps_rows_to_post_cells_in_account_time():
 def test_load_only_fetches_rows_the_publisher_can_act_on():
     r, calls = repo(serve)
     r.load()
-    assert "status=in.%28draft%2Cscheduled%2Cpartial%2Cposting%29" in str(
-        calls[1].url
-    ) or "status=in.(draft,scheduled,partial,posting)" in str(calls[1].url)
+    url = str(next(c.url for c in calls if c.url.path.endswith("/posts")))
+    assert "status=in.%28draft%2Cscheduled%2Cpartial%2Cposting%29" in url or (
+        "status=in.(draft,scheduled,partial,posting)" in url
+    )
+
+
+def test_load_marks_connected_logins():
+    r, _ = repo(serve)
+    _, accounts = r.load()
+    assert accounts["5"].connected == frozenset({"x"})
+
+
+def test_tokens_read_through_service_role_rpc():
+    def handler(request):
+        assert request.url.path.endswith("/rpc/connection_tokens")
+        assert json.loads(request.content) == {"p_account": 5, "p_platform": "x"}
+        return httpx.Response(200, json=[{"tokens": '{"access_token": "A"}', "expires_at": None}])
+
+    r, _ = repo(handler)
+    assert r.tokens("5", "x") == ({"access_token": "A"}, "")
+
+
+def test_tokens_none_when_not_connected():
+    r, _ = repo(lambda request: httpx.Response(200, json=[]))
+    assert r.tokens("5", "tiktok") is None
+
+
+def test_save_tokens_calls_rpc():
+    r, calls = repo(lambda request: httpx.Response(204))
+    r.save_tokens("5", "x", {"access_token": "A", "refresh_token": "R"}, "2026-10-28T12:00:00+00:00")
+    body = json.loads(calls[0].content)
+    assert calls[0].url.path.endswith("/rpc/save_connection")
+    assert body["p_tokens"] == '{"access_token": "A", "refresh_token": "R"}' and body["p_handle"] == ""
 
 
 def test_write_patches_each_post_with_typed_values():
