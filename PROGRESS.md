@@ -39,8 +39,9 @@ Nothing has posted for real yet: go-live needs your accounts and keys (below).
 
 ## Connect logins (branch `feat/connect-accounts`, needs you)
 Design: `docs/superpowers/specs/2026-10-28-connect-and-post-design.md`. Code + tests done; not live yet.
-1. Restore the paused Supabase project, then apply `20261028000000_connections.sql` and deploy the `connect`
-   function with JWT verification **off** (it checks the user itself).
+1. Done 2026-10-28: project restored, `20261028000000_connections.sql` applied (Vault round trip, grants and RLS
+   checked), `connect` deployed (v2, JWT verification off; it checks the user itself). Free projects pause after a
+   week idle: restore from the dashboard if runs start failing.
 2. Make the developer apps; the redirect URI is `https://wsclesrylegjsyfxaamr.supabase.co/functions/v1/connect`:
    - Meta (developers.facebook.com): Facebook Login for Business; you as admin can use it in Development mode.
    - X (developer.x.com): OAuth 2.0, confidential client, read+write; buy pay-per-use credits and set a spend cap
