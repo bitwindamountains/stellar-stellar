@@ -3,7 +3,7 @@ import { textFor, titleFor, type Variants } from '../content'
 import { Check, FlightPath, Logo } from '../icons'
 import { go } from '../route'
 import { supabase } from '../supabase'
-import { isDone, sentByHand, PLATFORM_NAMES, type Platform, type Post } from '../types'
+import { ACCOUNT_SELECT, isDone, sentByHand, PLATFORM_NAMES, type Account, type Platform, type Post } from '../types'
 
 const OPEN_URL: Partial<Record<Platform, string>> = {
   tiktok: 'https://www.tiktok.com/upload',
@@ -13,14 +13,14 @@ const OPEN_URL: Partial<Record<Platform, string>> = {
 }
 
 export default function Handoff({ num }: { num: number }) {
-  const [post, setPost] = useState<Post | null>(null)
+  const [post, setPost] = useState<(Post & { account?: Account }) | null>(null)
   const [error, setError] = useState('')
   const [copied, setCopied] = useState('') // which copy button last succeeded
   const [sharing, setSharing] = useState(false)
   const [swapping, setSwapping] = useState('')
 
   useEffect(() => {
-    supabase.from('posts').select('*').eq('num', num).single().then(({ data, error }) => {
+    supabase.from('posts').select(`*, account:accounts(${ACCOUNT_SELECT})`).eq('num', num).single().then(({ data, error }) => {
       if (error) setError(error.message)
       else setPost(data as Post)
     })
@@ -29,7 +29,7 @@ export default function Handoff({ num }: { num: number }) {
   if (error) return <Frame><p className="notice" role="alert">{error}</p></Frame>
   if (!post) return <Frame />
 
-  const targets = post.platforms.filter((p) => sentByHand(post, p))
+  const targets = post.platforms.filter((p) => sentByHand(post, p, post.account))
   const media = post.media_urls[0]
   const variants = (post.variants ?? {}) as Variants
   // Same text the publisher sends to Telegram: the platform's own caption, plus the link for your profile.
@@ -76,7 +76,7 @@ export default function Handoff({ num }: { num: number }) {
 
   async function done() {
     // Free-plan storage is 1 GB: once nothing else needs the upload, remove it. Pasted outside links are left alone.
-    const automaticPending = post!.platforms.some((p) => !sentByHand(post!, p) && !isDone(post!, p))
+    const automaticPending = post!.platforms.some((p) => !sentByHand(post!, p, post!.account) && !isDone(post!, p))
     const prefix = supabase.storage.from('media').getPublicUrl('').data.publicUrl
     let removed = automaticPending ? [] : post!.media_urls.filter((u) => u.startsWith(prefix))
     if (removed.length) {

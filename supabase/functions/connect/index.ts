@@ -223,7 +223,10 @@ Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: cors })
   try {
     if (req.method === 'POST') return await start(req)
-    if (req.method === 'GET') return await finish(new URL(req.url))
+    if (req.method === 'GET') {
+      // The browser is mid-redirect here: always land it back in the app, never on a JSON error.
+      return await finish(new URL(req.url)).catch(() => backToApp({ error: "Couldn't save the login. Try again." }))
+    }
   } catch {
     return reply({ error: 'Something went wrong. Try again.' }, 500)
   }

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { canRetry, chipState, chips, groupByDay, mediaWasRemoved, mergePosts, needsYou, statusLabel, weekStrip } from './postView'
-import type { Post } from './types'
+import { postedByApi, sentByHand, type Post } from './types'
 
 function post(over: Partial<Post>): Post {
   return {
@@ -97,5 +97,20 @@ describe('TikTok by hand or automatic', () => {
   it('a real TikTok ID means it posted automatically, not by hand', () => {
     expect(chipState(post({ platforms: ['tiktok'], tiktok_id: 'v_pub_1' }), 'tiktok')).toBe('done')
     expect(chipState(post({ platforms: ['tiktok'], tiktok_id: 'telegram', tg_message_id: '9' }), 'tiktok')).toBe('assist')
+  })
+})
+
+describe('sentByHand', () => {
+  const linked = { id: 1, name: 'K', fb_page_id: '', ig_user_id: '', token_env: '', timezone: 'UTC', connections: [{ platform: 'tiktok' as const, handle: 'k' }] }
+  it('a connected TikTok still retrying is automatic, not by hand', () => {
+    const p = post({ platforms: ['tiktok', 'youtube'], status: 'partial', tg_message_id: '9' })
+    expect(sentByHand(p, 'tiktok')).toBe(false)
+    expect(sentByHand(post({ platforms: ['tiktok'] }), 'tiktok', linked)).toBe(false)
+    expect(sentByHand(post({ platforms: ['tiktok'] }), 'tiktok')).toBe(true)
+    expect(sentByHand(post({ platforms: ['tiktok'], tiktok_id: 'telegram' }), 'tiktok', linked)).toBe(true)
+  })
+  it('posts live on an automatic platform cannot be deleted', () => {
+    expect(postedByApi(post({ x_post_id: '1' }))).toBe(true)
+    expect(postedByApi(post({ tiktok_id: 'telegram' }))).toBe(false)
   })
 })

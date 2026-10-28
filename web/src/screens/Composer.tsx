@@ -9,7 +9,7 @@ import { loadDefaults, loadDraft, rememberChoices, saveDraft } from '../prefs'
 import { go } from '../route'
 import { supabase } from '../supabase'
 import { quickTimes, utcToZoned, zonedToUtc } from '../time'
-import { ACCOUNT_SELECT, byHand, isDone, PLATFORM_CODES, PLATFORM_NAMES, PLATFORMS, type Account, type MediaType, type Platform, type Post } from '../types'
+import { ACCOUNT_SELECT, byHand, isDone, postedByApi, PLATFORM_CODES, PLATFORM_NAMES, PLATFORMS, type Account, type MediaType, type Platform, type Post } from '../types'
 import { hashtagCount, IG_CAPTION_MAX, validate, YOUTUBE_TITLE_MAX } from '../validation'
 
 const ACCEPT = 'image/jpeg,image/png,image/webp,video/mp4,video/quicktime'
@@ -371,7 +371,7 @@ export default function Composer({ num }: { num?: number }) {
             </fieldset>
 
             <div style={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'flex-end', gap: 12 }}>
-              {num && post && !post.fb_post_id && !post.ig_media_id && (
+              {num && post && !postedByApi(post) && (
                 <button type="button" className="btn" onClick={remove} style={{ marginRight: 'auto' }}>Delete</button>
               )}
               <button type="button" className="btn" disabled={busy !== ''} onClick={() => save('draft')}>Save draft</button>

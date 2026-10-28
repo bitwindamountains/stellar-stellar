@@ -169,7 +169,8 @@ def doctor() -> None:
     for account in accounts.values():
         used = {p for post in posts if post.get("account") == account.name for p in post.platforms}
         # Connected logins are checked when they post; this checks the GitHub-secret Meta tokens.
-        if not used & {"facebook", "instagram"} or not account.token_env:
+        # (with a Facebook connection the publisher ignores token_env, so it isn't checked either)
+        if not used & {"facebook", "instagram"} or not account.token_env or "meta" in account.connected:
             continue
 
         def token_check(account=account):
@@ -190,13 +191,23 @@ def doctor() -> None:
 
 def _tokens(repo, cfg: Config, http: httpx.Client, now: datetime):
     """token(account, connection) -> access token: a saved login (refreshed near expiry) or, for Meta,
-    the GitHub secret named by token_env. Each login is read and refreshed at most once per run."""
-    cache: dict[tuple[str, str], str] = {}
+    the GitHub secret named by token_env. Each login is read and refreshed at most once per run, and a
+    failure is remembered so later posts don't repeat the call (a repeated refresh could spend a token)."""
+    cache: dict[tuple[str, str], str | PlatformError] = {}
 
     def token(account, kind: str) -> str:
         key = (account.name, kind)
-        if key in cache:
-            return cache[key]
+        if key not in cache:
+            try:
+                cache[key] = lookup(account, kind)
+            except PlatformError as e:
+                cache[key] = e
+        found = cache[key]
+        if isinstance(found, PlatformError):
+            raise found
+        return found
+
+    def lookup(account, kind: str) -> str:
         if kind in account.connected:
             try:
                 found = repo.tokens(account.name, kind)
@@ -208,23 +219,24 @@ def _tokens(repo, cfg: Config, http: httpx.Client, now: datetime):
             if oauth.needs_refresh(expires_at, now):
                 tokens, expires_at = oauth.refresh(http, kind, tokens.get("refresh_token", ""), cfg.env, now)
                 try:
-                    repo.save_tokens(account.name, kind, tokens, expires_at)
+                    still_connected = repo.save_tokens(account.name, kind, tokens, expires_at)
                 except StoreError:
                     # X rotates refresh tokens: post now with the new one; the next run asks to reconnect.
                     typer.echo(
                         f"Couldn't save the refreshed {kind} login for account {account.name}", err=True
                     )
-            cache[key] = tokens["access_token"]
-        elif kind == "meta" and account.token_env:
+                else:
+                    if not still_connected:
+                        raise PlatformError("auth", f"{kind} was disconnected while posting: not posted")
+            return tokens["access_token"]
+        if kind == "meta" and account.token_env:
             value = cfg.env.get(account.token_env)
             if not value:
                 raise PlatformError("auth", f"{account.token_env} is not set (add it as a GitHub secret)")
-            cache[key] = value
-        else:
-            raise PlatformError(
-                "auth", f"No {kind} login for account {account.name}: connect it on the Accounts page"
-            )
-        return cache[key]
+            return value
+        raise PlatformError(
+            "auth", f"No {kind} login for account {account.name}: connect it on the Accounts page"
+        )
 
     return token
 

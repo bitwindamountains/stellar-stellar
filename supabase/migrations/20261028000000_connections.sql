@@ -70,6 +70,26 @@ begin
   end if;
 end $$;
 
+-- The publisher's refresh path: updates only, so a refresh racing a Disconnect can't bring the login back.
+create function public.update_connection_tokens(
+  p_account bigint, p_platform text, p_tokens text, p_expires_at timestamptz
+) returns boolean
+language plpgsql security definer set search_path = '' as $$
+declare
+  existing uuid;
+begin
+  select secret_id into existing from public.connections
+  where account_id = p_account and platform = p_platform
+  for update;
+  if existing is null then
+    return false;
+  end if;
+  perform vault.update_secret(existing, p_tokens);
+  update public.connections set expires_at = p_expires_at
+  where account_id = p_account and platform = p_platform;
+  return true;
+end $$;
+
 create function public.connection_tokens(p_account bigint, p_platform text)
 returns table (tokens text, expires_at timestamptz)
 language sql security definer set search_path = '' stable as $$
@@ -88,7 +108,9 @@ create trigger connections_drop_secret after delete on public.connections
   for each row execute function public.drop_connection_secret();
 
 revoke execute on function public.save_connection(bigint, text, text, text, timestamptz) from public, anon, authenticated;
+revoke execute on function public.update_connection_tokens(bigint, text, text, timestamptz) from public, anon, authenticated;
 revoke execute on function public.connection_tokens(bigint, text) from public, anon, authenticated;
 revoke execute on function public.drop_connection_secret() from public, anon, authenticated;
 grant execute on function public.save_connection(bigint, text, text, text, timestamptz) to service_role;
+grant execute on function public.update_connection_tokens(bigint, text, text, timestamptz) to service_role;
 grant execute on function public.connection_tokens(bigint, text) to service_role;
