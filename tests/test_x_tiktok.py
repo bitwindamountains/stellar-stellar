@@ -104,12 +104,13 @@ def tiktok_handler(statuses, put_status=201):
     return handler
 
 
-def test_tiktok_uploads_and_waits_for_publish():
-    http, calls = client(tiktok_handler(["PROCESSING_UPLOAD", "PUBLISH_COMPLETE"]))
-    result = tiktok.publish(http, "TOK", post(**VIDEO), privacy="SELF_ONLY", sleep=lambda s: None)
+def test_tiktok_uploads_to_the_inbox_and_waits_for_it():
+    http, calls = client(tiktok_handler(["PROCESSING_UPLOAD", "SEND_TO_USER_INBOX"]))
+    result = tiktok.publish(http, "TOK", post(**VIDEO), sleep=lambda s: None)
     assert result.id == "p1"
+    assert calls[1].url.path == "/v2/post/publish/inbox/video/init/"
     init = json.loads(calls[1].content)
-    assert init["post_info"] == {"title": "Hello", "privacy_level": "SELF_ONLY"}
+    assert set(init) == {"source_info"}  # drafts carry no caption or privacy: you add those in TikTok
     assert init["source_info"]["video_size"] == 10
     assert calls[2].headers["Content-Range"] == "bytes 0-9/10"
 
@@ -134,10 +135,10 @@ def test_tiktok_still_processing_keeps_the_id():
     assert tiktok.publish(http, "TOK", post(**VIDEO), sleep=lambda s: None, checks=3).id == "p1"
 
 
-def test_tiktok_unaudited_app_explains_privacy():
-    body = {"error": {"code": "unaudited_client_can_only_post_to_private_accounts", "message": "m"}}
+def test_tiktok_too_many_pending_drafts_is_retried_later():
+    body = {"error": {"code": "spam_risk_too_many_pending_share", "message": "m"}}
     err = tiktok.classify(403, body)
-    assert err.kind == "permanent" and "set your TikTok account to private" in str(err)
+    assert err.kind == "rate" and "drafts" in str(err)
 
 
 # --- refresh ---

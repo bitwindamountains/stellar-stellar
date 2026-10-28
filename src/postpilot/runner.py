@@ -6,6 +6,7 @@ from typing import Protocol
 from postpilot.config import Config
 from postpilot.models import (
     ASSISTED_PLATFORMS,
+    FINISH_IN_APP,
     ID_COLUMN,
     PERMALINK_COLUMN,
     SENT_BY_HAND,
@@ -140,9 +141,14 @@ def _publish_row(post, account, publishers, assist, write, cfg, stamp, report, d
         save({ID_COLUMN[platform]: result.id, PERMALINK_COLUMN[platform]: result.permalink})
         done_now.append(platform)
 
-    assisted = [
-        p for p in post.platforms if p in ASSISTED_PLATFORMS and not account.by_api(p) and not post.done(p)
-    ]
+    def needs_you(p: str) -> bool:
+        if account.by_api(p):
+            # A draft (TikTok inbox) still needs its caption on your phone: once, right after the upload.
+            # ponytail: if that send fails after an earlier message went out, only the handoff page has it.
+            return p in FINISH_IN_APP and post.done(p) and (p in done_now or not post.get("tg_message_id"))
+        return p in ASSISTED_PLATFORMS and not post.done(p)
+
+    assisted = [p for p in post.platforms if needs_you(p)]
     if assisted:
         if assist is None:
             errors.append(
@@ -150,9 +156,11 @@ def _publish_row(post, account, publishers, assist, write, cfg, stamp, report, d
             )
         else:
             try:
-                by_hand = {ID_COLUMN[p]: SENT_BY_HAND for p in assisted if p in ID_COLUMN}
+                by_hand = {
+                    ID_COLUMN[p]: SENT_BY_HAND for p in assisted if p in ID_COLUMN and not post.done(p)
+                }
                 save({"tg_message_id": assist(post, assisted), **by_hand})
-                done_now += assisted
+                done_now += [p for p in assisted if p not in done_now]
             except PlatformError as e:
                 errors.append(("telegram", e))
 

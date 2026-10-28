@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { canRetry, chipState, chips, groupByDay, mediaWasRemoved, mergePosts, needsYou, statusLabel, weekStrip } from './postView'
-import { postedByApi, sentByHand, type Post } from './types'
+import { isDraft, needsFinishing, postedByApi, sentByHand, type Post } from './types'
 
 function post(over: Partial<Post>): Post {
   return {
@@ -94,8 +94,11 @@ describe('mergePosts', () => {
 })
 
 describe('TikTok by hand or automatic', () => {
-  it('a real TikTok ID means it posted automatically, not by hand', () => {
-    expect(chipState(post({ platforms: ['tiktok'], tiktok_id: 'v_pub_1' }), 'tiktok')).toBe('done')
+  it('an uploaded TikTok draft waits for you until marked posted', () => {
+    expect(chipState(post({ platforms: ['tiktok'], tiktok_id: 'v_pub_1' }), 'tiktok')).toBe('assist')
+    expect(chipState(post({ platforms: ['tiktok'], tiktok_id: 'v_pub_1', assist_done_at: '2026-10-28T10:00:00Z' }), 'tiktok')).toBe('done')
+    expect(needsFinishing(post({ platforms: ['tiktok'], tiktok_id: 'v_pub_1' }), 'tiktok')).toBe(true)
+    expect(isDraft(post({ tiktok_id: 'telegram' }), 'tiktok')).toBe(false)
     expect(chipState(post({ platforms: ['tiktok'], tiktok_id: 'telegram', tg_message_id: '9' }), 'tiktok')).toBe('assist')
   })
 })

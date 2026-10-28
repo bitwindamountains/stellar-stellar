@@ -2,7 +2,7 @@ from html import escape
 
 import httpx
 
-from postpilot.models import PlatformError, Post
+from postpilot.models import ID_COLUMN, SENT_BY_HAND, PlatformError, Post
 
 API = "https://api.telegram.org"
 NAMES = {"fb_profile": "Facebook (personal)", "tiktok": "TikTok", "youtube": "YouTube", "shopee": "Shopee"}
@@ -12,11 +12,16 @@ def send_assist(
     http: httpx.Client, token: str, chat_id: str, post: Post, platforms: list[str], handoff_url: str = ""
 ) -> str:
     """Send media + a copy-ready caption for manual posting. Returns the first message's id."""
-    header = f"Post now to {', '.join(NAMES.get(p, p) for p in platforms)} (post #{post.row})"
+    drafts = [p for p in platforms if p in ID_COLUMN and post.get(ID_COLUMN[p]) not in ("", SENT_BY_HAND)]
+    names = [
+        f"{NAMES.get(p, p)} (video is in your {NAMES.get(p, p)} inbox)" if p in drafts else NAMES.get(p, p)
+        for p in platforms
+    ]
+    header = f"Post now to {', '.join(names)} (post #{post.row})"
     if handoff_url:
         header += f"\nOpen in PostPilot: {handoff_url}"
     first_id = None
-    if post.media_urls:
+    if post.media_urls and len(drafts) < len(platforms):  # a draft already has its video
         url = post.media_urls[0]
         method, field = (
             ("sendVideo", "video") if post.get("media_type").lower() == "video" else ("sendPhoto", "photo")
