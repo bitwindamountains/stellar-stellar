@@ -1,10 +1,13 @@
 # PostPilot progress
 
-_Last updated: 2026-10-28_
+_Last updated: 2026-10-29_
 
 ## Where things stand
-Everything is merged to `main` (PRs #1–#7) and the web app is live. Nothing has posted for real yet: go-live
-needs your developer apps and keys (below). Next up: the TikTok developer app (walkthrough below).
+Everything is merged to `main` (PRs #1–#9) and the web app is live. TikTok works in Sandbox: Connect works, and two
+real uploads returned `SEND_TO_USER_INBOX`, but no draft showed up in the TikTok app. So the production review (drafts
+only: Login Kit, `user.info.basic`, `video.upload`) was submitted on 2026-10-29. Site verification file, `/terms` and
+`/privacy` are live (PR #9). After approval: put the production key/secret into Supabase + GitHub, reconnect, test
+once. Next up: the Meta app. Direct Post (`video.publish`) needs TikTok's posting screen plus its own audit: later.
 
 | Part | State |
 |---|---|
