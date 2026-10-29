@@ -48,6 +48,7 @@ export function isConnected(account: Account | undefined, c: Connection): boolea
 export interface Post {
   num: number
   account_id: number
+  group_id: string | null // rows of one post sent to several accounts share it
   platforms: Platform[]
   publish_at: string | null
   caption: string
@@ -84,6 +85,16 @@ export interface Run {
 
 export function isAssisted(p: Platform): boolean {
   return (ASSISTED_PLATFORMS as readonly string[]).includes(p)
+}
+
+/** Can this account post p at all? Automatic platforms need their login or IDs; by-hand ones always work. */
+export function canPost(p: Platform, account: Account | undefined): boolean {
+  if (!account) return false
+  const meta = !!account.token_env || isConnected(account, 'meta')
+  if (p === 'facebook') return !!account.fb_page_id && meta
+  if (p === 'instagram') return !!account.ig_user_id && meta
+  if (p === 'x') return isConnected(account, 'x')
+  return true
 }
 
 /** Will this account post p by hand? Same rule as Account.by_api in the publisher. */
