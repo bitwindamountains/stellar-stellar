@@ -236,9 +236,9 @@ export default function Queue() {
           </div>
         </section>
 
-        <aside className="side" aria-label="Status">
+        <aside className="side queue-side" aria-label="Status">
           {flying.length > 0 && (
-            <section className="tray rise" aria-live="polite">
+            <section className="tray rise urgent" aria-live="polite">
               <div className="core">
                 <h2>Going out</h2>
                 {flying.slice(0, 4).map((g) => {
@@ -262,7 +262,7 @@ export default function Queue() {
             </section>
           )}
 
-          <section className="tray rise">
+          <section className={`tray rise${attention.length ? ' urgent' : ''}`}>
             <div className="core dark">
               <h2 style={{ fontSize: 24, letterSpacing: '-0.02em' }}>
                 {attention.length === 0 ? 'All clear' : `${attention.length} thing${attention.length === 1 ? '' : 's'} to check`}

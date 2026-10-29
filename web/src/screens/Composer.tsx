@@ -161,7 +161,11 @@ export default function Composer({ num }: { num?: number }) {
   async function save(status: 'draft' | 'scheduled') {
     if (busy || !accounts) return // Ctrl+Enter skips the disabled buttons; never save mid-upload or twice
     setTried(true)
-    if (problemsFor(active, targets, base, status === 'scheduled' && mode === 'later').length || !lead) return
+    if (problemsFor(active, targets, base, status === 'scheduled' && mode === 'later').length || !lead) {
+      // On a phone the checks sit below the form: bring them into view so a blocked save never looks like nothing.
+      document.getElementById('checks')?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+      return
+    }
     setBusy('save')
     const shared = {
       publish_at: status === 'scheduled' && mode === 'now' ? new Date().toISOString()
@@ -304,32 +308,29 @@ export default function Composer({ num }: { num?: number }) {
           <fieldset className="core" disabled={locked} style={{ gap: 28, border: 0, margin: 0, minWidth: 0 }}>
             <div className="field">
               <span className="legend">Media</span>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 14, padding: 12, borderRadius: 18, background: dragging ? 'var(--accent-tint)' : 'var(--well)',
-                boxShadow: dragging ? 'inset 0 0 0 1.5px var(--accent)' : 'inset 0 0 0 1px var(--hair)', transition: 'background-color 150ms ease, box-shadow 150ms ease' }}>
+              {/* The whole box is the file picker: click, drop or paste. */}
+              <label className={`dropzone${dragging ? ' over' : ''}`}>
                 <span className="thumb" aria-hidden="true" style={mediaType === 'image' && mediaUrl ? { width: 64, height: 64, backgroundImage: `url("${mediaUrl}")`, color: 'transparent' } : { width: 64, height: 64 }}>
                   {mediaType === 'none' ? 'None' : mediaType}
                 </span>
-                <span style={{ display: 'flex', flexDirection: 'column', gap: 8, minWidth: 0 }}>
-                  <label className="btn light file-btn" style={{ alignSelf: 'flex-start', minHeight: 44, paddingRight: 22 }}>
-                    {mediaUrl ? 'Replace file' : 'Choose file'}
-                    <input type="file" accept={ACCEPT} disabled={busy === 'upload'}
-                      onChange={(e) => e.target.files?.[0] && upload(e.target.files[0])} />
-                  </label>
-                  <span style={{ fontSize: 13, color: 'var(--muted)' }}>
-                    {busy === 'upload' ? 'Uploading…' : dragging ? 'Drop to upload' : mediaUrl ? 'Uploaded.' : 'Drop or paste a file here · up to 50 MB'}
-                  </span>
-                  {mediaUrl && (
-                    <button type="button" className="link-btn" onClick={() => {
-                      setMediaUrl('')
-                      setMediaType('none')
-                      const remembered = rememberedTargets('none')
-                      if (!num && remembered) setTargets(remembered)
-                    }}>
-                      Remove media
-                    </button>
-                  )}
+                <span className="dz-text">
+                  <span className="dz-title">{busy === 'upload' ? 'Uploading…' : dragging ? 'Drop to upload' : mediaUrl ? `${mediaType === 'video' ? 'Video' : 'Image'} added` : 'Add a photo or video'}</span>
+                  <span className="dz-hint">{mediaUrl ? 'Click to replace it' : 'Click, drop or paste · JPEG, PNG, WebP, MP4 · up to 50 MB'}</span>
                 </span>
-              </div>
+                <span className="btn dark" aria-hidden="true" style={{ minHeight: 44 }}>{mediaUrl ? 'Replace' : 'Choose file'}</span>
+                <input type="file" className="sr-only" accept={ACCEPT} disabled={busy === 'upload'}
+                  onChange={(e) => e.target.files?.[0] && upload(e.target.files[0])} />
+              </label>
+              {mediaUrl && (
+                <button type="button" className="link-btn" onClick={() => {
+                  setMediaUrl('')
+                  setMediaType('none')
+                  const remembered = rememberedTargets('none')
+                  if (!num && remembered) setTargets(remembered)
+                }}>
+                  Remove media
+                </button>
+              )}
             </div>
 
             <div className="field" style={{ gap: 12 }}>
@@ -344,7 +345,7 @@ export default function Composer({ num }: { num?: number }) {
               {editing === 'all' ? (
                 <>
                   <span style={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'space-between', gap: '4px 12px' }}>
-                    <label htmlFor="caption">Caption <span style={{ fontWeight: 400, color: 'var(--muted)' }}>· used everywhere unless a platform overrides it</span></label>
+                    <label htmlFor="caption" className="legend">Caption <span style={{ fontWeight: 400, color: 'var(--muted)' }}>· used everywhere unless a platform overrides it</span></label>
                     <span className="mono" aria-live="polite">{caption.length.toLocaleString('en')} chars · {hashtagCount(caption)} hashtags</span>
                   </span>
                   <textarea id="caption" className="input" value={caption} onChange={(e) => setCaption(e.target.value)} />
@@ -421,7 +422,7 @@ export default function Composer({ num }: { num?: number }) {
 
             <div className="actions">
               {rows.length > 0 && !rows.some(postedByApi) && (
-                <button type="button" className="btn" onClick={remove} style={{ marginRight: 'auto' }}>Delete</button>
+                <button type="button" className="btn danger" onClick={remove} style={{ marginRight: 'auto' }}>Delete</button>
               )}
               <button type="button" className="btn" disabled={busy !== ''} onClick={() => save('draft')}>Save draft</button>
               <button type="submit" className="btn primary" disabled={busy !== ''}>
@@ -433,7 +434,7 @@ export default function Composer({ num }: { num?: number }) {
         </section>
 
         <aside className="side" aria-label="Checks, preview and plan">
-          <section className="tray rise">
+          <section className="tray rise" id="checks">
             <div className="core">
               <h2>Checks</h2>
               <ul aria-live="polite" style={{ listStyle: 'none', margin: 0, padding: 0, display: 'flex', flexDirection: 'column', gap: 12, fontSize: 14, lineHeight: 1.45 }}>
