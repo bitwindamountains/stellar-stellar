@@ -173,7 +173,7 @@ export default function Accounts() {
                   })}
                 </ul>
                 <p style={{ margin: 0, fontSize: 13, color: 'var(--muted)' }}>
-                  Shopee, YouTube and your personal Facebook don't let apps post: those come to your phone to post by hand.
+                  Shopee, YouTube and your personal Facebook come to your phone to post by hand. A post can go to several accounts at once: pick them in New post.
                 </p>
               </div>
             </section>

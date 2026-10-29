@@ -1,17 +1,40 @@
 import { useCallback, useEffect, useMemo, useState, type CSSProperties } from 'react'
 import { retryNow } from '../actions'
+import { groupHref, groupPosts, groupStatus, postLinks, type PostGroup } from '../groups'
 import { Arrow, Asteroids, Constellation, FlightPath, PlatformMark } from '../icons'
-import { awaitingHandoff, canRetry, chips, groupByDay, mergePosts, needsYou, statusLabel, timeOf, weekStrip } from '../postView'
+import { awaitingHandoff, canRetry, chips, groupByDay, mergePosts, needsYou, timeOf, weekStrip } from '../postView'
 import { supabase } from '../supabase'
-import { ACCOUNT_SELECT, needsFinishing, PLATFORM_CODES, sentByHand, type Account, type Post, type Run } from '../types'
+import { ACCOUNT_SELECT, canPost, isConnected, needsFinishing, PLATFORM_CODES, sentByHand, type Account, type Post, type Run } from '../types'
 
-type Filter = 'all' | 'auto' | 'hand' | 'needs'
+type Filter = 'all' | 'auto' | 'hand' | 'needs' | 'posted'
+const NAMED = { facebook: 'Facebook', instagram: 'Instagram', x: 'X', tiktok: 'TikTok' } as Record<string, string>
+const RECENT_MS = 15 * 60_000 // a post stays in "Going out" this long after it posted
+
+/** Local calendar date as YYYY-MM-DD (day anchors and the composer's ?date=). */
+function localDate(d: Date): string {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+}
+
+/** Due or posting now, or posted in the last few minutes: what "Post now" is waiting on. */
+function inFlight(g: PostGroup, now: number): boolean {
+  return g.rows.some((r) => r.status === 'posting'
+    || (['scheduled', 'partial'].includes(r.status) && !!r.publish_at && new Date(r.publish_at).getTime() <= now)
+    || (r.status === 'posted' && !!r.posted_at && now - new Date(r.posted_at).getTime() < RECENT_MS))
+}
+
+function flightStep(g: PostGroup): string {
+  if (g.rows.some((r) => r.status === 'posting')) return 'Posting…'
+  if (g.rows.some((r) => ['scheduled', 'partial'].includes(r.status))) return 'Waiting for the next run'
+  return 'Posted'
+}
 
 export default function Queue() {
   const [posts, setPosts] = useState<Post[]>([])
+  const [history, setHistory] = useState<Post[] | null>(null) // results for the Posted tab or a search
   const [accounts, setAccounts] = useState<Account[]>([])
   const [run, setRun] = useState<Run | null>(null)
   const [filter, setFilter] = useState<Filter>('all')
+  const [search, setSearch] = useState('')
   const [error, setError] = useState('')
   const [loaded, setLoaded] = useState(false)
   const [retrying, setRetrying] = useState<number | null>(null)
@@ -31,7 +54,7 @@ export default function Queue() {
         .order('publish_at', { ascending: false }).limit(1000),
     ]).then(([p, a, r, unresolved, handoffs]) => {
       const failed = p.error ?? a.error ?? r.error ?? unresolved.error ?? handoffs.error
-      if (failed) setError(failed.message)
+      setError(failed ? failed.message : '')
       setPosts(mergePosts(p.data, unresolved.data, handoffs.data))
       setAccounts((a.data as Account[]) ?? [])
       setRun(((r.data as Run[]) ?? [])[0] ?? null)
@@ -39,6 +62,35 @@ export default function Queue() {
     })
   }, [])
   useEffect(load, [load])
+
+  // Live: reload shortly after any post or run changes (Realtime), and when the app comes back to the front.
+  useEffect(() => {
+    let timer = 0
+    const soon = () => { clearTimeout(timer); timer = window.setTimeout(load, 400) }
+    const channel = supabase.channel('queue')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'posts' }, soon)
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'runs' }, soon)
+      .subscribe()
+    const onShow = () => { if (document.visibilityState === 'visible') soon() }
+    document.addEventListener('visibilitychange', onShow)
+    return () => { clearTimeout(timer); document.removeEventListener('visibilitychange', onShow); supabase.removeChannel(channel) }
+  }, [load])
+
+  // Posted tab and search look further back than the live queue, straight from the database.
+  const query = search.trim().replace(/[%_\\]/g, '')
+  useEffect(() => {
+    if (filter !== 'posted' && !query) return setHistory(null)
+    let q = supabase.from('posts').select('*').order('publish_at', { ascending: false }).limit(200)
+    if (filter === 'posted') q = q.eq('status', 'posted')
+    if (query) q = q.ilike('caption', `%${query}%`)
+    let current = true
+    const timer = setTimeout(() => q.then(({ data, error }) => {
+      if (!current) return
+      if (error) setError(error.message)
+      setHistory((data as Post[]) ?? [])
+    }), query ? 300 : 0)
+    return () => { current = false; clearTimeout(timer) }
+  }, [filter, query, posts])
 
   async function retry(num: number) {
     setRetrying(num)
@@ -48,28 +100,34 @@ export default function Queue() {
     else load()
   }
 
+  const accountOf = useCallback((id: number) => accounts.find((a) => a.id === id), [accounts])
+  const groups = useMemo(() => groupPosts(history ?? posts), [history, posts])
   const shown = useMemo(() => {
-    const accountOf = (p: Post) => accounts.find((a) => a.id === p.account_id)
     const keep: Record<Filter, (p: Post) => boolean> = {
       all: () => true,
-      auto: (p) => p.platforms.some((x) => !sentByHand(p, x, accountOf(p))),
-      hand: (p) => p.platforms.some((x) => needsFinishing(p, x, accountOf(p))),
+      auto: (p) => p.platforms.some((x) => !sentByHand(p, x, accountOf(p.account_id))),
+      hand: (p) => p.platforms.some((x) => needsFinishing(p, x, accountOf(p.account_id))),
       needs: needsYou,
+      posted: () => true,
     }
-    return posts.filter(keep[filter])
-  }, [posts, filter, accounts])
+    return groups.filter((g) => g.rows.some(keep[filter]))
+  }, [groups, filter, accountOf])
   const attention = posts.filter(needsYou)
-  const days = groupByDay(shown)
+  const allGroups = useMemo(() => groupPosts(posts), [posts])
+  const flying = allGroups.filter((g) => inFlight(g, Date.now()))
+  const byLead = new Map(shown.map((g) => [g.lead.num, g]))
+  let days = groupByDay(shown.map((g) => g.lead))
+  if (history) days = days.reverse().map((d) => ({ ...d, posts: [...d.posts].reverse() })) // newest first
 
   return (
     <>
       <header className={`hero sky rise${attention.length ? ' alert' : ''}`} style={{ maxWidth: 'none', flexDirection: 'row', flexWrap: 'wrap', alignItems: 'flex-end', justifyContent: 'space-between', gap: 32 }}>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 20, maxWidth: 720 }}>
           <h1>Your queue</h1>
-          <p>Facebook and Instagram post themselves. TikTok, YouTube and your personal profile come to your phone ready to share.</p>
+          <p>Facebook, Instagram and X post themselves, and TikTok lands in your drafts. Your profile, YouTube and Shopee come to your phone ready to share.</p>
         </div>
         <div role="group" aria-label="Filter posts" className="filters">
-          {([['all', 'All'], ['auto', 'Automatic'], ['hand', 'By hand'], ['needs', `Needs you · ${attention.length}`]] as const).map(([key, label]) => (
+          {([['all', 'All'], ['auto', 'Automatic'], ['hand', 'By hand'], ['needs', `Needs you · ${attention.length}`], ['posted', 'Posted']] as const).map(([key, label]) => (
             <button key={key} type="button" aria-pressed={filter === key} onClick={() => setFilter(key)}>{label}</button>
           ))}
         </div>
@@ -81,7 +139,8 @@ export default function Queue() {
 
       {loaded && (
         <nav aria-label="Next 7 days" className="week rise">
-          {weekStrip(posts).map((day) => {
+          {weekStrip(allGroups.map((g) => g.lead)).map((day) => {
+            const date = localDate(new Date(day.key))
             const inner = (
               <>
                 <span className="mono">{day.label.toUpperCase()}</span>
@@ -92,9 +151,12 @@ export default function Queue() {
               </>
             )
             return day.count ? (
-              <div key={day.key} className="week-day">{inner}</div>
+              <button key={day.key} type="button" className="week-day" aria-label={`${day.label} ${day.date}: ${day.count} planned, show them`}
+                onClick={() => { setFilter('all'); setSearch(''); requestAnimationFrame(() => document.getElementById(`day-${date}`)?.scrollIntoView({ behavior: 'smooth', block: 'start' })) }}>
+                {inner}
+              </button>
             ) : (
-              <a key={day.key} href="#/new" className="week-day empty-day" aria-label={`${day.label} ${day.date}: nothing planned, write a post`}>{inner}</a>
+              <a key={day.key} href={`#/new?date=${date}`} className="week-day empty-day" aria-label={`${day.label} ${day.date}: nothing planned, write a post for that day`}>{inner}</a>
             )
           })}
         </nav>
@@ -103,32 +165,38 @@ export default function Queue() {
       <div className="split">
         <section className="main tray rise" aria-label="Posts">
           <div className="core flush" aria-busy={!loaded}>
+            <div style={{ padding: '20px 20px 0' }}>
+              <label htmlFor="q" className="sr-only">Search captions</label>
+              <input id="q" className="input search" type="search" placeholder="Search captions, any date" value={search} onChange={(e) => setSearch(e.target.value)} />
+            </div>
             {!loaded && [0, 1, 2].map((i) => <div key={i} className="skeleton" aria-hidden="true" />)}
             {loaded && days.length === 0 && (
               <div className="empty">
-                {filter === 'all' ? <><Constellation /><p>Nothing planned yet. <a href="#/new">Write your first post</a>.</p></> : <p>Nothing here.</p>}
+                {filter === 'all' && !query ? <><Constellation /><p>Nothing planned yet. <a href="#/new">Write your first post</a>.</p></> : <p>{history === null && (filter === 'posted' || query) ? 'Searching…' : 'Nothing here.'}</p>}
               </div>
             )}
             {days.map((day) => (
-              <div key={day.label + day.date}>
+              <div key={day.label + day.date} id={day.posts[0].publish_at ? `day-${localDate(new Date(day.posts[0].publish_at))}` : undefined} style={{ scrollMarginTop: 96 }}>
                 <div className="day"><h2>{day.label}</h2><span className="mono">{day.date}</span></div>
                 <ul className="rows">
-                  {day.posts.map((post) => {
-                    const status = statusLabel(post)
-                    const image = post.media_type === 'image' ? post.media_urls[0] : undefined
-                    const rowChips = chips(post)
-                    const done = rowChips.filter((c) => c.state === 'done')
+                  {day.posts.map((leadPost) => {
+                    const g = byLead.get(leadPost.num)!
+                    const status = groupStatus(g.rows)
+                    const image = leadPost.media_type === 'image' ? leadPost.media_urls[0] : undefined
+                    const multi = g.rows.length > 1
+                    const done = g.rows.flatMap(chips).filter((c) => c.state === 'done')
+                    const links = g.rows.flatMap((r) => postLinks(r).map((l) => ({ ...l, who: accountOf(r.account_id)?.name ?? '' })))
                     return (
-                      <li key={post.num}>
-                        <a className="row" href={awaitingHandoff(post) ? `#/handoff/${post.num}` : `#/edit/${post.num}`}>
-                          <span className="r-time">{timeOf(post.publish_at)}</span>
+                      <li key={g.key}>
+                        <a className="row" href={groupHref(g.rows)}>
+                          <span className="r-time">{timeOf(leadPost.publish_at)}</span>
                           <span className="thumb r-thumb" aria-hidden="true" style={image ? { backgroundImage: `url("${image}")`, color: 'transparent' } : undefined}>
-                            {post.media_type === 'none' ? (post.link ? 'Link' : 'Text') : post.media_type}
+                            {leadPost.media_type === 'none' ? (leadPost.link ? 'Link' : 'Text') : leadPost.media_type}
                             {/* one moon per platform it has gone out on (the chips carry the same facts for screen readers) */}
                             {done.length > 0 && (
                               <span className="orbit">
                                 {done.map((c, i) => (
-                                  <span key={c.platform} className="moon" style={{ '--a': `${(i * 360) / done.length - 45}deg` } as CSSProperties}>
+                                  <span key={`${i}-${c.platform}`} className="moon" style={{ '--a': `${(i * 360) / done.length - 45}deg` } as CSSProperties}>
                                     <PlatformMark platform={c.platform} />
                                   </span>
                                 ))}
@@ -137,16 +205,28 @@ export default function Queue() {
                           </span>
                           <span className="r-body">
                             <span style={{ fontSize: 15, lineHeight: 1.45, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>
-                              {post.caption || <span style={{ color: 'var(--muted)' }}>No caption</span>}
+                              {leadPost.caption || <span style={{ color: 'var(--muted)' }}>No caption</span>}
                             </span>
-                            <span style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
-                              {rowChips.map((c) => (
-                                <span key={c.platform} className={`chip ${c.state}`} title={c.label} aria-label={c.label}>{c.code}</span>
+                            <span style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 6 }}>
+                              {g.rows.map((r) => (
+                                <span key={r.num} style={{ display: 'contents' }}>
+                                  {multi && <span className="mono" style={{ marginLeft: r === g.lead ? 0 : 6 }}>{accountOf(r.account_id)?.name}</span>}
+                                  {chips(r).map((c) => (
+                                    <span key={c.platform} className={`chip ${c.state}`} title={c.label} aria-label={c.label}>{c.code}</span>
+                                  ))}
+                                </span>
                               ))}
                             </span>
                           </span>
                           <span className={`pill r-pill ${status.tone}`}>{status.text}</span>
                         </a>
+                        {links.length > 0 && (
+                          <div className="r-links">
+                            {links.map((l) => (
+                              <a key={`${l.who}-${l.platform}`} href={l.url} target="_blank" rel="noopener">Open on {NAMED[l.platform]}{multi ? ` · ${l.who}` : ''} ↗</a>
+                            ))}
+                          </div>
+                        )}
                       </li>
                     )
                   })}
@@ -157,6 +237,31 @@ export default function Queue() {
         </section>
 
         <aside className="side" aria-label="Status">
+          {flying.length > 0 && (
+            <section className="tray rise" aria-live="polite">
+              <div className="core">
+                <h2>Going out</h2>
+                {flying.slice(0, 4).map((g) => {
+                  const step = flightStep(g)
+                  const links = g.rows.flatMap(postLinks)
+                  return (
+                    <div key={g.key} style={{ display: 'flex', flexDirection: 'column', gap: 8, padding: 14, borderRadius: 16, background: 'var(--well)' }}>
+                      <span style={{ fontSize: 14, lineHeight: 1.45, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{g.lead.caption || 'No caption'}</span>
+                      <span className={step === 'Posted' ? 'ok' : 'mono'} style={{ fontSize: 13 }}>
+                        {step === 'Posted' ? 'Posted ✓' : step}{step === 'Waiting for the next run' && ' · usually within an hour'}
+                      </span>
+                      {links.length > 0 && (
+                        <span style={{ display: 'flex', flexWrap: 'wrap', gap: 10, fontSize: 13 }}>
+                          {links.map((l) => <a key={l.url} href={l.url} target="_blank" rel="noopener">Open on {NAMED[l.platform]} ↗</a>)}
+                        </span>
+                      )}
+                    </div>
+                  )
+                })}
+              </div>
+            </section>
+          )}
+
           <section className="tray rise">
             <div className="core dark">
               <h2 style={{ fontSize: 24, letterSpacing: '-0.02em' }}>
@@ -171,7 +276,7 @@ export default function Queue() {
                   <a href={awaitingHandoff(post) ? `#/handoff/${post.num}` : `#/edit/${post.num}`}
                     style={{ display: 'flex', flexDirection: 'column', gap: 6, textDecoration: 'none' }}>
                     <span className="mono" style={{ color: awaitingHandoff(post) ? '#afc0ff' : '#f5b583' }}>
-                      {post.platforms.map((p) => PLATFORM_CODES[p]).join(' · ')} · {timeOf(post.publish_at)}
+                      {accountOf(post.account_id)?.name} · {post.platforms.map((p) => PLATFORM_CODES[p]).join(' · ')} · {timeOf(post.publish_at)}
                     </span>
                     <span style={{ fontSize: 14, lineHeight: 1.45 }}>
                       {awaitingHandoff(post) ? 'Waiting for you to post by hand.' : post.last_error || 'Check this post.'}
@@ -207,7 +312,7 @@ export default function Queue() {
                 <p style={{ margin: 0, fontSize: 14, color: 'var(--muted)' }}>No runs yet. The publisher runs every 30 minutes once it's set up.</p>
               )}
               <p style={{ margin: 0, fontSize: 13, lineHeight: 1.5, color: 'var(--muted)' }}>
-                Runs at :07 and :37. Posts go out within about half an hour of their time.
+                Scheduled runs come about every 30 minutes, but GitHub often starts them late, so allow up to an hour. Post now starts one right away.
               </p>
             </div>
           </section>
@@ -219,12 +324,15 @@ export default function Queue() {
                 <a className="btn light" href="#/accounts" style={{ alignSelf: 'flex-start' }}>Add an account<span className="knob"><Arrow /></span></a>
               ) : (
                 <ul style={{ listStyle: 'none', margin: 0, padding: 0, display: 'flex', flexDirection: 'column', gap: 10, fontSize: 14 }}>
-                  {accounts.map((a) => (
-                    <li key={a.id} style={{ display: 'flex', justifyContent: 'space-between', gap: 12 }}>
-                      <span>{a.name}</span>
-                      <span className="mono">{[a.fb_page_id && 'FB', a.ig_user_id && 'IG'].filter(Boolean).join(' · ') || 'by hand only'}</span>
-                    </li>
-                  ))}
+                  {accounts.map((a) => {
+                    const logins = [canPost('facebook', a) && 'FB', canPost('instagram', a) && 'IG', canPost('x', a) && 'X', isConnected(a, 'tiktok') && 'TT'].filter(Boolean)
+                    return (
+                      <li key={a.id} style={{ display: 'flex', justifyContent: 'space-between', gap: 12 }}>
+                        <a href="#/accounts">{a.name}</a>
+                        <span className="mono">{logins.join(' · ') || 'by hand only'}</span>
+                      </li>
+                    )
+                  })}
                 </ul>
               )}
             </div>
