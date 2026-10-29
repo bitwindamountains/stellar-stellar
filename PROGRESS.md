@@ -7,7 +7,13 @@ Everything is merged to `main` (PRs #1–#9) and the web app is live. TikTok wor
 real uploads returned `SEND_TO_USER_INBOX`, but no draft showed up in the TikTok app. So the production review (drafts
 only: Login Kit, `user.info.basic`, `video.upload`) was submitted on 2026-10-29. Site verification file, `/terms` and
 `/privacy` are live (PR #9). After approval: put the production key/secret into Supabase + GitHub, reconnect, test
-once. Next up: the Meta app. Direct Post (`video.publish`) needs TikTok's posting screen plus its own audit: later.
+once. Direct Post (`video.publish`) needs TikTok's posting screen plus its own audit: later.
+
+**Meta is live** (2026-10-29): app in Development mode, connected on account `fb`; the first real FB + IG post went
+out. **PR #10** (QoL): one post can go to several accounts (rows share `posts.group_id`, migration applied); the Queue
+updates live (Realtime) with a "Going out" panel, Open links, a Posted tab and caption search; tapping a week day
+jumps to it or starts a post for that day; the Composer has per-account platform toggles and a per-platform preview.
+Next: X developer app, then YouTube upload (private until Google's audit).
 
 | Part | State |
 |---|---|
