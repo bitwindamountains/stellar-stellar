@@ -3,14 +3,19 @@
 import type { Variants } from './content'
 import type { MediaType, Platform } from './types'
 
+/** Where a post goes: platforms per account id. */
+export type Targets = Record<number, Platform[]>
+
 export interface Defaults {
-  accountId?: number
+  targetsByMedia?: Partial<Record<MediaType, Targets>>
+  accountId?: number // older single-account defaults, still read
   platformsByMedia?: Partial<Record<MediaType, Platform[]>>
 }
 
 export interface SavedDraft {
-  accountId?: number
-  platforms: Platform[]
+  targets?: Targets
+  accountId?: number // older drafts
+  platforms?: Platform[]
   caption: string
   variants: Variants
   mediaType: MediaType
@@ -42,7 +47,19 @@ export const loadDefaults = () => read<Defaults>('pp:defaults') ?? {}
 export const loadDraft = () => read<SavedDraft>('pp:draft')
 export const saveDraft = (draft: SavedDraft | null) => write('pp:draft', draft)
 
-export function rememberChoices(accountId: number, mediaType: MediaType, platforms: Platform[]): void {
+/** Remembered targets for a media type, falling back to the older single-account defaults. */
+export function rememberedTargets(mediaType: MediaType): Targets | undefined {
   const d = loadDefaults()
-  write('pp:defaults', { accountId, platformsByMedia: { ...d.platformsByMedia, [mediaType]: platforms } })
+  if (d.targetsByMedia?.[mediaType]) return d.targetsByMedia[mediaType]
+  const platforms = d.platformsByMedia?.[mediaType]
+  return d.accountId && platforms ? { [d.accountId]: platforms } : undefined
+}
+
+export function draftTargets(d: SavedDraft): Targets | undefined {
+  return d.targets ?? (d.accountId && d.platforms ? { [d.accountId]: d.platforms } : undefined)
+}
+
+export function rememberChoices(mediaType: MediaType, targets: Targets): void {
+  const d = loadDefaults()
+  write('pp:defaults', { targetsByMedia: { ...d.targetsByMedia, [mediaType]: targets } })
 }

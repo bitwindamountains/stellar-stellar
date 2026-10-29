@@ -15,7 +15,7 @@ const LOGINS: { c: Connection; name: string; note: string }[] = [
 const LOGIN_NAME = Object.fromEntries(LOGINS.map((l) => [l.c, l.name])) as Record<Connection, string>
 
 export default function Accounts() {
-  const [accounts, setAccounts] = useState<Account[]>([])
+  const [accounts, setAccounts] = useState<Account[] | null>(null) // null = still loading
   const [editing, setEditing] = useState<number | null>(null)
   const [form, setForm] = useState(EMPTY)
   const [error, setError] = useState('')
@@ -24,7 +24,7 @@ export default function Accounts() {
 
   async function load() {
     const { data, error } = await supabase.from('accounts').select(ACCOUNT_SELECT).order('name')
-    if (error) setError(error.message)
+    if (error) { setError(error.message); setAccounts((a) => a ?? []) }
     else setAccounts(data as Account[])
   }
   useEffect(() => {
@@ -87,7 +87,7 @@ export default function Accounts() {
   }
 
   const set = (k: keyof typeof EMPTY) => (e: React.ChangeEvent<HTMLInputElement>) => setForm((f) => ({ ...f, [k]: e.target.value }))
-  const current = accounts.find((a) => a.id === editing)
+  const current = accounts?.find((a) => a.id === editing)
 
   return (
     <>
@@ -101,28 +101,35 @@ export default function Accounts() {
       <div className="split">
         <section className="main tray rise" aria-label="Your accounts">
           <div className="core flush">
-            {accounts.length === 0 ? (
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, padding: '20px 24px 4px' }}>
+              <h2>Your accounts</h2>
+              <button type="button" className="btn" aria-pressed={editing === null} onClick={() => edit(null)} style={{ minHeight: 44 }}>+ Add account</button>
+            </div>
+            {accounts === null ? (
+              [0, 1].map((i) => <div key={i} className="skeleton" aria-hidden="true" />)
+            ) : accounts.length === 0 ? (
               <p className="empty">No accounts yet. Add your first one.</p>
             ) : (
-              <ul className="rows" style={{ paddingTop: 16 }}>
-                {accounts.map((a) => (
-                  <li key={a.id}>
-                    <button type="button" className="row simple" onClick={() => edit(a)}
-                      style={{ width: '100%', border: 0, background: editing === a.id ? '#f7f7f3' : 'transparent', textAlign: 'left', cursor: 'pointer' }}>
-                      <span style={{ flex: '1 1 200px', display: 'flex', flexDirection: 'column', gap: 6 }}>
-                        <span style={{ fontSize: 16, fontWeight: 500 }}>{a.name}</span>
-                        <span className="mono">{a.timezone}{a.token_env ? ` · ${a.token_env}` : ''}</span>
-                      </span>
-                      <span style={{ display: 'flex', gap: 6 }}>
-                        {a.fb_page_id && <span className="chip done">FB</span>}
-                        {a.ig_user_id && <span className="chip done">IG</span>}
-                        {isConnected(a, 'x') && <span className="chip done">X</span>}
-                        {isConnected(a, 'tiktok') && <span className="chip done">TT</span>}
-                        <span className="chip assist">By hand</span>
-                      </span>
-                    </button>
-                  </li>
-                ))}
+              <ul className="rows" style={{ paddingTop: 8 }}>
+                {accounts.map((a) => {
+                  const logins = [a.fb_page_id && 'FB', a.ig_user_id && 'IG', isConnected(a, 'x') && 'X', isConnected(a, 'tiktok') && 'TT'].filter(Boolean) as string[]
+                  return (
+                    <li key={a.id}>
+                      <button type="button" className="row simple acct" aria-current={editing === a.id} onClick={() => edit(a)}
+                        style={{ width: '100%', border: 0, background: 'transparent', textAlign: 'left', cursor: 'pointer' }}>
+                        <span style={{ flex: '1 1 200px', display: 'flex', flexDirection: 'column', gap: 6 }}>
+                          <span style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 16, fontWeight: 600 }}>
+                            {a.name}<span className="chip assist editing">Editing</span>
+                          </span>
+                          <span className="mono">{a.timezone}{a.token_env ? ` · ${a.token_env}` : ''}</span>
+                        </span>
+                        <span style={{ display: 'flex', gap: 6 }}>
+                          {logins.length ? logins.map((l) => <span key={l} className="chip done">{l}</span>) : <span className="mono">By hand only</span>}
+                        </span>
+                      </button>
+                    </li>
+                  )
+                })}
               </ul>
             )}
           </div>
@@ -131,7 +138,7 @@ export default function Accounts() {
         <aside className="side">
           <section className="tray rise">
             <form className="core" onSubmit={submit}>
-              <h2>{editing ? 'Edit account' : 'Add account'}</h2>
+              <h2>{current ? `Edit ${current.name}` : 'Add an account'}</h2>
               <div className="field"><label htmlFor="a-name">Name</label>
                 <input id="a-name" className="input" required maxLength={60} value={form.name} onChange={set('name')} /></div>
               <div className="field"><label htmlFor="a-fb">Facebook Page ID <span style={{ fontWeight: 400, color: 'var(--muted)' }}>· optional</span></label>
@@ -154,7 +161,7 @@ export default function Accounts() {
           {current && (
             <section className="tray rise" aria-label={`Logins for ${current.name}`}>
               <div className="core">
-                <h2>Logins</h2>
+                <h2>Logins for {current.name}</h2>
                 <ul style={{ listStyle: 'none', margin: 0, padding: 0, display: 'grid', gap: 14 }}>
                   {LOGINS.map(({ c, name, note }) => {
                     const login = current.connections?.find((x) => x.platform === c)
@@ -173,7 +180,7 @@ export default function Accounts() {
                   })}
                 </ul>
                 <p style={{ margin: 0, fontSize: 13, color: 'var(--muted)' }}>
-                  Shopee, YouTube and your personal Facebook don't let apps post: those come to your phone to post by hand.
+                  Shopee, YouTube and your personal Facebook come to your phone to post by hand. A post can go to several accounts at once: pick them in New post.
                 </p>
               </div>
             </section>

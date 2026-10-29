@@ -284,7 +284,9 @@ h2 { margin: 0; font-size: 18px; font-weight: 600; letter-spacing: -0.01em; }
 
 /* Forms */
 .field { display: flex; flex-direction: column; gap: 8px; }
-.field > label, .legend { font-size: 13px; font-weight: 500; color: var(--ink-2); }
+.field > label { font-size: 13px; font-weight: 500; color: var(--ink-2); }
+/* Section labels (Media, Where, When) lead each block, so they read as headings, not fine print. */
+.legend, .field > label.legend { font-size: 15px; font-weight: 600; color: var(--ink); letter-spacing: -0.01em; }
 .input {
   width: 100%; min-height: 48px; padding: 12px 16px; border: 0; border-radius: 14px; background: var(--well);
   box-shadow: inset 0 0 0 1px var(--hair); font-size: 16px; /* 16px stops iOS zoom on focus */
@@ -308,7 +310,7 @@ textarea.input { min-height: 140px; line-height: 1.55; resize: vertical; }
 .r-pill { grid-area: pill; }
 .filters { display: flex; gap: 4px; padding: 4px; border-radius: 999px; background: #e6e6e0; overflow-x: auto; scrollbar-width: thin; }
 .filters button {
-  min-height: 40px; padding: 0 16px; border: 0; border-radius: 999px; background: transparent; color: var(--ink-2);
+  flex: none; min-height: 44px; min-width: 44px; padding: 0 16px; border: 0; border-radius: 999px; background: transparent; color: var(--ink-2);
   font-size: 13px; font-weight: 500; white-space: nowrap; cursor: pointer;
   transition: background-color 150ms ease, color 150ms ease, transform 140ms var(--ease-out);
 }
@@ -499,3 +501,109 @@ button.chip:active { transform: scale(0.96); }
   .const-line { animation: none; stroke-dashoffset: 0; }
   .trail, .launch .plane { animation: none; }
 }
+
+/* Composer: one block per account with its platform toggles. */
+.target { display: flex; flex-direction: column; gap: 12px; padding: 16px; border-radius: 18px; background: var(--well); box-shadow: inset 0 0 0 1px var(--hair); }
+.target[data-on] { background: #fff; box-shadow: inset 0 0 0 1.5px var(--ink); }
+.toggle {
+  display: inline-flex; align-items: center; gap: 8px; min-height: 44px; padding: 0 14px; border: 0; border-radius: 999px;
+  background: #fff; color: var(--ink); font: 500 14px var(--sans); cursor: pointer; box-shadow: inset 0 0 0 1px rgba(21, 23, 27, 0.16);
+  transition: background-color 150ms ease, color 150ms ease, transform 140ms var(--ease-out);
+}
+.toggle[aria-pressed='true'] { background: var(--ink); color: #fff; box-shadow: none; }
+.toggle:disabled { cursor: not-allowed; opacity: 0.7; }
+.toggle:active:not(:disabled) { transform: scale(0.97); }
+.toggle svg { width: 14px; height: 14px; }
+.toggle-mode { font: 500 10px/1 var(--mono); letter-spacing: 0.08em; text-transform: uppercase; opacity: 0.7; }
+.link-btn { align-self: flex-start; min-height: 44px; padding: 0; border: 0; background: none; color: var(--accent-ink); font-size: 14px; cursor: pointer; }
+.actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 12px; }
+
+/* Preview: a plain card standing in for the platform's post. */
+.preview { display: flex; flex-direction: column; border-radius: 18px; overflow: hidden; background: #fff; box-shadow: inset 0 0 0 1px var(--hair); }
+.preview-head { display: flex; align-items: center; gap: 10px; padding: 12px 14px; }
+.preview-avatar { flex: none; display: grid; place-items: center; width: 32px; height: 32px; border-radius: 50%; background: var(--ink); color: #fff; font-size: 13px; font-weight: 600; }
+.preview-media { display: block; width: 100%; max-height: 420px; object-fit: cover; background: #1e2026; }
+.preview-body { display: flex; flex-direction: column; gap: 8px; padding: 12px 14px 16px; font-size: 14px; line-height: 1.5; }
+
+/* Queue extras: live-post links under a row, history search. */
+.r-links { display: flex; flex-wrap: wrap; gap: 6px; padding: 0 16px 12px 164px; }
+.r-links a { display: inline-flex; align-items: center; gap: 4px; min-height: 44px; padding: 0 12px; border-radius: 999px; background: var(--well); color: var(--ink-2); font-size: 13px; text-decoration: none; }
+.search { width: 100%; }
+
+@media (max-width: 767px) {
+  /* Post now / Schedule stay in thumb reach above the tab bar. */
+  .actions {
+    position: sticky; bottom: calc(84px + env(safe-area-inset-bottom)); z-index: 5;
+    margin: 0 -10px; padding: 10px; border-radius: 24px; background: rgba(255, 255, 255, 0.92);
+    box-shadow: 0 12px 30px -16px rgba(21, 23, 27, 0.35); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px);
+  }
+  .actions .btn { flex: 1 1 auto; }
+  .r-links { padding-left: 84px; }
+}
+@media (prefers-reduced-motion: reduce) { .toggle:active { transform: none; } }
+button.week-day { border: 0; font: inherit; color: inherit; text-align: left; cursor: pointer; }
+button.week-day:active { transform: scale(0.97); }
+
+/* Hero decorations stay clear of the heading and text: the rocks fade out toward the copy. */
+.sky .belt { -webkit-mask-image: linear-gradient(90deg, transparent 0 48%, #000 75%); mask-image: linear-gradient(90deg, transparent 0 48%, #000 75%); }
+
+/* Media drop zone: the whole box opens the file picker, with a clear dark button and a dashed edge. */
+.dropzone {
+  display: flex; align-items: center; gap: 16px; padding: 16px; border-radius: 18px; cursor: pointer;
+  background: var(--well); outline: 1.5px dashed rgba(21, 23, 27, 0.28); outline-offset: -1.5px;
+  transition: background-color 150ms ease, outline-color 150ms ease;
+}
+.dropzone.over { background: var(--accent-tint); outline: 2px solid var(--accent); }
+.dropzone:focus-within { outline: 2px solid var(--accent); }
+.dz-text { display: flex; flex-direction: column; gap: 4px; min-width: 0; flex: 1; }
+.dz-title { font-size: 16px; font-weight: 600; color: var(--ink); }
+.dz-hint { font-size: 13px; color: var(--muted); }
+.btn.dark { background: var(--ink); color: #fff; }
+.btn.danger { background: var(--warn-tint); color: var(--warn-ink); }
+@media (hover: hover) and (pointer: fine) {
+  .dropzone:hover { background: #ecece6; outline-color: rgba(21, 23, 27, 0.5); }
+  .btn.dark:hover { background: #2a2d33 !important; }
+}
+
+/* Accounts list: the account being edited is unmistakable. */
+.acct[aria-current='true'] { background: var(--accent-tint) !important; box-shadow: inset 4px 0 0 var(--accent), inset 0 0 0 1px rgba(43, 75, 216, 0.25); }
+.acct .editing { display: none; }
+.acct[aria-current='true'] .editing { display: inline-flex; }
+
+/* Handoff steps read as buttons: a trailing arrow on each. */
+.step::after { content: '→'; margin-left: auto; color: var(--muted); font-size: 16px; }
+.step:has(svg)::after { content: none; }
+
+@media (max-width: 767px) {
+  .sky .belt { -webkit-mask-image: linear-gradient(90deg, transparent 0 62%, #000 92%); mask-image: linear-gradient(90deg, transparent 0 62%, #000 92%); }
+  /* Status sits beside the time instead of drifting under the row. */
+  .row { grid-template-columns: 56px minmax(0, 1fr) auto; grid-template-areas: 'thumb time pill' 'thumb body body'; }
+  .r-pill { justify-self: end; }
+  .dropzone { flex-wrap: wrap; }
+  .dropzone .btn.dark { flex: 1 1 100%; justify-content: center; }
+  /* Queue on a phone: things that need you come before the list; run stats and accounts after it. */
+  .split > .queue-side { display: contents; }
+  .queue-side > .urgent { order: -1; flex: 1 1 100%; }
+  .queue-side > :not(.urgent) { order: 1; flex: 1 1 100%; }
+}
+
+/* Sticky bars never hide the focused field: scrolling into view leaves room for them. */
+html { scroll-padding-top: 96px; }
+@media (max-width: 767px) { html { scroll-padding-top: 16px; scroll-padding-bottom: 180px; } }
+.island .signout { min-width: 44px; justify-content: center; }
+/* Full-row links in the Queue sidebar and "Going out": easy to hit with a thumb. */
+.side-links { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; }
+.side-links a { display: flex; align-items: center; justify-content: space-between; gap: 12px; min-height: 44px; color: var(--ink); text-decoration: none; font-size: 14px; }
+.side-links a + a, .side-links li + li { border-top: 1px solid var(--hair); }
+.link-row { display: flex; flex-wrap: wrap; gap: 8px; }
+.link-row a { display: inline-flex; align-items: center; gap: 4px; min-height: 44px; padding: 0 14px; border-radius: 999px; background: #fff; color: var(--ink-2); font-size: 13px; text-decoration: none; box-shadow: inset 0 0 0 1px var(--hair); }
+@media (hover: hover) and (pointer: fine) { .r-links a:hover, .link-row a:hover { color: var(--ink); background: #ecece6; } .side-links a:hover { color: var(--accent-ink); } }
+/* Phone: filter and tab rows wrap instead of hiding options off the edge. */
+@media (max-width: 767px) { .filters { flex-wrap: wrap; border-radius: 24px; overflow: visible; } }
+
+/* Inline errors under the section they belong to. */
+.field-error { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; font-size: 14px; line-height: 1.45; color: var(--warn-ink); }
+.field-error li { display: flex; gap: 8px; align-items: flex-start; }
+.field-error svg { flex: none; width: 16px; height: 16px; margin-top: 2px; }
+.input[aria-invalid='true'], .dropzone:has(input[aria-invalid='true']) { box-shadow: inset 0 0 0 1.5px var(--warn-ink); }
+.dropzone:has(input[aria-invalid='true']) { outline-color: var(--warn-ink); }

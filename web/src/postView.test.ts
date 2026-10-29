@@ -4,7 +4,7 @@ import { isDraft, needsFinishing, postedByApi, sentByHand, type Post } from './t
 
 function post(over: Partial<Post>): Post {
   return {
-    num: 1, account_id: 1, platforms: ['facebook'], publish_at: null, caption: '', media_type: 'none', media_urls: [],
+    num: 1, account_id: 1, group_id: null, platforms: ['facebook'], publish_at: null, caption: '', media_type: 'none', media_urls: [],
     link: '', status: 'scheduled', attempts: 0, claimed_at: null, fb_post_id: '', fb_permalink: '', ig_media_id: '',
     ig_permalink: '', x_post_id: '', x_permalink: '', tiktok_id: '', tiktok_permalink: '', tg_message_id: '', variants: {}, assist_done_at: null, last_error: '', posted_at: null, ...over,
   }
