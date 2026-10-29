@@ -15,7 +15,7 @@ const LOGINS: { c: Connection; name: string; note: string }[] = [
 const LOGIN_NAME = Object.fromEntries(LOGINS.map((l) => [l.c, l.name])) as Record<Connection, string>
 
 export default function Accounts() {
-  const [accounts, setAccounts] = useState<Account[]>([])
+  const [accounts, setAccounts] = useState<Account[] | null>(null) // null = still loading
   const [editing, setEditing] = useState<number | null>(null)
   const [form, setForm] = useState(EMPTY)
   const [error, setError] = useState('')
@@ -24,7 +24,7 @@ export default function Accounts() {
 
   async function load() {
     const { data, error } = await supabase.from('accounts').select(ACCOUNT_SELECT).order('name')
-    if (error) setError(error.message)
+    if (error) { setError(error.message); setAccounts((a) => a ?? []) }
     else setAccounts(data as Account[])
   }
   useEffect(() => {
@@ -87,7 +87,7 @@ export default function Accounts() {
   }
 
   const set = (k: keyof typeof EMPTY) => (e: React.ChangeEvent<HTMLInputElement>) => setForm((f) => ({ ...f, [k]: e.target.value }))
-  const current = accounts.find((a) => a.id === editing)
+  const current = accounts?.find((a) => a.id === editing)
 
   return (
     <>
@@ -103,9 +103,11 @@ export default function Accounts() {
           <div className="core flush">
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, padding: '20px 24px 4px' }}>
               <h2>Your accounts</h2>
-              <button type="button" className="btn" aria-pressed={editing === null} onClick={() => edit(null)} style={{ minHeight: 40 }}>+ Add account</button>
+              <button type="button" className="btn" aria-pressed={editing === null} onClick={() => edit(null)} style={{ minHeight: 44 }}>+ Add account</button>
             </div>
-            {accounts.length === 0 ? (
+            {accounts === null ? (
+              [0, 1].map((i) => <div key={i} className="skeleton" aria-hidden="true" />)
+            ) : accounts.length === 0 ? (
               <p className="empty">No accounts yet. Add your first one.</p>
             ) : (
               <ul className="rows" style={{ paddingTop: 8 }}>

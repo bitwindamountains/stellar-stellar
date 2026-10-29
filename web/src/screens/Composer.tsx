@@ -9,6 +9,7 @@ import PostPreview from '../PostPreview'
 import { takeShared } from '../share'
 import { draftTargets, loadDraft, rememberChoices, rememberedTargets, saveDraft, type Targets } from '../prefs'
 import { go, takeQuery } from '../route'
+import { reveal } from '../scroll'
 import { supabase } from '../supabase'
 import { quickTimes, utcToZoned, zonedToUtc } from '../time'
 import { ACCOUNT_SELECT, byHand, canPost, isDone, postedByApi, PLATFORM_CODES, PLATFORM_NAMES, PLATFORMS, type Account, type MediaType, type Platform, type Post } from '../types'
@@ -163,7 +164,7 @@ export default function Composer({ num }: { num?: number }) {
     setTried(true)
     if (problemsFor(active, targets, base, status === 'scheduled' && mode === 'later').length || !lead) {
       // On a phone the checks sit below the form: bring them into view so a blocked save never looks like nothing.
-      document.getElementById('checks')?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+      reveal('checks', 'center')
       return
     }
     setBusy('save')
@@ -231,7 +232,7 @@ export default function Composer({ num }: { num?: number }) {
   }
 
   // Wait for accounts before choosing a screen, so the empty state never flashes on load.
-  if (accounts === null) return null
+  if (accounts === null) return <div className="tray" aria-busy="true"><div className="core"><div className="skeleton" aria-hidden="true" /><div className="skeleton" aria-hidden="true" /></div></div>
   if (accounts.length === 0 && !error) {
     return (
       <section className="hero sky rise">
@@ -405,7 +406,7 @@ export default function Composer({ num }: { num?: number }) {
                     <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
                       {quickTimes(tz).map((c) => (
                         <button key={c.label} type="button" className="chip queued" onClick={() => setPublishAt(c.value)}
-                          aria-pressed={publishAt === c.value} style={{ height: 36, cursor: 'pointer', border: 0, fontFamily: 'var(--sans)' }}>
+                          aria-pressed={publishAt === c.value} style={{ height: 44, padding: '0 14px', cursor: 'pointer', border: 0, fontFamily: 'var(--sans)' }}>
                           {c.label}
                         </button>
                       ))}

@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useMemo, useState, type CSSProperties } from 'react'
 import { retryNow } from '../actions'
 import { groupHref, groupPosts, groupStatus, postLinks, type PostGroup } from '../groups'
-import { Arrow, Asteroids, Constellation, FlightPath, PlatformMark } from '../icons'
+import { Arrow, Asteroids, Check, Constellation, FlightPath, PlatformMark } from '../icons'
 import { awaitingHandoff, canRetry, chips, groupByDay, mergePosts, needsYou, timeOf, weekStrip } from '../postView'
+import { reveal } from '../scroll'
 import { supabase } from '../supabase'
 import { ACCOUNT_SELECT, canPost, isConnected, needsFinishing, PLATFORM_CODES, sentByHand, type Account, type Post, type Run } from '../types'
 
@@ -152,7 +153,7 @@ export default function Queue() {
             )
             return day.count ? (
               <button key={day.key} type="button" className="week-day" aria-label={`${day.label} ${day.date}: ${day.count} planned, show them`}
-                onClick={() => { setFilter('all'); setSearch(''); requestAnimationFrame(() => document.getElementById(`day-${date}`)?.scrollIntoView({ behavior: 'smooth', block: 'start' })) }}>
+                onClick={() => { setFilter('all'); setSearch(''); requestAnimationFrame(() => reveal(`day-${date}`)) }}>
                 {inner}
               </button>
             ) : (
@@ -223,7 +224,7 @@ export default function Queue() {
                         {links.length > 0 && (
                           <div className="r-links">
                             {links.map((l) => (
-                              <a key={`${l.who}-${l.platform}`} href={l.url} target="_blank" rel="noopener">Open on {NAMED[l.platform]}{multi ? ` · ${l.who}` : ''} ↗</a>
+                              <a key={`${l.who}-${l.platform}`} href={l.url} target="_blank" rel="noopener">Open on {NAMED[l.platform]}{multi ? ` · ${l.who}` : ''}<NewTab /></a>
                             ))}
                           </div>
                         )}
@@ -248,11 +249,11 @@ export default function Queue() {
                     <div key={g.key} style={{ display: 'flex', flexDirection: 'column', gap: 8, padding: 14, borderRadius: 16, background: 'var(--well)' }}>
                       <span style={{ fontSize: 14, lineHeight: 1.45, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{g.lead.caption || 'No caption'}</span>
                       <span className={step === 'Posted' ? 'ok' : 'mono'} style={{ fontSize: 13 }}>
-                        {step === 'Posted' ? 'Posted ✓' : step}{step === 'Waiting for the next run' && ' · usually within an hour'}
+                        {step === 'Posted' ? <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}><Check />Posted</span> : step}{step === 'Waiting for the next run' && ' · usually within an hour'}
                       </span>
                       {links.length > 0 && (
-                        <span style={{ display: 'flex', flexWrap: 'wrap', gap: 10, fontSize: 13 }}>
-                          {links.map((l) => <a key={l.url} href={l.url} target="_blank" rel="noopener">Open on {NAMED[l.platform]} ↗</a>)}
+                        <span className="link-row">
+                          {links.map((l) => <a key={l.url} href={l.url} target="_blank" rel="noopener">Open on {NAMED[l.platform]}<NewTab /></a>)}
                         </span>
                       )}
                     </div>
@@ -274,7 +275,7 @@ export default function Queue() {
                 <div key={post.num} style={{ display: 'flex', flexDirection: 'column', gap: 10, padding: 16, borderRadius: 18,
                   background: 'rgba(255,255,255,0.06)', boxShadow: 'inset 0 0 0 1px rgba(255,255,255,0.08)' }}>
                   <a href={awaitingHandoff(post) ? `#/handoff/${post.num}` : `#/edit/${post.num}`}
-                    style={{ display: 'flex', flexDirection: 'column', gap: 6, textDecoration: 'none' }}>
+                    style={{ display: 'flex', flexDirection: 'column', gap: 6, minHeight: 44, textDecoration: 'none' }}>
                     <span className="mono" style={{ color: awaitingHandoff(post) ? '#afc0ff' : '#f5b583' }}>
                       {accountOf(post.account_id)?.name} · {post.platforms.map((p) => PLATFORM_CODES[p]).join(' · ')} · {timeOf(post.publish_at)}
                     </span>
@@ -323,13 +324,12 @@ export default function Queue() {
               {accounts.length === 0 ? (
                 <a className="btn light" href="#/accounts" style={{ alignSelf: 'flex-start' }}>Add an account<span className="knob"><Arrow /></span></a>
               ) : (
-                <ul style={{ listStyle: 'none', margin: 0, padding: 0, display: 'flex', flexDirection: 'column', gap: 10, fontSize: 14 }}>
+                <ul className="side-links">
                   {accounts.map((a) => {
                     const logins = [canPost('facebook', a) && 'FB', canPost('instagram', a) && 'IG', canPost('x', a) && 'X', isConnected(a, 'tiktok') && 'TT'].filter(Boolean)
                     return (
-                      <li key={a.id} style={{ display: 'flex', justifyContent: 'space-between', gap: 12 }}>
-                        <a href="#/accounts">{a.name}</a>
-                        <span className="mono">{logins.join(' · ') || 'by hand only'}</span>
+                      <li key={a.id}>
+                        <a href="#/accounts"><span>{a.name}</span><span className="mono">{logins.join(' · ') || 'by hand only'}</span></a>
                       </li>
                     )
                   })}
@@ -341,4 +341,9 @@ export default function Queue() {
       </div>
     </>
   )
+}
+
+/** Marks a link that opens a new tab: a visual arrow plus words for screen readers. */
+function NewTab() {
+  return <><span aria-hidden="true">↗</span><span className="sr-only"> (opens in a new tab)</span></>
 }
