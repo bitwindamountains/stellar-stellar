@@ -10,6 +10,7 @@ import { takeShared } from '../share'
 import { draftTargets, loadDraft, rememberChoices, rememberedTargets, saveDraft, type Targets } from '../prefs'
 import { go, takeQuery } from '../route'
 import { reveal } from '../scroll'
+import { bySection, SECTIONS, type Section } from '../fields'
 import { supabase } from '../supabase'
 import { quickTimes, utcToZoned, zonedToUtc } from '../time'
 import { ACCOUNT_SELECT, byHand, canPost, isDone, postedByApi, PLATFORM_CODES, PLATFORM_NAMES, PLATFORMS, type Account, type MediaType, type Platform, type Post } from '../types'
@@ -53,6 +54,7 @@ export default function Composer({ num }: { num?: number }) {
   const [busy, setBusy] = useState<'' | 'upload' | 'save'>('')
   const [error, setError] = useState('')
   const [tried, setTried] = useState(false)
+  const [touched, setTouched] = useState<Section[]>([]) // sections left once: their errors show from then on
 
   useEffect(() => {
     supabase.from('accounts').select(ACCOUNT_SELECT).order('name').then(({ data, error }) => {
@@ -123,6 +125,14 @@ export default function Composer({ num }: { num?: number }) {
   const locked = rows.some((r) => r.status === 'posting')
   const when = mode === 'now' ? 'once posted' : publishAt ? publishAt.slice(11, 16) : 'post time'
   const rowOf = (id: number) => rows.find((r) => r.account_id === id)
+  const errors = bySection(problems)
+  // Errors show once a section has been left (or after a blocked save), not while you're still filling it in.
+  const shown = (s: Section) => (tried || touched.includes(s) ? errors[s] : [])
+  const touch = (s: Section) => (e: React.FocusEvent) => {
+    if (e.currentTarget.contains(e.relatedTarget as Node | null)) return // still inside the section
+    setTouched((t) => (t.includes(s) ? t : [...t, s]))
+  }
+  const invalid = (s: Section) => (shown(s).length ? { 'aria-invalid': true, 'aria-describedby': `err-${s}` } : {})
 
   function setVariant(p: Platform, key: keyof Variant, value: string) {
     setVariants((cur) => ({ ...cur, [p]: { ...cur[p], [key]: value } }))
@@ -162,9 +172,13 @@ export default function Composer({ num }: { num?: number }) {
   async function save(status: 'draft' | 'scheduled') {
     if (busy || !accounts) return // Ctrl+Enter skips the disabled buttons; never save mid-upload or twice
     setTried(true)
-    if (problemsFor(active, targets, base, status === 'scheduled' && mode === 'later').length || !lead) {
-      // On a phone the checks sit below the form: bring them into view so a blocked save never looks like nothing.
-      reveal('checks', 'center')
+    const blocked = problemsFor(active, targets, base, status === 'scheduled' && mode === 'later')
+    if (blocked.length || !lead) {
+      // Move focus to the first section with a problem; its message is right under it.
+      const first = SECTIONS.find((s) => bySection(blocked)[s].length)
+      const target = first && document.querySelector<HTMLElement>(FOCUS[first])
+      if (target) target.focus()
+      else reveal('checks', 'center')
       return
     }
     setBusy('save')
@@ -307,7 +321,7 @@ export default function Composer({ num }: { num?: number }) {
         }}>
         <section className="main tray rise" aria-label="Post">
           <fieldset className="core" disabled={locked} style={{ gap: 28, border: 0, margin: 0, minWidth: 0 }}>
-            <div className="field">
+            <div className="field" onBlur={touch('media')}>
               <span className="legend">Media</span>
               {/* The whole box is the file picker: click, drop or paste. */}
               <label className={`dropzone${dragging ? ' over' : ''}`}>
@@ -319,9 +333,10 @@ export default function Composer({ num }: { num?: number }) {
                   <span className="dz-hint">{mediaUrl ? 'Click to replace it' : 'Click, drop or paste · JPEG, PNG, WebP, MP4 · up to 50 MB'}</span>
                 </span>
                 <span className="btn dark" aria-hidden="true" style={{ minHeight: 44 }}>{mediaUrl ? 'Replace' : 'Choose file'}</span>
-                <input type="file" className="sr-only" accept={ACCEPT} disabled={busy === 'upload'}
+                <input id="media-file" type="file" className="sr-only" accept={ACCEPT} disabled={busy === 'upload'} {...invalid('media')}
                   onChange={(e) => e.target.files?.[0] && upload(e.target.files[0])} />
               </label>
+              <FieldError section="media" messages={shown('media')} />
               {mediaUrl && (
                 <button type="button" className="link-btn" onClick={() => {
                   setMediaUrl('')
@@ -334,7 +349,7 @@ export default function Composer({ num }: { num?: number }) {
               )}
             </div>
 
-            <div className="field" style={{ gap: 12 }}>
+            <div className="field" style={{ gap: 12 }} onBlur={touch('caption')}>
               <div role="group" aria-label="Edit the text for" className="filters" style={{ alignSelf: 'flex-start', maxWidth: '100%' }}>
                 <button type="button" aria-pressed={editing === 'all'} onClick={() => setTab('all')}>All platforms</button>
                 {chosen.map((p) => (
@@ -349,14 +364,15 @@ export default function Composer({ num }: { num?: number }) {
                     <label htmlFor="caption" className="legend">Caption <span style={{ fontWeight: 400, color: 'var(--muted)' }}>· used everywhere unless a platform overrides it</span></label>
                     <span className="mono" aria-live="polite">{caption.length.toLocaleString('en')} chars · {hashtagCount(caption)} hashtags</span>
                   </span>
-                  <textarea id="caption" className="input" value={caption} onChange={(e) => setCaption(e.target.value)} />
+                  <textarea id="caption" className="input" value={caption} onChange={(e) => setCaption(e.target.value)} {...invalid('caption')} />
                 </>
               ) : (
                 <PlatformText p={editing} base={caption} variants={variants} set={setVariant} />
               )}
+              <FieldError section="caption" messages={shown('caption')} />
             </div>
 
-            <fieldset style={{ margin: 0, padding: 0, border: 0, display: 'flex', flexDirection: 'column', gap: 12 }}>
+            <fieldset id="where" style={{ margin: 0, padding: 0, border: 0, display: 'flex', flexDirection: 'column', gap: 12 }} onBlur={touch('where')} {...invalid('where')}>
               <legend className="legend" style={{ padding: 0, marginBottom: 12 }}>Where</legend>
               {accounts.map((a) => {
                 const row = rowOf(a.id)
@@ -390,19 +406,20 @@ export default function Composer({ num }: { num?: number }) {
                   </div>
                 )
               })}
+              <FieldError section="where" messages={shown('where')} />
             </fieldset>
 
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: 16 }}>
-              <div className="field" style={{ flex: '1 1 280px', minWidth: 0 }}>
+              <div className="field" style={{ flex: '1 1 280px', minWidth: 0 }} onBlur={touch('when')}>
                 <span className="legend">When</span>
-                <div role="group" aria-label="When to post" className="filters" style={{ alignSelf: 'flex-start' }}>
+                <div id="when-mode" role="group" aria-label="When to post" className="filters" style={{ alignSelf: 'flex-start' }}>
                   <button type="button" aria-pressed={mode === 'now'} onClick={() => setMode('now')}>Post now</button>
                   <button type="button" aria-pressed={mode === 'later'} onClick={() => setMode('later')}>Schedule</button>
                 </div>
                 {mode === 'later' && (
                   <>
                     <label htmlFor="when" className="sr-only">Post at ({tz})</label>
-                    <input id="when" className="input" type="datetime-local" value={publishAt} onChange={(e) => setPublishAt(e.target.value)} />
+                    <input id="when" className="input" type="datetime-local" value={publishAt} onChange={(e) => setPublishAt(e.target.value)} {...invalid('when')} />
                     <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
                       {quickTimes(tz).map((c) => (
                         <button key={c.label} type="button" className="chip queued" onClick={() => setPublishAt(c.value)}
@@ -414,6 +431,7 @@ export default function Composer({ num }: { num?: number }) {
                     <span style={{ fontSize: 13, color: 'var(--muted)' }}>{tz} time{active.length > 1 ? ', for every account' : ''}</span>
                   </>
                 )}
+                <FieldError section="when" messages={shown('when')} />
               </div>
               <div className="field" style={{ flex: '1 1 280px', minWidth: 0 }}>
                 <label htmlFor="link">Link <span style={{ fontWeight: 400, color: 'var(--muted)' }}>· Facebook and X</span></label>
@@ -474,6 +492,24 @@ export default function Composer({ num }: { num?: number }) {
         </aside>
       </form>
     </>
+  )
+}
+
+// Where a blocked save puts focus for each section.
+const FOCUS: Record<Section, string> = {
+  media: '#media-file',
+  caption: '#caption, #v-title, #v-caption',
+  where: '#where .toggle:not(:disabled)',
+  when: '#when, #when-mode button',
+}
+
+/** A section's problems, right under it; the field points at it with aria-describedby. */
+function FieldError({ section, messages }: { section: Section; messages: string[] }) {
+  if (!messages.length) return null
+  return (
+    <ul id={`err-${section}`} className="field-error">
+      {messages.map((m) => <li key={m}><Alert label="Problem" />{m}</li>)}
+    </ul>
   )
 }
 
