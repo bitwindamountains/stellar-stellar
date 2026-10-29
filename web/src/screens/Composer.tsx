@@ -13,13 +13,22 @@ import { reveal } from '../scroll'
 import { bySection, SECTIONS, type Section } from '../fields'
 import { supabase } from '../supabase'
 import { quickTimes, utcToZoned, zonedToUtc } from '../time'
-import { ACCOUNT_SELECT, byHand, canPost, isDone, postedByApi, PLATFORM_CODES, PLATFORM_NAMES, PLATFORMS, type Account, type MediaType, type Platform, type Post } from '../types'
+import { ACCOUNT_SELECT, byHand, canPost, isConnected, isDone, postedByApi, PLATFORM_CODES, PLATFORM_NAMES, PLATFORMS, type Account, type MediaType, type Platform, type Post } from '../types'
 import { hashtagCount, IG_CAPTION_MAX, validate, YOUTUBE_TITLE_MAX } from '../validation'
 
 const ACCEPT = 'image/jpeg,image/png,image/webp,video/mp4,video/quicktime'
 const MAX_BYTES = 50 * 1024 * 1024 // matches the bucket's file_size_limit
 const PUBLISHING_NOW = 'This post is being published right now. Try again in a minute, after the run finishes.'
 const NAMED = { facebook: 'Facebook', instagram: 'Instagram', x: 'X', tiktok: 'TikTok' } as Record<Platform, string>
+
+// Posted by hand from your phone; TikTok joins them for accounts without a TikTok login.
+const HAND: Platform[] = ['fb_profile', 'tiktok', 'youtube', 'shopee']
+const isHandPlatform = (p: Platform) => p !== 'tiktok' && HAND.includes(p)
+
+/** A platform this account posts to through its own login. */
+function ownLogin(p: Platform, a: Account): boolean {
+  return p === 'tiktok' ? isConnected(a, 'tiktok') : !isHandPlatform(p) && canPost(p, a)
+}
 
 /** Accounts that have platforms picked, in the order the accounts list shows them. */
 function activeIn(accounts: Account[], targets: Targets): Account[] {
@@ -143,6 +152,23 @@ export default function Composer({ num }: { num?: number }) {
       const list = cur[id] ?? []
       return { ...cur, [id]: list.includes(p) ? list.filter((x) => x !== p) : [...list, p] }
     })
+  }
+
+  // By-hand platforms ride on one account's row (the first one picked, else the first account): it only sets the
+  // time zone and which phone message they go out in.
+  const byHandOn = (id: number, p: Platform) => {
+    const a = accounts?.find((x) => x.id === id)
+    return !!targets[id]?.includes(p) && (!a || !ownLogin(p, a))
+  }
+  const handOn = HAND.filter((p) => Object.keys(targets).some((id) => byHandOn(Number(id), p)))
+  const handPlatforms = HAND.filter((p) => p !== 'tiktok' || !(accounts ?? []).some((a) => isConnected(a, 'tiktok')) || handOn.includes(p))
+  function toggleHand(p: Platform) {
+    if (handOn.includes(p)) {
+      setTargets((cur) => Object.fromEntries(Object.entries(cur).map(([id, list]) => [id, byHandOn(Number(id), p) ? list.filter((x) => x !== p) : list])))
+      return
+    }
+    const host = activeIn(accounts ?? [], targets)[0] ?? accounts?.[0]
+    if (host) toggle(host.id, p)
   }
 
   async function upload(file: File) {
@@ -376,36 +402,58 @@ export default function Composer({ num }: { num?: number }) {
               <legend className="legend" style={{ padding: 0, marginBottom: 12 }}>Where</legend>
               {accounts.map((a) => {
                 const row = rowOf(a.id)
-                const usable = PLATFORMS.filter((p) => canPost(p, a) || targets[a.id]?.includes(p))
-                const missing = PLATFORMS.filter((p) => !usable.includes(p))
+                // Only this account's own logins (plus anything an older post already had here, so it can be unticked).
+                const usable = PLATFORMS.filter((p) => !isHandPlatform(p) && (ownLogin(p, a) || (p !== 'tiktok' && !!targets[a.id]?.includes(p))))
+                const picked = (targets[a.id] ?? []).filter((p) => usable.includes(p))
                 return (
-                  <div key={a.id} className="target" data-on={targets[a.id]?.length ? '' : undefined}>
+                  <div key={a.id} className="target" data-on={picked.length ? '' : undefined}>
                     <span style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 12 }}>
                       <span style={{ fontSize: 15, fontWeight: 600 }}>{a.name}</span>
-                      <span className="mono">{targets[a.id]?.length ? `${targets[a.id].length} selected` : 'Not posting here'}</span>
+                      <span className="mono">{picked.length ? `${picked.length} selected` : usable.length ? 'Not posting here' : ''}</span>
                     </span>
-                    <div role="group" aria-label={`Platforms for ${a.name}`} style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
-                      {usable.map((p) => {
-                        const done = !!row && row.platforms.includes(p) && isDone(row, p)
-                        const on = !!targets[a.id]?.includes(p)
-                        return (
-                          <button key={p} type="button" className="toggle" aria-pressed={on} disabled={done}
-                            title={done ? 'Already posted here' : undefined} onClick={() => toggle(a.id, p)}>
-                            {on && <Check />}
-                            {PLATFORM_NAMES[p]}
-                            <span className="toggle-mode">{done ? 'Posted' : byHand(p, a) ? 'By hand' : p === 'tiktok' ? 'Drafts' : 'Auto'}</span>
-                          </button>
-                        )
-                      })}
-                    </div>
-                    {missing.length > 0 && (
-                      <span style={{ fontSize: 13, color: 'var(--muted)' }}>
-                        {missing.map((p) => NAMED[p] ?? PLATFORM_NAMES[p]).join(', ')}: <a href="#/accounts">connect on Accounts</a>
-                      </span>
+                    {usable.length ? (
+                      <div role="group" aria-label={`Platforms for ${a.name}`} style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+                        {usable.map((p) => {
+                          const done = !!row && row.platforms.includes(p) && isDone(row, p)
+                          const on = !!targets[a.id]?.includes(p)
+                          return (
+                            <button key={p} type="button" className="toggle" aria-pressed={on} disabled={done}
+                              title={done ? 'Already posted here' : undefined} onClick={() => toggle(a.id, p)}>
+                              {on && <Check />}
+                              {PLATFORM_NAMES[p]}
+                              <span className="toggle-mode">{done ? 'Posted' : p === 'tiktok' ? 'Drafts' : 'Auto'}</span>
+                            </button>
+                          )
+                        })}
+                      </div>
+                    ) : (
+                      <span style={{ fontSize: 14, color: 'var(--muted)' }}>No logins yet. <a href="#/accounts">Connect one on Accounts</a>.</span>
                     )}
                   </div>
                 )
               })}
+              {/* By-hand platforms belong to no login: they come to your phone, once, whichever accounts you pick. */}
+              <div className="target" data-on={handOn.length ? '' : undefined}>
+                <span style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 12 }}>
+                  <span style={{ fontSize: 15, fontWeight: 600 }}>To your phone</span>
+                  <span className="mono">{handOn.length ? `${handOn.length} selected` : 'Post these by hand'}</span>
+                </span>
+                <div role="group" aria-label="Platforms you post by hand" style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+                  {handPlatforms.map((p) => {
+                    const on = handOn.includes(p)
+                    const done = rows.some((r) => r.platforms.includes(p) && isDone(r, p))
+                    return (
+                      <button key={p} type="button" className="toggle" aria-pressed={on} disabled={done}
+                        title={done ? 'Already sent to your phone' : undefined} onClick={() => toggleHand(p)}>
+                        {on && <Check />}
+                        {PLATFORM_NAMES[p]}
+                        <span className="toggle-mode">{done ? 'Sent' : 'By hand'}</span>
+                      </button>
+                    )
+                  })}
+                </div>
+                <span style={{ fontSize: 13, color: 'var(--muted)' }}>The caption and file come to Telegram and the handoff page; you post them yourself.</span>
+              </div>
               <FieldError section="where" messages={shown('where')} />
             </fieldset>
 
@@ -482,7 +530,7 @@ export default function Composer({ num }: { num?: number }) {
                   {active.flatMap((a) => targets[a.id].map((p) => ({ a, p }))).map(({ a, p }, i) => (
                     <li key={`${a.id}-${p}`} style={{ display: 'flex', gap: 16, padding: '14px 0', borderTop: i ? '1px solid rgba(255,255,255,0.08)' : 0 }}>
                       <span className="mono" style={{ width: 32, lineHeight: '20px', color: byHand(p, a) ? '#afc0ff' : '#c9cbcf' }}>{PLATFORM_CODES[p]}</span>
-                      <span style={{ fontSize: 14, lineHeight: 1.45 }}>{active.length > 1 && <strong style={{ fontWeight: 600 }}>{a.name}: </strong>}{planText(p, a)}</span>
+                      <span style={{ fontSize: 14, lineHeight: 1.45 }}>{active.length > 1 && <strong style={{ fontWeight: 600 }}>{ownLogin(p, a) ? a.name : 'Your phone'}: </strong>}{planText(p, a)}</span>
                     </li>
                   ))}
                 </ol>
