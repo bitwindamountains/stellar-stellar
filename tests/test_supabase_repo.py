@@ -1,4 +1,5 @@
 import json
+from datetime import date
 
 import httpx
 import pytest
@@ -220,3 +221,27 @@ def test_claim_is_conditional_and_returns_stored_row():
     assert claimed[12].get("caption") == "stored now"
     patch = next(c for c in calls if c.method == "PATCH")
     assert json.loads(patch.content) == {"status": "posting", "attempts": 2}
+
+
+def test_claim_nudge_is_once_per_day():
+    sent = set()
+
+    def handler(request):
+        assert request.url.path.endswith("/nudges") and request.method == "POST"
+        assert request.headers["Prefer"] == "resolution=ignore-duplicates,return=representation"
+        day = json.loads(request.content)["day"]
+        if day in sent:
+            return httpx.Response(201, json=[])  # duplicate ignored: nothing inserted
+        sent.add(day)
+        return httpx.Response(201, json=[{"day": day}])
+
+    r, _ = repo(handler)
+    assert r.claim_nudge(date(2026, 10, 5)) is True
+    assert r.claim_nudge(date(2026, 10, 5)) is False
+    assert r.claim_nudge(date(2026, 10, 6)) is True
+
+
+def test_claim_nudge_error_is_a_store_error():
+    r, _ = repo(lambda req: httpx.Response(500, json={"message": "boom"}))
+    with pytest.raises(StoreError):
+        r.claim_nudge(date(2026, 10, 5))

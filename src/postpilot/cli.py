@@ -240,13 +240,14 @@ def _tokens(repo, cfg: Config, http: httpx.Client, now: datetime):
 
 
 def _nudge_if_empty(repo, cfg: Config, http: httpx.Client, now: datetime) -> None:
-    """Once a day at PP_NUDGE_HOUR, message Telegram if nothing is planned or posted today."""
-    # ponytail: a manual run in the same half hour can nudge a second time; add a sent-marker if that annoys.
+    """Once a day, on the first run after PP_NUDGE_HOUR, tell Telegram if nothing is planned or done today."""
     window = nudge_window(now, getattr(repo, "timezone", DEFAULT_TIMEZONE), cfg.nudge_hour)
     if not window:
         return
+    day, start, end = window
     try:
-        if repo.count_live_between(*window) == 0:
+        # Claim before sending: a failed send loses one reminder, never sends two.
+        if repo.count_live_between(start, end) == 0 and repo.claim_nudge(day):
             link = f" {cfg.web_app_url}/#/new" if cfg.web_app_url else ""
             telegram.send_text(
                 http, cfg.telegram_bot_token, cfg.telegram_chat_id, f"Nothing posted today yet.{link}"
