@@ -100,12 +100,18 @@ Design: `docs/superpowers/specs/2026-10-30-first-comment-and-stats-design.md`; p
 - Unverified until a real run: the FB metric names `post_media_view` / `post_total_media_view_unique` (Meta's
   replacements for retired metrics); a wrong name only leaves that number blank.
 
+## On-time posting (needs you)
+GitHub's 30-minute schedule really runs every 4–7 hours. Migration `20261030000000_dispatch_due.sql` adds a
+Supabase cron job that starts the publish workflow every 10 minutes while a post is due, and a `nudges` table so the
+4 pm Telegram nudge goes out once a day on the first run after 4 pm. To switch the cron job on, put a fine-grained
+GitHub token (this repo, "Actions: read and write") in Vault, in the Supabase SQL editor:
+`select vault.create_secret('<token>', 'postpilot_github_token');`
+
 ## Not yet verified for real
 Email/password sign-in, uploads, publisher reads/writes against live Supabase, Post now triggering a run,
 Android share target, PNG→JPEG conversion on upload, the 4 pm nudge, copy buttons on a phone.
 
 ## Known limits / later
 - Google Sheet backend: claim can't be conditional (Sheets has no conditional writes).
-- A manual run between 4:00 and 4:30 pm can send the nudge twice.
 - Image cleanup after automatic posts isn't done (only by-hand uploads are deleted).
 - Not built: feed autopilot (RSS/YouTube → posts), FB/IG video and Reels, insights, AI captions, calendar view.
