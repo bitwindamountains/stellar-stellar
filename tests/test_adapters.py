@@ -108,3 +108,31 @@ def test_fb_and_ig_use_their_own_text():
         sleep=lambda s: None,
     )
     assert g.calls[0][2]["caption"] == "IG only"
+
+
+def test_comment_posts_to_comments_edge_and_returns_id():
+    g = FakeGraph([{"id": "C1"}, {"id": "C2"}])
+    assert facebook.comment(g, "PAGE_1", "hi") == "C1"
+    assert instagram.comment(g, "MEDIA", "hi") == "C2"
+    assert g.calls == [
+        ("POST", "PAGE_1/comments", {"message": "hi"}, False),
+        ("POST", "MEDIA/comments", {"message": "hi"}, False),
+    ]
+
+
+def test_comment_timeout_is_unknown_not_retried():
+    import httpx
+
+    from postpilot.graph import GraphClient
+
+    calls = []
+
+    def boom(r):
+        calls.append(r)
+        raise httpx.ReadTimeout("timed out", request=r)
+
+    g = GraphClient("v1", "T", http=httpx.Client(transport=httpx.MockTransport(boom)), sleep=lambda s: None)
+    with pytest.raises(PlatformError) as e:
+        instagram.comment(g, "MEDIA", "hi")
+    assert e.value.kind == "unknown" and len(calls) == 1
+    assert calls[0].url.path.endswith("/MEDIA/comments") and b"message=hi" in calls[0].content

@@ -167,3 +167,34 @@ def test_connected_tiktok_caption_limit():
 def test_shopee_is_by_hand_and_needs_no_media():
     assert errors(platforms="shopee") == []
     assert any("shopee" in e for e in errors(platforms="shopee", caption="x" * 4100))
+
+
+IG_IMG = {"platforms": "instagram", "media_type": "image", "media_urls": "https://x/a.jpg"}
+
+
+@pytest.mark.parametrize(
+    ("comment", "expected"),
+    [
+        ("x" * 301, "First comment: Instagram allows at most 300 characters"),
+        ("#a #b #c #d #e", "First comment: Instagram allows at most 4 hashtags"),
+        ("https://a.co https://b.co", "First comment: Instagram allows at most 1 link"),
+        ("BUY NOW", "First comment: Instagram rejects all-caps comments"),
+    ],
+)
+def test_first_comment_instagram_rules(comment, expected):
+    assert expected in errors(**IG_IMG, first_comment=comment)
+
+
+def test_first_comment_ok_and_empty_add_no_errors():
+    assert errors(**IG_IMG, first_comment="x" * 300 + "") == []
+    assert errors(**IG_IMG, first_comment="#a #b #c #d https://a.co 123") == []
+    assert errors(**IG_IMG, first_comment="") == []
+    assert errors(platforms="facebook", first_comment="BUY " + "x" * 400) == []  # IG rules only apply to IG
+
+
+def test_first_comment_too_long_for_phone_handoff():
+    video = {"media_type": "video", "media_urls": "https://x/a.mp4"}
+    msg = "First comment too long for the phone handoff"
+    assert msg in errors(platforms="youtube", first_comment="x" * 4037, **video)
+    assert msg not in errors(platforms="youtube", first_comment="x" * 4036, **video)
+    assert msg not in errors(platforms="facebook", first_comment="x" * 5000)

@@ -22,6 +22,9 @@ TLDS += "|ph|sg|my|jp|us|uk|ca|au"
 URL = re.compile(rf"https?://\S+|\b(?:[a-z0-9-]+\.)+(?:{TLDS})\b(?:/\S*)?", re.IGNORECASE)
 IG_CAPTION_MAX = 2200
 IG_HASHTAGS_MAX = 30
+IG_COMMENT_MAX = 300  # Meta's IG comment limits: 300 chars, 4 hashtags, 1 link, not all caps
+IG_COMMENT_HASHTAGS_MAX = 4
+IG_COMMENT_URLS_MAX = 1
 TELEGRAM_MESSAGE_MAX = 4096
 TELEGRAM_OVERHEAD = 60  # platform label line and title label (Telegram counts text after parsing tags)
 NON_JPEG = (".png", ".webp", ".gif", ".heic", ".heif", ".avif", ".bmp", ".tif", ".tiff", ".svg")
@@ -116,6 +119,20 @@ def validate(post: Post, accounts: dict[str, Account]) -> list[str]:
         if size > TELEGRAM_MESSAGE_MAX:
             over = size - TELEGRAM_MESSAGE_MAX
             errors.append(f"{p} caption too long for the Telegram assist: shorten it by {over:,} characters")
+    first = post.get("first_comment")
+    if first:
+        if INSTAGRAM in platforms:
+            if len(first) > IG_COMMENT_MAX:
+                errors.append(f"First comment: Instagram allows at most {IG_COMMENT_MAX} characters")
+            if len(re.findall(r"#\w+", first)) > IG_COMMENT_HASHTAGS_MAX:
+                errors.append(f"First comment: Instagram allows at most {IG_COMMENT_HASHTAGS_MAX} hashtags")
+            if len(re.findall(r"https?://", first)) > IG_COMMENT_URLS_MAX:
+                errors.append(f"First comment: Instagram allows at most {IG_COMMENT_URLS_MAX} link")
+            if first.isupper():
+                errors.append("First comment: Instagram rejects all-caps comments")
+        by_hand = any(p in PLATFORMS and not (account and account.by_api(p)) for p in platforms)
+        if by_hand and _telegram_len(first) + TELEGRAM_OVERHEAD > TELEGRAM_MESSAGE_MAX:
+            errors.append("First comment too long for the phone handoff")
     if len(post.title_for("youtube")) > YOUTUBE_TITLE_MAX:
         errors.append(f"YouTube titles max {YOUTUBE_TITLE_MAX} characters")
     return errors
