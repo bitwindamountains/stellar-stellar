@@ -167,3 +167,33 @@ def test_connected_tiktok_caption_limit():
 def test_shopee_is_by_hand_and_needs_no_media():
     assert errors(platforms="shopee") == []
     assert any("shopee" in e for e in errors(platforms="shopee", caption="x" * 4100))
+
+
+IG_IMG = {"platforms": "instagram", "media_type": "image", "media_urls": "https://x/a.jpg"}
+
+
+def test_first_comment_instagram_limit_counts_utf16_units():
+    msg = "First comment: Instagram allows at most 2,200 characters"
+    assert msg not in errors(**IG_IMG, first_comment="x" * 2200)
+    assert msg in errors(**IG_IMG, first_comment="x" * 2201)
+    assert msg not in errors(**IG_IMG, first_comment="😀" * 1100)  # 2,200 units
+    assert msg in errors(**IG_IMG, first_comment="😀" * 1100 + "x")  # 2,201 units (1,101 code points)
+
+
+def test_first_comment_ok_and_empty_add_no_errors():
+    assert errors(**IG_IMG, first_comment="") == []
+    assert errors(**IG_IMG, first_comment="BUY #a #b #c #d #e https://a.co https://b.co") == []
+    assert errors(platforms="facebook", first_comment="x" * 3000) == []  # IG rule only applies to IG
+
+
+def test_first_comment_too_long_for_phone_handoff():
+    video = {"media_type": "video", "media_urls": "https://x/a.mp4"}
+    msg = "First comment too long for the phone handoff"
+    assert msg in errors(platforms="youtube", first_comment="x" * 4037, **video)
+    assert msg not in errors(platforms="youtube", first_comment="x" * 4036, **video)
+    assert msg not in errors(platforms="facebook", first_comment="x" * 5000)
+    # TikTok drafts get the comment block in Telegram too, even when TikTok is connected.
+    tiktok = {"platforms": "tiktok", **video}
+    assert msg in linked_errors(**tiktok, first_comment="x" * 4037)
+    assert msg not in linked_errors(**tiktok, first_comment="x" * 4036)
+    assert msg in errors(account="nobody", **tiktok, first_comment="x" * 4037)

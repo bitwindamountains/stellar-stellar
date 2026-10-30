@@ -62,3 +62,17 @@ def test_parse_local_rejects_bad_dates(bad):
 def test_parse_local_rejects_unknown_timezone():
     with pytest.raises(ValueError, match="time zone"):
         parse_local("2026-10-05 18:00", "Mars/Base")
+
+
+def test_comment_pending():
+    base = {"platforms": "facebook", "first_comment": "hi"}
+    assert not post(**{**base, "first_comment": ""}).comment_pending("facebook")
+    assert not post(**base).comment_pending("facebook")
+    assert post(**base, fb_post_id="1_2").comment_pending("facebook")
+    assert not post(**base, fb_post_id="1_2", fb_comment_id="c1").comment_pending("facebook")
+    assert not post(**base, x_post_id="9").comment_pending("x")
+
+
+def test_stats_parses_json():
+    assert post(stats='{"facebook": {"likes": 3}}').stats == {"facebook": {"likes": 3}}
+    assert post(stats="nope").stats == {}

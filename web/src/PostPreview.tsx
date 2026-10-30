@@ -7,9 +7,10 @@ import { byHand, PLATFORM_NAMES, type MediaType, type Platform } from './types'
 const ASPECT: Partial<Record<Platform, string>> = { instagram: '4 / 5', x: '16 / 9', tiktok: '9 / 16', youtube: '16 / 9' }
 
 /** A mock of the post on each platform, from the same text the publisher sends. */
-export default function PostPreview({ platforms, caption, variants, link, mediaType, mediaUrl, accountFor }: {
+export default function PostPreview({ platforms, caption, firstComment, variants, link, mediaType, mediaUrl, accountFor }: {
   platforms: Platform[]
   caption: string
+  firstComment: string
   variants: Variants
   link: string
   mediaType: MediaType
@@ -55,6 +56,12 @@ export default function PostPreview({ platforms, caption, variants, link, mediaT
               </span>
             )}
           </div>
+          {firstComment && (p === 'facebook' || p === 'instagram') && (
+            <div className="preview-body" style={{ color: 'var(--muted)', fontSize: 13 }}>
+              <span className="mono">First comment</span>
+              <p style={{ margin: 0, whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' }}>{firstComment}</p>
+            </div>
+          )}
         </article>
         {hand && <p style={{ margin: 0, fontSize: 13, color: 'var(--muted)' }}>You post this one by hand; this is the text you'll paste.</p>}
       </div>

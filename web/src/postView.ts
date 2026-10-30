@@ -1,4 +1,4 @@
-import { isDone, needsFinishing, PLATFORM_CODES, PLATFORM_NAMES, type Platform, type Post } from './types'
+import { isDone, needsFinishing, PLATFORM_CODES, PLATFORM_NAMES, type Platform, type PlatformStats, type Post } from './types'
 
 export type ChipState = 'done' | 'queued' | 'assist' | 'retry'
 
@@ -116,4 +116,30 @@ export function mergePosts(...lists: (unknown[] | null)[]): Post[] {
   const byNum = new Map<number, Post>()
   for (const list of lists) for (const p of (list ?? []) as Post[]) byNum.set(p.num, p)
   return [...byNum.values()]
+}
+
+/** 1200 -> 1.2k, 2000 -> 2k, 1000000 -> 1m. */
+export function compact(n: number): string {
+  if (n >= 1_000_000) return `${+(n / 1_000_000).toFixed(1)}m`
+  if (n >= 1000) return `${+(n / 1000).toFixed(1)}k`
+  return String(n)
+}
+
+/** "1.2k views · 48 likes · 6 comments"; reach stands in when views are missing. */
+export function statsLine(s: PlatformStats): string {
+  const parts: [number | undefined, string][] = [
+    s.views != null ? [s.views, 'views'] : [s.reach, 'reach'],
+    [s.likes, 'likes'],
+    [s.comments, 'comments'],
+    [s.shares, 'shares'],
+  ]
+  return parts.filter(([n]) => n != null).map(([n, label]) => `${compact(n!)} ${label}`).join(' · ')
+}
+
+export function ago(iso: string, now = new Date()): string {
+  const min = Math.floor((now.getTime() - new Date(iso).getTime()) / 60_000)
+  if (min < 1) return 'just now'
+  if (min < 60) return `${min} min ago`
+  if (min < 1440) return `${Math.floor(min / 60)} h ago`
+  return `${Math.floor(min / 1440)} d ago`
 }
