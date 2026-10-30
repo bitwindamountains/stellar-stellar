@@ -6,6 +6,7 @@ from typing import Protocol
 from postpilot.config import Config
 from postpilot.models import (
     ASSISTED_PLATFORMS,
+    COMMENT_COLUMN,
     FINISH_IN_APP,
     ID_COLUMN,
     PERMALINK_COLUMN,
@@ -20,6 +21,7 @@ from postpilot.validation import validate
 
 Publisher = Callable[[Post, Account], PublishResult]
 Assist = Callable[[Post, list[str]], str]
+Commenter = Callable[[Post, Account, str], str]  # (post, account, the platform's post ID) -> comment ID
 
 
 class Repository(Protocol):
@@ -46,14 +48,17 @@ def run(
     cfg: Config,
     now: datetime,
     dry_run: bool = False,
+    commenters: dict[str, Commenter] | None = None,
 ) -> Report:
     report = Report()
     stamp = now.isoformat(timespec="seconds")
     claim = repo.claim
+    commenters = commenters or {}
     if dry_run:
         write = lambda updates: None  # noqa: E731
         publishers = {name: (lambda post, account: PublishResult("dry-run", "")) for name in publishers}
         assist = lambda post, platforms: "dry-run"  # noqa: E731
+        commenters = {name: (lambda post, account, object_id: "dry-run") for name in commenters}
     else:
         write = repo.write
 
@@ -74,16 +79,25 @@ def run(
         why = f"Not posted: more than {cfg.late_grace_minutes} minutes late. Edit it to post now or later."
         updates[post.row] = {"status": "missed", "last_error": why}
         report.missed.append(post.row)
-    for post in s.exhausted:
-        why = f"Gave up after {post.get('attempts') or 0} attempt(s). {post.get('last_error')}".strip()
-        updates[post.row] = {"status": "failed", "last_error": why}
-    for post in s.stale:
-        pending = [p for p in post.platforms if not post.done(p)]
-        why = f"Run stopped while posting. Check {', '.join(pending)}, then reschedule if it's missing."
-        updates[post.row] = {"status": "failed", "last_error": why}
+    for post, kind in [(p, "permanent") for p in s.exhausted] + [(p, "unknown") for p in s.stale]:
+        # Live everywhere, only first comments left: the post is out, so it's posted (comment by hand).
+        comments = [p for p in post.platforms if post.comment_pending(p)]
+        if comments and all(post.done(p) for p in post.platforms):
+            notes = "; ".join(_comment_note(p, kind) for p in comments)
+            updates[post.row] = {"status": "posted", "posted_at": stamp, "last_error": notes}
+            report.posted.append(post.row)
+        elif kind == "permanent":
+            why = f"Gave up after {post.get('attempts') or 0} attempt(s). {post.get('last_error')}".strip()
+            updates[post.row] = {"status": "failed", "last_error": why}
+            report.failed.append(post.row)
+        else:
+            pending = [p for p in post.platforms if not post.done(p)]
+            why = f"Run stopped while posting. Check {', '.join(pending)}, then reschedule if it's missing."
+            updates[post.row] = {"status": "failed", "last_error": why}
+            report.failed.append(post.row)
     for post, errors in s.invalid:
         updates[post.row] = {"status": "failed", "last_error": "; ".join(errors)}
-    report.failed += [p.row for p in s.exhausted + s.stale] + [p.row for p, _ in s.invalid]
+    report.failed += [p.row for p, _ in s.invalid]
     if updates:
         write(updates)
 
@@ -110,15 +124,33 @@ def run(
             report.failed.append(post.row)
             continue
         _publish_row(
-            fresh, accounts[fresh.get("account")], publishers, assist, write, cfg, stamp, report, dry_run
+            fresh,
+            accounts[fresh.get("account")],
+            publishers,
+            assist,
+            commenters,
+            write,
+            cfg,
+            stamp,
+            report,
+            dry_run,
         )
     for row, fields in sorted(updates.items()):
-        if fields["status"] in ("missed", "failed"):
+        if fields["status"] in ("missed", "failed", "posted"):
             report.lines.append(f"row {row}: {fields['status']}: {fields['last_error']}")
     return report
 
 
-def _publish_row(post, account, publishers, assist, write, cfg, stamp, report, dry_run) -> None:
+def _comment_note(platform: str, kind: str) -> str:
+    name = platform.capitalize()
+    if kind == "auth":
+        return f"Comment not added on {name}: reconnect Meta in Accounts to allow comments"
+    if kind == "unknown":
+        return f"Comment on {name} may not have been added: check, and add it by hand if missing"
+    return f"Comment not added on {name}: add it by hand"
+
+
+def _publish_row(post, account, publishers, assist, commenters, write, cfg, stamp, report, dry_run) -> None:
     def save(fields: dict[str, str]) -> None:
         post.cells.update(fields)
         write({post.row: fields})  # immediately: a filled ID is what stops a repost
@@ -140,6 +172,23 @@ def _publish_row(post, account, publishers, assist, write, cfg, stamp, report, d
             continue
         save({ID_COLUMN[platform]: result.id, PERMALINK_COLUMN[platform]: result.permalink})
         done_now.append(platform)
+
+    # First comments: once per platform, only after its post is out. Failures never undo a live post.
+    comment_errors: list[tuple[str, PlatformError]] = []
+    for platform in post.platforms:
+        if not (account.by_api(platform) and platform in commenters and post.comment_pending(platform)):
+            continue
+        try:
+            comment_id = commenters[platform](post, account, post.get(ID_COLUMN[platform]))
+        except PlatformError as e:
+            comment_errors.append((platform, e))
+            continue
+        except Exception as e:  # never surface raw text: it may contain URLs with tokens
+            unexpected = PlatformError("unknown", f"Unexpected {type(e).__name__}; check if it was added")
+            comment_errors.append((platform, unexpected))
+            continue
+        save({COMMENT_COLUMN[platform]: comment_id})
+        done_now.append(f"{platform} comment")
 
     def needs_you(p: str) -> bool:
         if account.by_api(p):
@@ -164,19 +213,28 @@ def _publish_row(post, account, publishers, assist, write, cfg, stamp, report, d
             except PlatformError as e:
                 errors.append(("telegram", e))
 
-    if not errors:
-        final = {"status": "posted", "posted_at": stamp, "last_error": ""}
-        report.posted.append(post.row)
-    else:
-        retry = all(e.retryable for _, e in errors) and int(post.get("attempts")) < cfg.max_attempts
-        message = "; ".join(f"{platform}: {e}" for platform, e in errors)
+    attempts_left = int(post.get("attempts") or 0) < cfg.max_attempts  # empty in a dry run (no claim)
+    # A partial retries every pending comment, so it's only safe when no comment outcome is unclear/final.
+    comments_retryable = all(e.retryable for _, e in comment_errors)
+    if errors:
+        retry = all(e.retryable for _, e in errors) and comments_retryable and attempts_left
+        failures = errors + [(f"{p} comment", e) for p, e in comment_errors]
+        message = "; ".join(f"{platform}: {e}" for platform, e in failures)
         final = {"status": "partial" if retry else "failed", "last_error": message}
         (report.partial if retry else report.failed).append(post.row)
+    elif comment_errors and comments_retryable and attempts_left:
+        message = "; ".join(f"{p} comment: {e}" for p, e in comment_errors)
+        final = {"status": "partial", "last_error": message}
+        report.partial.append(post.row)
+    else:
+        notes = "; ".join(_comment_note(p, e.kind) for p, e in comment_errors)
+        final = {"status": "posted", "posted_at": stamp, "last_error": notes}
+        report.posted.append(post.row)
     write({post.row: final})
     verb = "would publish" if dry_run else "published"
     line = f"row {post.row}: {final['status']}"
     if done_now:
         line += f" ({verb} {', '.join(done_now)})"
-    if errors:
+    if final["last_error"]:
         line += f": {final['last_error']}"
     report.lines.append(line)

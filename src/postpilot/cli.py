@@ -102,6 +102,14 @@ def publish(
 
         return publish_one
 
+    def meta_comment(module):
+        def comment_one(post, account, object_id):
+            graph = GraphClient(cfg.meta_graph_version, token(account, "meta"), http=http)
+            return module.comment(graph, object_id, post.get("first_comment"))
+
+        return comment_one
+
+    commenters = {"facebook": meta_comment(facebook), "instagram": meta_comment(instagram)}
     publishers = {
         "facebook": meta(facebook),
         "instagram": meta(instagram),
@@ -127,6 +135,7 @@ def publish(
             cfg,
             now,
             dry_run=dry_run,
+            commenters=commenters,
         )
     except StoreError as e:
         raise _fail(f"Store error: {e}") from None
