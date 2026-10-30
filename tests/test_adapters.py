@@ -136,3 +136,80 @@ def test_comment_timeout_is_unknown_not_retried():
         instagram.comment(g, "MEDIA", "hi")
     assert e.value.kind == "unknown" and len(calls) == 1
     assert calls[0].url.path.endswith("/MEDIA/comments") and b"message=hi" in calls[0].content
+
+
+def _routed(routes):
+    """FakeGraph-free: route by (path, metric) -> dict or PlatformError."""
+
+    class G:
+        def get(self, path, **params):
+            r = routes[(path, params.get("metric"))]
+            if isinstance(r, Exception):
+                raise r
+            return r
+
+    return G()
+
+
+def _ig_routes():
+    ins = lambda n, v: {"data": [{"name": n, "values": [{"value": v}]}]}  # noqa: E731
+    return {
+        ("M", None): {"like_count": 5, "comments_count": 2},
+        ("M/insights", "reach"): ins("reach", 100),
+        ("M/insights", "views"): ins("views", 150),
+        ("M/comments", None): {
+            "data": [
+                {"text": "nice", "username": "bob", "like_count": 3, "timestamp": "2026-01-01T00:00:00+0000"}
+            ]
+        },
+    }
+
+
+IG_COMMENT = {"author": "bob", "text": "nice", "likes": 3, "at": "2026-01-01T00:00:00+0000"}
+
+
+def test_ig_stats_happy_path():
+    assert instagram.stats(_routed(_ig_routes()), "M") == {
+        "likes": 5, "comments": 2, "reach": 100, "views": 150, "top_comments": [IG_COMMENT],
+    }  # fmt: skip
+
+
+def test_ig_stats_retired_metric_only_loses_itself():
+    routes = _ig_routes()
+    routes[("M/insights", "views")] = PlatformError("permanent", "Meta rejected the post: x (code 100)")
+    out = instagram.stats(_routed(routes), "M")
+    assert "views" not in out and out["reach"] == 100 and out["likes"] == 5 and out["top_comments"]
+
+
+def _fb_routes(shares=True):
+    ins = lambda n, v: {"data": [{"name": n, "values": [{"value": v}]}]}  # noqa: E731
+    post_fields = {
+        "reactions": {"data": [], "summary": {"total_count": 7}},
+        "comments": {"data": [], "summary": {"total_count": 1}},
+    }
+    if shares:
+        post_fields["shares"] = {"count": 4}
+    return {
+        ("P", None): post_fields,
+        ("P/insights", "post_media_view"): ins("post_media_view", 90),
+        ("P/insights", "post_total_media_view_unique"): ins("post_total_media_view_unique", 60),
+        ("P/comments", None): {
+            "data": [{"from": {"name": "Ann"}, "message": "hi", "like_count": 1, "created_time": "T"}]
+        },
+    }
+
+
+def test_fb_stats_happy_path_and_no_shares_key_when_absent():
+    out = facebook.stats(_routed(_fb_routes()), "P")
+    assert out == {
+        "likes": 7, "comments": 1, "shares": 4, "views": 90, "reach": 60,
+        "top_comments": [{"author": "Ann", "text": "hi", "likes": 1, "at": "T"}],
+    }  # fmt: skip
+    assert "shares" not in facebook.stats(_routed(_fb_routes(shares=False)), "P")
+
+
+def test_stats_fields_error_propagates():
+    routes = _ig_routes()
+    routes[("M", None)] = PlatformError("auth", "x")
+    with pytest.raises(PlatformError):
+        instagram.stats(_routed(routes), "M")
