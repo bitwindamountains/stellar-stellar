@@ -2,6 +2,11 @@ from postpilot.graph import fetch_permalink
 from postpilot.models import Account, Post, PublishResult
 
 
+def comment(graph, post_id: str, text: str) -> str:
+    # Not safe: a timeout may still have posted the comment, so it is never retried.
+    return graph.post(f"{post_id}/comments", safe=False, message=text)["id"]
+
+
 def publish(graph, account: Account, post: Post) -> PublishResult:
     caption, link, urls = post.text_for("facebook"), post.get("link"), post.media_urls
     if urls:
