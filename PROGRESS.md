@@ -43,6 +43,12 @@ affiliate links.
   X posting, Shopee by hand. Code review (10 fixes) done.
 - **Deploy (PR #6)** and **TikTok drafts (PR #7)**: TikTok uploads to your inbox (`video.upload`, no app audit
   for Direct Post); the caption comes to Telegram and the handoff page; you finish it in TikTok.
+- **Screens redesign (branch `feat/app-screens`, 2026-10-30)**: the one big Queue became five tabs: **Today**
+  (needs you + going out today), **Planned** (week strip, selected day, drafts), **(+) New post** (write first,
+  settings rows open sheets), **History** (posted feed with search/filters; tap a post for how it did) and
+  **Accounts** (now also the last-run line and Sign out, which left the nav). Phone: floating glass tab bar with
+  the raised (+); desktop: glass sidebar. Look: Liquid Glass over a stellar night sky (one shared starfield);
+  older browsers fall back to solid glass. Old Queue screen and its CSS removed.
 
 ## Live (2026-10-28)
 - Web app: https://postpilot.postpilot-web.workers.dev (Cloudflare Workers static assets; redeploy from `web/`:

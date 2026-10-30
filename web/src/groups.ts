@@ -28,10 +28,11 @@ export function groupStatus(rows: Post[]): { text: string; tone: string } {
   return labels.sort((a, b) => RANK.indexOf(a.tone) - RANK.indexOf(b.tone))[0]
 }
 
-/** Where tapping the group goes: a row waiting for you on your phone first, else the editor. */
+/** Where tapping the group goes: a row waiting for you on your phone first, how it did once all went out, else the editor. */
 export function groupHref(rows: Post[]): string {
   const handoff = rows.find(awaitingHandoff)
-  return handoff ? `#/handoff/${handoff.num}` : `#/edit/${rows[0].num}`
+  if (handoff) return `#/handoff/${handoff.num}`
+  return rows.every((r) => r.status === 'posted') ? `#/history/${rows[0].num}` : `#/edit/${rows[0].num}`
 }
 
 /** Live links to the post, per platform that gave one. */

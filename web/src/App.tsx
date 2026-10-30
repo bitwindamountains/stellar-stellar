@@ -1,23 +1,34 @@
 import type { Session } from '@supabase/supabase-js'
-import { useEffect, useRef, useState } from 'react'
-import { Exit, Logo, Plus } from './icons'
-import { useRoute } from './route'
+import { useEffect, useState } from 'react'
+import { Asteroids, FlightPath } from './icons'
+import Nav from './Nav'
+import { lastTab, rememberTab, useRoute } from './route'
 import Accounts from './screens/Accounts'
 import Composer from './screens/Composer'
 import Handoff from './screens/Handoff'
-import Queue from './screens/Queue'
+import History from './screens/History'
+import Planned from './screens/Planned'
+import PostDetail from './screens/PostDetail'
 import SignIn from './screens/SignIn'
+import Today from './screens/Today'
+import { parseRoute } from './selectors'
 import { supabase } from './supabase'
+
+const TABS: Record<string, string> = { today: '/', planned: '/planned', history: '/history', accounts: '/accounts' }
 
 export default function App() {
   const [session, setSession] = useState<Session | null | undefined>(undefined)
-  const route = useRoute()
+  const route = parseRoute(useRoute(), new URLSearchParams(location.hash.split('?')[1] ?? ''))
+  const { screen } = route
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data }) => setSession(data.session))
     const { data } = supabase.auth.onAuthStateChange((_event, s) => setSession(s))
     return () => data.subscription.unsubscribe()
   }, [])
+
+  // Task screens (composer, post detail) go back to the tab you came from.
+  useEffect(() => { if (TABS[screen]) rememberTab(TABS[screen]) }, [screen])
 
   // Pointer parallax for the night-sky layers (desktop only): CSS reads --px/--py in -1..1. No React state,
   // at most one write per frame.
@@ -39,52 +50,34 @@ export default function App() {
   if (session === undefined) return null
   if (session === null) return <SignIn />
 
-  const [screen = '', id] = route
   // The handoff is a phone screen opened from Telegram: no nav, just the task.
-  if (screen === 'handoff' && id) return <Handoff num={Number(id)} />
+  if (route.screen === 'handoff') return <><Starfield /><Handoff num={route.num} /></>
 
+  // Writing gets the whole phone screen: no tab bar there (the desktop sidebar stays).
+  const composing = screen === 'new' || screen === 'edit'
+  // The tab a task screen belongs to: post detail is in History, an edit in the tab it was opened from.
+  const fromTab = (Object.keys(TABS).find((k) => TABS[k] === lastTab()) ?? 'today') as typeof screen
+  const current = screen === 'post' ? 'history' : screen === 'edit' ? fromTab : screen
   return (
-    <div className="page">
-      <div className="wrap">
-        <nav className="island" aria-label="Main">
-          <a href="#/" className="brand"><Logo />PostPilot</a>
-          <a href="#/" aria-current={screen === '' ? 'page' : undefined}>Queue</a>
-          <a href="#/accounts" aria-current={screen === 'accounts' ? 'page' : undefined}>Accounts</a>
-          <a href="#/new" className="btn primary" aria-current={screen === 'new' ? 'page' : undefined}
-            style={{ color: '#fff', minHeight: 44 }}>
-            New post<span className="knob"><Plus /></span>
-          </a>
-          <SignOut />
-        </nav>
-        {screen === 'new' && <Composer />}
-        {screen === 'edit' && id && <Composer num={Number(id)} />}
-        {screen === 'accounts' && <Accounts />}
-        {screen === '' && <Queue />}
+    <div className={composing ? 'app composing' : 'app'}>
+      <Starfield />
+      <Nav current={current} />
+      <div className="page">
+        <div className="wrap">
+          {route.screen === 'today' && <Today />}
+          {route.screen === 'planned' && <Planned day={route.day} />}
+          {route.screen === 'history' && <History />}
+          {route.screen === 'post' && <PostDetail num={route.num} />}
+          {route.screen === 'new' && <Composer day={route.day} />}
+          {route.screen === 'edit' && <Composer num={route.num} />}
+          {route.screen === 'accounts' && <Accounts />}
+        </div>
       </div>
     </div>
   )
 }
 
-// Visible but hard to hit by accident: set apart at the end of the nav, and it takes two taps. The first
-// arms it for 3 s; a second tap within 0.4 s (a double-tap slip) is ignored.
-function SignOut() {
-  const [armedAt, setArmedAt] = useState(0)
-  const timer = useRef(0)
-  useEffect(() => () => clearTimeout(timer.current), [])
-  function click() {
-    if (!armedAt) {
-      setArmedAt(Date.now())
-      timer.current = window.setTimeout(() => setArmedAt(0), 3000)
-    } else if (Date.now() - armedAt > 400) {
-      clearTimeout(timer.current)
-      supabase.auth.signOut()
-    }
-  }
-  return (
-    <button type="button" className={armedAt ? 'signout armed' : 'signout'} onClick={click}
-      aria-label={armedAt ? 'Tap again to sign out' : 'Sign out'}>
-      <Exit />
-      <span className="signout-text" aria-live="polite">{armedAt ? <><span className="signout-long">Tap again to sign out</span><span className="signout-short">Sure?</span></> : 'Sign out'}</span>
-    </button>
-  )
-}
+// The night sky behind every screen, drawn once: dark at the top, fading into the page.
+const Starfield = () => (
+  <div className="starfield" aria-hidden="true"><FlightPath /><Asteroids /></div>
+)
