@@ -6,6 +6,7 @@ import { Close } from './icons'
 export default function Sheet({ open, onClose, title, children }: { open: boolean; onClose: () => void; title: string; children: ReactNode }) {
   const ref = useRef<HTMLDialogElement>(null)
   const opener = useRef<HTMLElement | null>(null)
+  const downOnBackdrop = useRef(false)
   const id = useId()
 
   // Layout effect, so a caller can close a sheet inside flushSync and then move focus itself.
@@ -25,8 +26,10 @@ export default function Sheet({ open, onClose, title, children }: { open: boolea
         if (!document.activeElement || document.activeElement === document.body) opener.current?.focus()
         onClose()
       }}
-      // The dialog box has no padding, so a click on the dialog itself landed on the backdrop.
-      onClick={(e) => { if (e.target === e.currentTarget) ref.current?.close() }}>
+      // The dialog box has no padding, so a press on the dialog itself landed on the backdrop. Both the press and the
+      // release must be there: a text selection dragged out of the sheet ends on the backdrop too.
+      onPointerDown={(e) => { downOnBackdrop.current = e.target === e.currentTarget }}
+      onClick={(e) => { if (downOnBackdrop.current && e.target === e.currentTarget) ref.current?.close() }}>
       <div className="sheet-head">
         <h2 id={id}>{title}</h2>
         <button type="button" className="sheet-x" aria-label={`Close ${title.toLowerCase()}`} onClick={() => ref.current?.close()}><Close /></button>
