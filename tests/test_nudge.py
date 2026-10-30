@@ -1,4 +1,4 @@
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime
 
 import pytest
 
@@ -8,13 +8,15 @@ from postpilot.nudge import nudge_window
 BASE = {"GOOGLE_SHEET_ID": "s", "GOOGLE_SERVICE_ACCOUNT_FILE": "f", "META_GRAPH_VERSION": "v23.0"}
 
 
-def test_window_is_first_half_hour_of_the_local_hour():
+def test_window_runs_from_the_local_hour_to_midnight():
     # 16:07 Manila = 08:07 UTC
-    start, end = nudge_window(datetime(2026, 10, 5, 8, 7, tzinfo=UTC), "Asia/Manila", 16)
+    day, start, end = nudge_window(datetime(2026, 10, 5, 8, 7, tzinfo=UTC), "Asia/Manila", 16)
+    assert day == date(2026, 10, 5)
     assert start == datetime(2026, 10, 4, 16, 0, tzinfo=UTC)  # Oct 5 00:00 Manila
     assert end == datetime(2026, 10, 5, 16, 0, tzinfo=UTC)
-    assert nudge_window(datetime(2026, 10, 5, 8, 37, tzinfo=UTC), "Asia/Manila", 16) is None
-    assert nudge_window(datetime(2026, 10, 5, 9, 7, tzinfo=UTC), "Asia/Manila", 16) is None
+    # 23:50 Manila still counts as Oct 5; 15:59 is too early.
+    assert nudge_window(datetime(2026, 10, 5, 15, 50, tzinfo=UTC), "Asia/Manila", 16)[0] == date(2026, 10, 5)
+    assert nudge_window(datetime(2026, 10, 5, 7, 59, tzinfo=UTC), "Asia/Manila", 16) is None
 
 
 def test_nudge_hour_setting():
