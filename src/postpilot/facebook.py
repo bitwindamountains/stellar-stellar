@@ -27,8 +27,9 @@ def stats(graph, post_id: str) -> dict:
         fields="reactions.summary(total_count).limit(0),comments.summary(total_count).limit(0),shares",
     )
     out = {
-        "likes": data["reactions"]["summary"]["total_count"],
-        "comments": data["comments"]["summary"]["total_count"],
+        k: data[src]["summary"]["total_count"]
+        for k, src in (("likes", "reactions"), ("comments", "comments"))
+        if src in data
     }
     if "shares" in data:
         out["shares"] = data["shares"]["count"]
