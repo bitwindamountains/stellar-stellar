@@ -786,3 +786,60 @@ html { scroll-padding-top: 24px; }
   .planned-head { padding-right: 56px; }
   .wk-day b { font-size: 16px; }
 }
+
+/* History: search + filters on a glass bar over the sky, then a feed of solid cards; post detail below. */
+.history { display: flex; flex-direction: column; gap: 24px; width: 100%; max-width: 960px; }
+.history > * { flex: none; }
+.h-tools { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 8px; border-radius: 28px; }
+.h-tools .search { flex: 1 1 280px; width: auto; min-width: 0; background: rgba(255, 255, 255, 0.85); }
+.h-filters { flex: 1 1 auto; background: rgba(21, 23, 27, 0.07); }
+.h-filters button { flex: 1 0 auto; }
+.h-row { grid-template-columns: 56px minmax(0, 1fr); grid-template-areas: none; gap: 16px; padding: 14px 16px; color: var(--ink); }
+.h-body { min-width: 0; display: flex; flex-direction: column; align-items: flex-start; gap: 5px; }
+.h-caption { max-width: 100%; font-size: 15px; font-weight: 500; line-height: 1.4; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.h-stats { font-size: 14px; line-height: 1.4; color: var(--ink-2); font-variant-numeric: tabular-nums; }
+.h-stats.quiet { color: var(--muted); }
+.h-where { line-height: 1.4; }
+.h-rows > li + li { border-top: 1px solid var(--hair); }
+.h-rows { padding-top: 8px; }
+.h-more { display: flex; justify-content: center; padding: 8px 16px 20px; }
+.h-back {
+  align-self: flex-start; display: inline-flex; align-items: center; gap: 6px; min-height: 44px; padding: 0 18px 0 14px;
+  border-radius: 999px; color: var(--ink); font-size: 14px; font-weight: 500; text-decoration: none;
+}
+.h-back span { font-size: 20px; line-height: 1; }
+.d-post { flex-direction: row; align-items: flex-start; gap: 18px; padding: 20px; }
+.d-thumb { width: 88px; height: 88px; border-radius: 18px; }
+.d-caption { margin: 0; font-size: 16px; line-height: 1.55; white-space: pre-wrap; overflow-wrap: anywhere; max-width: 65ch; }
+.d-switch { display: flex; flex-wrap: wrap; gap: 8px; }
+.d-switch .filters { background: rgba(255, 255, 255, 0.55); box-shadow: inset 0 0 0 1px rgba(21, 23, 27, 0.06); }
+.d-title { display: flex; align-items: baseline; justify-content: space-between; flex-wrap: wrap; gap: 8px 16px; }
+.d-title h2, #d-top { margin: 0; font-size: 20px; letter-spacing: -0.02em; }
+.d-stats { margin: 0; display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 8px; }
+.d-stats > div { padding: 14px; border-radius: 16px; background: var(--well); min-width: 0; }
+.d-stats dt { font-size: 12px; color: var(--muted); }
+.d-stats dd { margin: 6px 0 0; font-size: 26px; font-weight: 600; letter-spacing: -0.03em; }
+.d-quiet { margin: 0; font-size: 14px; line-height: 1.5; color: var(--muted); }
+.d-comment { margin: 0; display: flex; align-items: center; gap: 8px; font-size: 14px; color: var(--ink-2); }
+.d-comment::before { content: ''; width: 8px; height: 8px; border-radius: 50%; background: var(--accent); flex: none; }
+.d-comment.warn { color: var(--warn-ink); }
+.d-comment.warn::before { background: var(--warn-ink); }
+.d-note { margin: 0; padding: 12px 14px; border-radius: 14px; background: var(--warn-tint); color: #6e2e05; font-size: 14px; line-height: 1.45; overflow-wrap: anywhere; }
+.d-actions { display: flex; flex-wrap: wrap; gap: 8px; padding-top: 4px; }
+.d-actions .btn.light { box-shadow: inset 0 0 0 1px var(--hair); padding-right: 18px; gap: 6px; }
+.d-comments { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; }
+.d-comments li { padding: 14px 0; display: flex; flex-direction: column; gap: 4px; }
+.d-comments li + li { border-top: 1px solid var(--hair); }
+.d-comments p { margin: 0; font-size: 15px; line-height: 1.5; overflow-wrap: anywhere; max-width: 65ch; }
+.d-who { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 10px; font-size: 14px; }
+@media (hover: hover) and (pointer: fine) { .h-back:hover { text-decoration: underline; text-underline-offset: 3px; } .h-row:hover { background: #f7f7f3; } }
+@media (max-width: 767px) {
+  .history { gap: 20px; }
+  .h-tools { padding: 6px; border-radius: 24px; }
+  .h-filters { flex-wrap: nowrap; border-radius: 999px; overflow-x: auto; }
+  .h-filters button { padding: 0 12px; }
+  .d-stats { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .d-stats dd { font-size: 22px; }
+  .d-post { padding: 16px; gap: 14px; }
+  .d-thumb { width: 64px; height: 64px; }
+}
