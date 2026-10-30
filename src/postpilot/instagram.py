@@ -1,8 +1,13 @@
 import time
 from collections.abc import Callable
 
-from postpilot.graph import fetch_permalink
+from postpilot.graph import fetch_permalink, insight
 from postpilot.models import Account, PlatformError, Post, PublishResult
+
+
+def comment(graph, media_id: str, text: str) -> str:
+    # Not safe: a timeout may still have posted the comment, so it is never retried.
+    return graph.post(f"{media_id}/comments", safe=False, message=text)["id"]
 
 
 def publish(
@@ -30,3 +35,26 @@ def publish(
         raise PlatformError("transient", "Instagram is still processing the image; will retry next run")
     media_id = graph.post(f"{account.ig_user_id}/media_publish", safe=False, creation_id=container)["id"]
     return PublishResult(media_id, fetch_permalink(graph, media_id, "permalink"))
+
+
+def stats(graph, media_id: str) -> dict:
+    data = graph.get(media_id, fields="like_count,comments_count")
+    # Instagram omits like_count when the owner hides likes.
+    out = {
+        k: data[src] for k, src in (("likes", "like_count"), ("comments", "comments_count")) if src in data
+    }
+    for key in ("reach", "views"):
+        value = insight(graph, media_id, key)
+        if value is not None:
+            out[key] = value
+    raw = graph.get(f"{media_id}/comments", fields="text,username,like_count,timestamp", limit="50")
+    out["top_comments"] = [
+        {
+            "author": c.get("username", ""),
+            "text": c.get("text", ""),
+            "likes": c.get("like_count", 0),
+            "at": c.get("timestamp", ""),
+        }
+        for c in raw.get("data", [])
+    ]
+    return out

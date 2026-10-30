@@ -69,7 +69,7 @@ async function signedInUser(req: Request): Promise<string | null> {
 
 function authorizeUrl(platform: Platform, state: string, codeChallenge: string): string {
   if (platform === 'meta') {
-    const scope = 'pages_show_list,pages_read_engagement,pages_manage_posts,instagram_basic,instagram_content_publish,business_management'
+    const scope = 'pages_show_list,pages_read_engagement,pages_manage_posts,instagram_basic,instagram_content_publish,business_management,pages_manage_engagement,instagram_manage_comments,instagram_manage_insights,read_insights'
     return `https://www.facebook.com/${GRAPH.split('/').pop()}/dialog/oauth?${new URLSearchParams({
       client_id: env('META_APP_ID'), redirect_uri: REDIRECT_URI, state, scope, response_type: 'code',
     })}`

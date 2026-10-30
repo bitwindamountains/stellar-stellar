@@ -1,6 +1,6 @@
 from dataclasses import replace
 
-from postpilot.models import ACCOUNT_COLUMNS, POST_COLUMNS, Account, Post
+from postpilot.models import ACCOUNT_COLUMNS, COMMENT_COLUMN, POST_COLUMNS, Account, Post
 from postpilot.sheet import accounts_from_values, posts_from_values
 
 
@@ -13,7 +13,9 @@ class FakeRepository:
         accounts: list[dict[str, str]],
         connected: dict[str, set[str]] | None = None,
     ):
-        self.posts = [list(POST_COLUMNS)] + [[p.get(c, "") for c in POST_COLUMNS] for p in posts]
+        # Supabase-only columns too, so runner tests can exercise first comments.
+        cols = [*POST_COLUMNS, "first_comment", *COMMENT_COLUMN.values()]
+        self.posts = [cols] + [[p.get(c, "") for c in cols] for p in posts]
         self.accounts = [list(ACCOUNT_COLUMNS)] + [[a.get(c, "") for c in ACCOUNT_COLUMNS] for a in accounts]
         self.connected = connected or {}  # account name -> saved logins, like Supabase `connections`
         self.writes: list[dict[int, dict[str, str]]] = []

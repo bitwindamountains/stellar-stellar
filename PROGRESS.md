@@ -84,6 +84,22 @@ Design: `docs/superpowers/specs/2026-10-28-connect-and-post-design.md`.
    TIKTOK_CLIENT_SECRET` (the publisher refreshes X/TikTok logins).
 4. Accounts → pick an account → Connect each login. Shopee stays by hand (no posting API for apps).
 
+## First comment + post stats (2026-10-30, needs you)
+Design: `docs/superpowers/specs/2026-10-30-first-comment-and-stats-design.md`; plan alongside it.
+- **First comment**: optional box in the Composer; posted under FB Page / IG posts right after they publish. Each
+  comment's ID (or a give-up marker `not-added` / `unclear`) is saved at once, so nothing ever comments twice.
+  A failed comment never makes a live post `failed`: it ends `posted` with a note ("add it by hand"). By-hand
+  platforms get a "First comment" block in Telegram and a Copy comment button on the handoff page.
+- **Stats**: after each real run the publisher refreshes FB/IG views, reach, likes, comments, shares and the top 5
+  comments for 7 days after posting (max 20 posts, 60 s budget; a stats problem never fails the run). Shown in
+  the Posted tab.
+- Migration `20261031000000_first_comment_stats.sql` is applied.
+- To switch it on: deploy `connect` (new Meta permissions: `pages_manage_engagement`, `instagram_manage_comments`,
+  `instagram_manage_insights`, `read_insights`; admins/testers only until App Review, fine in Development mode),
+  then Accounts → reconnect Meta once. Until then comments end "reconnect Meta" and stats are skipped.
+- Unverified until a real run: the FB metric names `post_media_view` / `post_total_media_view_unique` (Meta's
+  replacements for retired metrics); a wrong name only leaves that number blank.
+
 ## On-time posting (needs you)
 GitHub's 30-minute schedule really runs every 4–7 hours. Migration `20261030000000_dispatch_due.sql` adds a
 Supabase cron job that starts the publish workflow every 10 minutes while a post is due, and a `nudges` table so the

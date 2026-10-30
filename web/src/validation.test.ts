@@ -91,4 +91,24 @@ describe('X and connected logins (mirrors validation.py)', () => {
     expectError({ account: linked, platforms: ['tiktok'], mediaType: 'video', mediaUrls: ['https://x/a.mp4'], caption: 'x'.repeat(2201) }, '2,200')
     expect(validate(draft({ platforms: ['shopee'] }), true)).toEqual([])
   })
+  it('checks the first comment', () => {
+    const ig = { platforms: ['instagram' as const], mediaType: 'image' as const, mediaUrls: ['https://x/a.jpg'] }
+    const msg = 'First comment: Instagram allows at most 2,200 characters'
+    expect(validate(draft({ ...ig, firstComment: 'x'.repeat(2200) }), true)).toEqual([])
+    expectError({ ...ig, firstComment: 'x'.repeat(2201) }, msg)
+    expect(validate(draft({ ...ig, firstComment: '\u{1F600}'.repeat(1100) }), true)).toEqual([]) // 2,200 UTF-16 units
+    expectError({ ...ig, firstComment: '\u{1F600}'.repeat(1100) + 'x' }, msg)
+    expect(validate(draft({ ...ig, firstComment: 'BUY #a #b #c #d #e https://a.co https://b.co' }), true)).toEqual([])
+    expect(validate(draft({ ...ig, firstComment: '' }), true)).toEqual([])
+    expect(validate(draft({ firstComment: 'x'.repeat(3000) }), true)).toEqual([])
+    const video = { platforms: ['youtube' as const], mediaType: 'video' as const, mediaUrls: ['https://x/a.mp4'] }
+    expectError({ ...video, firstComment: 'x'.repeat(4037) }, 'First comment too long for the phone handoff')
+    expect(validate(draft({ ...video, firstComment: 'x'.repeat(4036) }), true)).toEqual([])
+    expect(validate(draft({ firstComment: 'x'.repeat(5000) }), true)).toEqual([])
+    // TikTok drafts get the comment block in Telegram too, even when TikTok is connected.
+    const tiktok = { ...video, platforms: ['tiktok' as const] }
+    expectError({ ...tiktok, account: linked, firstComment: 'x'.repeat(4037) }, 'First comment too long for the phone handoff')
+    expect(validate(draft({ ...tiktok, account: linked, firstComment: 'x'.repeat(4036) }), true)).toEqual([])
+    expectError({ ...tiktok, account: undefined, firstComment: 'x'.repeat(4037) }, 'First comment too long for the phone handoff')
+  })
 })

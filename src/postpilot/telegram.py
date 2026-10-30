@@ -52,6 +52,9 @@ def send_assist(
             parts.append(f"<pre>{escape(text)}</pre>")
         if len(parts) > 1:
             _call(http, token, "sendMessage", chat_id=chat_id, text="\n".join(parts), parse_mode="HTML")
+    if comment := post.get("first_comment"):  # Post.get strips; empty means none
+        text = f"<b>First comment</b>\n<pre>{escape(comment)}</pre>"
+        _call(http, token, "sendMessage", chat_id=chat_id, text=text, parse_mode="HTML")
     return str(first_id)
 
 
