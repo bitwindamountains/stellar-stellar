@@ -148,6 +148,14 @@ export const Plus = () => (
     <path d="M12 5v14M5 12h14" />
   </svg>
 )
+// Tab icons: 24px grid, same thin stroke. Today is a star (the app's sky), not a generic house.
+const Tab = ({ d }: { d: string }) => (
+  <svg width="22" height="22" viewBox="0 0 24 24" strokeWidth={1.6} {...base} aria-hidden="true" focusable="false"><path d={d} /></svg>
+)
+export const TodayIcon = () => <Tab d="M12 3.5c.6 4.4 2.6 6.6 7 7.5-4.4.9-6.4 3.1-7 7.5-.6-4.4-2.6-6.6-7-7.5 4.4-.9 6.4-3.1 7-7.5Z" />
+export const PlannedIcon = () => <Tab d="M5.5 6.5h13a1.5 1.5 0 0 1 1.5 1.5v10.5a1.5 1.5 0 0 1-1.5 1.5h-13A1.5 1.5 0 0 1 4 18.5V8a1.5 1.5 0 0 1 1.5-1.5ZM4 10.5h16M8.5 4v4M15.5 4v4M8.5 14h2" />
+export const HistoryIcon = () => <Tab d="M4.5 12a7.5 7.5 0 1 0 2.2-5.3L4.5 9M4.5 5v4h4M12 8v4.5l3 2" />
+export const AccountsIcon = () => <Tab d="M12 12a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7ZM5 20c.8-3.4 3.6-5.5 7-5.5s6.2 2.1 7 5.5" />
 export const Arrow = () => (
   <svg width="14" height="14" viewBox="0 0 24 24" strokeWidth={1.6} {...base} aria-hidden="true">
     <path d="M5 12h14M13 6l6 6-6 6" />

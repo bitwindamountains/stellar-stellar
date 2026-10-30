@@ -1,23 +1,31 @@
 import type { Session } from '@supabase/supabase-js'
 import { useEffect, useRef, useState } from 'react'
-import { Exit, Logo, Plus } from './icons'
-import { useRoute } from './route'
+import { Asteroids, Exit, FlightPath } from './icons'
+import Nav from './Nav'
+import { rememberTab, useRoute } from './route'
 import Accounts from './screens/Accounts'
 import Composer from './screens/Composer'
 import Handoff from './screens/Handoff'
 import Queue from './screens/Queue'
 import SignIn from './screens/SignIn'
+import { parseRoute } from './selectors'
 import { supabase } from './supabase'
+
+const TABS: Record<string, string> = { today: '/', planned: '/planned', history: '/history', accounts: '/accounts' }
 
 export default function App() {
   const [session, setSession] = useState<Session | null | undefined>(undefined)
-  const route = useRoute()
+  const route = parseRoute(useRoute(), new URLSearchParams(location.hash.split('?')[1] ?? ''))
+  const { screen } = route
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data }) => setSession(data.session))
     const { data } = supabase.auth.onAuthStateChange((_event, s) => setSession(s))
     return () => data.subscription.unsubscribe()
   }, [])
+
+  // Task screens (composer, post detail) go back to the tab you came from.
+  useEffect(() => { if (TABS[screen]) rememberTab(TABS[screen]) }, [screen])
 
   // Pointer parallax for the night-sky layers (desktop only): CSS reads --px/--py in -1..1. No React state,
   // at most one write per frame.
@@ -39,31 +47,32 @@ export default function App() {
   if (session === undefined) return null
   if (session === null) return <SignIn />
 
-  const [screen = '', id] = route
   // The handoff is a phone screen opened from Telegram: no nav, just the task.
-  if (screen === 'handoff' && id) return <Handoff num={Number(id)} />
+  if (route.screen === 'handoff') return <><Starfield /><Handoff num={route.num} /></>
 
+  // Writing gets the whole phone screen: no tab bar there (the desktop sidebar stays).
+  const composing = screen === 'new' || screen === 'edit'
   return (
-    <div className="page">
-      <div className="wrap">
-        <nav className="island" aria-label="Main">
-          <a href="#/" className="brand"><Logo />PostPilot</a>
-          <a href="#/" aria-current={screen === '' ? 'page' : undefined}>Queue</a>
-          <a href="#/accounts" aria-current={screen === 'accounts' ? 'page' : undefined}>Accounts</a>
-          <a href="#/new" className="btn primary" aria-current={screen === 'new' ? 'page' : undefined}
-            style={{ color: '#fff', minHeight: 44 }}>
-            New post<span className="knob"><Plus /></span>
-          </a>
-          <SignOut />
-        </nav>
-        {screen === 'new' && <Composer />}
-        {screen === 'edit' && id && <Composer num={Number(id)} />}
-        {screen === 'accounts' && <Accounts />}
-        {screen === '' && <Queue />}
+    <div className={composing ? 'app composing' : 'app'}>
+      <Starfield />
+      <Nav current={screen}><SignOut /></Nav>
+      <div className="page">
+        <div className="wrap">
+          {route.screen === 'today' && <Queue />}
+          {(route.screen === 'planned' || route.screen === 'history' || route.screen === 'post') && <p style={{ color: '#f4f5fa' }}>Coming soon</p>}
+          {route.screen === 'new' && <Composer />}
+          {route.screen === 'edit' && <Composer num={route.num} />}
+          {route.screen === 'accounts' && <Accounts />}
+        </div>
       </div>
     </div>
   )
 }
+
+// The night sky behind every screen, drawn once: dark at the top, fading into the page.
+const Starfield = () => (
+  <div className="starfield" aria-hidden="true"><FlightPath /><Asteroids /></div>
+)
 
 // Visible but hard to hit by accident: set apart at the end of the nav, and it takes two taps. The first
 // arms it for 3 s; a second tap within 0.4 s (a double-tap slip) is ignored.
