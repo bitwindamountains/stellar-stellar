@@ -65,7 +65,7 @@ export default function App() {
           {route.screen === 'planned' && <Planned day={route.day} />}
           {route.screen === 'history' && <History />}
           {route.screen === 'post' && <PostDetail num={route.num} />}
-          {route.screen === 'new' && <Composer />}
+          {route.screen === 'new' && <Composer day={route.day} />}
           {route.screen === 'edit' && <Composer num={route.num} />}
           {route.screen === 'accounts' && <Accounts />}
         </div>
