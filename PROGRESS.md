@@ -3,7 +3,7 @@
 _Last updated: 2026-10-29_
 
 ## Where things stand
-Everything is merged to `main` (PRs #1–#9) and the web app is live. TikTok works in Sandbox: Connect works, and two
+Everything is merged to `main` (PRs #1–#11) and the web app is live. TikTok works in Sandbox: Connect works, and two
 real uploads returned `SEND_TO_USER_INBOX`, but no draft showed up in the TikTok app. So the production review (drafts
 only: Login Kit, `user.info.basic`, `video.upload`) was submitted on 2026-10-29. Site verification file, `/terms` and
 `/privacy` are live (PR #9). After approval: put the production key/secret into Supabase + GitHub, reconnect, test
@@ -12,15 +12,21 @@ once. Direct Post (`video.publish`) needs TikTok's posting screen plus its own a
 **Meta is live** (2026-10-29): app in Development mode, connected on account `fb`; the first real FB + IG post went
 out. **PR #10** (QoL): one post can go to several accounts (rows share `posts.group_id`, migration applied); the Queue
 updates live (Realtime) with a "Going out" panel, Open links, a Posted tab and caption search; tapping a week day
-jumps to it or starts a post for that day; the Composer has per-account platform toggles and a per-platform preview.
-Next: X developer app, then YouTube upload (private until Google's audit).
+jumps to it or starts a post for that day; the Composer has per-account platform toggles and a per-platform preview. **PR #11**: each account offers only
+the platforms it has a login for (e.g. `a-tiktok-only-account` = TikTok only); by-hand platforms (FB profile, YouTube,
+Shopee) sit in one "To your phone" block. Not yet tried on live data: saving/editing a multi-account post, and
+Realtime updates in the Queue.
+
+Next (waiting on you): X developer app (`X_CLIENT_ID`/`X_CLIENT_SECRET` into Supabase + GitHub, then Connect X),
+then YouTube upload (private until Google's audit); TikTok review result. Ideas parked: dark mode, Shopee/Lazada
+affiliate links.
 
 | Part | State |
 |---|---|
 | Publisher (Python, GitHub Actions every 30 min) | Done. 186 tests. FB, IG, X automatic; TikTok to drafts. |
 | Supabase schema + RLS | Applied to project `wsclesrylegjsyfxaamr` (private, own project); RLS verified with simulated users. |
 | `dispatch` function (instant Post now) | Deployed (v2), rejects anyone not signed in. Needs `GITHUB_TOKEN`/`GITHUB_REPO` secrets. |
-| Web app (PWA) | Done. 34 tests. Live on Cloudflare Workers. |
+| Web app (PWA) | Done. 43 tests. Live on Cloudflare Workers. |
 | GitHub repo | `bitwindamountains/PostPilot`, private. Secret set: `SUPABASE_URL`. |
 
 ## Done
