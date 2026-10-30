@@ -233,3 +233,27 @@ def test_stats_object_loads():
     r, _ = repo(handler)
     posts, _ = r.load()
     assert posts[0].stats == {"instagram": {"likes": 2}}
+
+
+def test_recent_posted_and_save_stats():
+    from datetime import UTC, datetime
+
+    def handler(request):
+        if (
+            request.url.path.endswith("/posts")
+            and request.method == "GET"
+            and "posted_at" in request.url.params
+        ):
+            return httpx.Response(200, json=[{**POSTS[0], "status": "posted"}])
+        return serve(request)
+
+    r, calls = repo(handler)
+    r.load()
+    posts = r.recent_posted(datetime(2026, 10, 23, tzinfo=UTC))
+    assert [p.row for p in posts] == [12]
+    q = calls[-1].url.params
+    assert q["status"] == "eq.posted" and q["posted_at"] == "gte.2026-10-23T00:00:00+00:00"
+    assert q["order"] == "posted_at.desc"
+    r.save_stats(12, {"facebook": {"likes": 1}})
+    assert calls[-1].method == "PATCH" and calls[-1].url.params["num"] == "eq.12"
+    assert json.loads(calls[-1].content) == {"stats": {"facebook": {"likes": 1}}}

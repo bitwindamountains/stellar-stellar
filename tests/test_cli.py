@@ -261,3 +261,32 @@ def test_publish_passes_meta_commenters(monkeypatch):
     monkeypatch.setattr(cli, "run", fake_run)
     assert invoke(monkeypatch, ["publish", "--dry-run"], FakeRepository([], ACCOUNTS)).exit_code == 0
     assert set(seen["commenters"]) == {"facebook", "instagram"}
+
+
+class StatsRepo(NudgeRepo):
+    def __init__(self):
+        super().__init__(1)
+
+    def recent_posted(self, since):
+        return []
+
+
+def test_stats_store_error_keeps_exit_code_and_dry_run_skips(monkeypatch):
+    calls = []
+
+    def fake_refresh(repo, fetchers, now):
+        calls.append(sorted(fetchers))
+        raise cli.StoreError("down")
+
+    monkeypatch.setattr(cli.stats, "refresh", fake_refresh)
+    env = {
+        "SUPABASE_URL": "https://x.supabase.co",
+        "SUPABASE_SERVICE_ROLE_KEY": "k",
+        "META_GRAPH_VERSION": "v23.0",
+        "GITHUB_ACTIONS": "true",
+    }
+    result = invoke(monkeypatch, ["publish"], StatsRepo(), env=env)
+    assert result.exit_code == 0 and "Stats skipped: down" in result.output
+    assert calls == [["facebook", "instagram"]]
+    assert invoke(monkeypatch, ["publish", "--dry-run"], StatsRepo(), env=env).exit_code == 0
+    assert len(calls) == 1
