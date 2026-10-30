@@ -5,7 +5,7 @@ from datetime import UTC, datetime
 import httpx
 import typer
 
-from postpilot import facebook, instagram, oauth, telegram, tiktok, x
+from postpilot import facebook, instagram, oauth, stats, telegram, tiktok, x
 from postpilot.config import Config, ConfigError, load_config
 from postpilot.graph import GraphClient
 from postpilot.models import DEFAULT_TIMEZONE, PlatformError, StoreError
@@ -109,6 +109,14 @@ def publish(
 
         return comment_one
 
+    def meta_stats(module):
+        def stats_one(post, account, object_id):
+            graph = GraphClient(cfg.meta_graph_version, token(account, "meta"), http=http)
+            return module.stats(graph, object_id)
+
+        return stats_one
+
+    fetchers = {"facebook": meta_stats(facebook), "instagram": meta_stats(instagram)}
     commenters = {"facebook": meta_comment(facebook), "instagram": meta_comment(instagram)}
     publishers = {
         "facebook": meta(facebook),
@@ -144,6 +152,12 @@ def publish(
         repo.record_run(**counts, duration_ms=int((time.monotonic() - started) * 1000), dry_run=False)
     if not dry_run and assist and cfg.nudge_hour is not None and hasattr(repo, "count_live_between"):
         _nudge_if_empty(repo, cfg, http, now)
+    if not dry_run and hasattr(repo, "recent_posted"):
+        try:
+            for line in stats.refresh(repo, fetchers, now):
+                typer.echo(line)
+        except StoreError as e:
+            typer.echo(f"Stats skipped: {e}")
     for line in report.lines:
         typer.echo(line)
     prefix = "Dry run: " if dry_run else ""
