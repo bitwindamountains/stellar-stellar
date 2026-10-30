@@ -1,7 +1,7 @@
 -- GitHub's 30-minute schedule really runs every few hours, so posts went out late. Every 10 minutes, if a post is
 -- due, start the publish workflow directly. Needs a fine-grained GitHub token (this repo, "Actions: read and
 -- write") in Vault: select vault.create_secret('<token>', 'postpilot_github_token');  Without it this does nothing.
-create extension if not exists pg_net;
+create extension if not exists pg_net with schema extensions;
 create extension if not exists pg_cron;
 
 create or replace function public.dispatch_due() returns void
