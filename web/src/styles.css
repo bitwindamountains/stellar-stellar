@@ -749,3 +749,36 @@ html { scroll-padding-top: 24px; }
   .needs { padding: 14px; border-radius: 24px; }
   .need { padding: 14px; }
 }
+
+/* Planned: a week strip of seven equal days on glass, then the selected day and the drafts. */
+.planned > * { flex: none; }
+.planned { display: flex; flex-direction: column; gap: 24px; width: 100%; max-width: 960px; }
+.wk { display: flex; align-items: center; gap: 2px; padding: 8px; border-radius: 28px; }
+.wk-days { flex: 1; min-width: 0; display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 2px; }
+.wk-day {
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; min-height: 64px; padding: 6px 0;
+  border: 0; border-radius: 18px; background: transparent; color: var(--ink); font: inherit; cursor: pointer;
+}
+.wk-day .mono { color: var(--ink-2); }
+.wk-day b { font-size: 18px; font-weight: 600; letter-spacing: -0.02em; }
+.wk-day[aria-pressed='true'] { background: linear-gradient(180deg, #3d5cf0, var(--accent)); color: #fff; }
+.wk-day[aria-pressed='true'] .mono { color: rgba(255, 255, 255, 0.85); }
+.wk-dot { width: 6px; height: 6px; border-radius: 50%; background: transparent; }
+.wk-dot.on { background: var(--accent); }
+.wk-day[aria-pressed='true'] .wk-dot.on { background: #fff; }
+.wk-nav {
+  flex: none; width: 36px; min-height: 44px; border: 0; border-radius: 14px; background: transparent; color: var(--ink-2);
+  font-size: 24px; line-height: 1; cursor: pointer;
+}
+.wk-nav:disabled { opacity: 0.3; cursor: not-allowed; }
+.add-day {
+  display: flex; align-items: center; min-height: 52px; padding: 0 20px; color: var(--accent-ink); font-weight: 500; text-decoration: none;
+  border-top: 1px solid rgba(21, 23, 27, 0.08);
+}
+@media (hover: hover) and (pointer: fine) { .wk-day:not([aria-pressed='true']):hover, .wk-nav:not(:disabled):hover { background: rgba(21, 23, 27, 0.06); } .add-day:hover { text-decoration: underline; } }
+@media (max-width: 767px) {
+  .planned { gap: 20px; }
+  .wk { padding: 6px 2px; border-radius: 24px; }
+  .wk-nav { width: 28px; }
+  .wk-day b { font-size: 16px; }
+}
