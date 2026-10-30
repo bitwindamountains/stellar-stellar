@@ -2,10 +2,11 @@ import { useCallback, useEffect, useMemo, useState, type CSSProperties } from 'r
 import { retryNow } from '../actions'
 import { groupHref, groupPosts, groupStatus, postLinks, type PostGroup } from '../groups'
 import { Arrow, Asteroids, Check, Constellation, FlightPath, PlatformMark } from '../icons'
-import { ago, awaitingHandoff, canRetry, chips, groupByDay, mergePosts, needsYou, statsLine, timeOf, weekStrip } from '../postView'
+import { ago, awaitingHandoff, canRetry, chips, flightStep, groupByDay, needsYou, statsLine, timeOf, weekStrip } from '../postView'
 import { reveal } from '../scroll'
 import { supabase } from '../supabase'
-import { ACCOUNT_SELECT, canPost, isConnected, needsFinishing, PLATFORM_CODES, sentByHand, type Account, type PlatformStats, type Post, type Run } from '../types'
+import { canPost, isConnected, needsFinishing, PLATFORM_CODES, sentByHand, type PlatformStats, type Post } from '../types'
+import { usePosts } from '../usePosts'
 
 type Filter = 'all' | 'auto' | 'hand' | 'needs' | 'posted'
 const NAMED = { facebook: 'Facebook', instagram: 'Instagram', x: 'X', tiktok: 'TikTok' } as Record<string, string>
@@ -23,59 +24,14 @@ function inFlight(g: PostGroup, now: number): boolean {
     || (r.status === 'posted' && !!r.posted_at && now - new Date(r.posted_at).getTime() < RECENT_MS))
 }
 
-function flightStep(g: PostGroup): string {
-  if (g.rows.some((r) => r.status === 'posting')) return 'Posting…'
-  if (g.rows.some((r) => ['scheduled', 'partial'].includes(r.status))) return 'Waiting for the next run'
-  return 'Posted'
-}
-
 export default function Queue() {
-  const [posts, setPosts] = useState<Post[]>([])
+  const { posts, accounts, run, error: loadError, loaded, reload: load } = usePosts()
   const [history, setHistory] = useState<Post[] | null>(null) // results for the Posted tab or a search
-  const [accounts, setAccounts] = useState<Account[]>([])
-  const [run, setRun] = useState<Run | null>(null)
   const [filter, setFilter] = useState<Filter>('all')
   const [search, setSearch] = useState('')
-  const [error, setError] = useState('')
-  const [loaded, setLoaded] = useState(false)
+  const [actionError, setError] = useState('')
+  const error = actionError || loadError
   const [retrying, setRetrying] = useState<number | null>(null)
-
-  const load = useCallback(() => {
-    // Last 2 days onward, plus undated drafts. ponytail: no paging; fine for a personal queue of a few hundred.
-    const since = new Date(Date.now() - 2 * 86_400_000).toISOString()
-    Promise.all([
-      supabase.from('posts').select('*').or(`publish_at.gte.${since},publish_at.is.null`).order('publish_at').limit(300),
-      supabase.from('accounts').select(ACCOUNT_SELECT).order('name'),
-      supabase.from('runs').select('*').order('ran_at', { ascending: false }).limit(1),
-      // Unresolved posts stay visible however old, so a failure can't quietly drop out of "Needs you".
-      // Newest first up to 1,000 (Supabase's default row cap); a personal queue won't get near that.
-      supabase.from('posts').select('*').in('status', ['failed', 'missed', 'partial', 'posting'])
-        .order('publish_at', { ascending: false }).limit(1000),
-      supabase.from('posts').select('*').neq('tg_message_id', '').is('assist_done_at', null)
-        .order('publish_at', { ascending: false }).limit(1000),
-    ]).then(([p, a, r, unresolved, handoffs]) => {
-      const failed = p.error ?? a.error ?? r.error ?? unresolved.error ?? handoffs.error
-      setError(failed ? failed.message : '')
-      setPosts(mergePosts(p.data, unresolved.data, handoffs.data))
-      setAccounts((a.data as Account[]) ?? [])
-      setRun(((r.data as Run[]) ?? [])[0] ?? null)
-      setLoaded(true)
-    })
-  }, [])
-  useEffect(load, [load])
-
-  // Live: reload shortly after any post or run changes (Realtime), and when the app comes back to the front.
-  useEffect(() => {
-    let timer = 0
-    const soon = () => { clearTimeout(timer); timer = window.setTimeout(load, 400) }
-    const channel = supabase.channel('queue')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'posts' }, soon)
-      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'runs' }, soon)
-      .subscribe()
-    const onShow = () => { if (document.visibilityState === 'visible') soon() }
-    document.addEventListener('visibilitychange', onShow)
-    return () => { clearTimeout(timer); document.removeEventListener('visibilitychange', onShow); supabase.removeChannel(channel) }
-  }, [load])
 
   // Posted tab and search look further back than the live queue, straight from the database.
   const query = search.trim().replace(/[%_\\]/g, '')
@@ -95,6 +51,7 @@ export default function Queue() {
 
   async function retry(num: number) {
     setRetrying(num)
+    setError('')
     const failed = await retryNow(num)
     setRetrying(null)
     if (failed) setError(failed)

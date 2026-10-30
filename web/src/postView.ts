@@ -1,3 +1,4 @@
+import type { PostGroup } from './groups'
 import { isDone, needsFinishing, PLATFORM_CODES, PLATFORM_NAMES, type Platform, type PlatformStats, type Post } from './types'
 
 export type ChipState = 'done' | 'queued' | 'assist' | 'retry'
@@ -142,4 +143,11 @@ export function ago(iso: string, now = new Date()): string {
   if (min < 60) return `${min} min ago`
   if (min < 1440) return `${Math.floor(min / 60)} h ago`
   return `${Math.floor(min / 1440)} d ago`
+}
+
+/** Where a post in flight is: being posted, waiting for the run that picks it up, or out. */
+export function flightStep(g: PostGroup): string {
+  if (g.rows.some((r) => r.status === 'posting')) return 'Posting…'
+  if (g.rows.some((r) => ['scheduled', 'partial'].includes(r.status))) return 'Waiting for the next run'
+  return 'Posted'
 }

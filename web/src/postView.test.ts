@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { ago, canRetry, chipState, chips, groupByDay, mediaWasRemoved, mergePosts, needsYou, statsLine, statusLabel, weekStrip } from './postView'
+import { ago, canRetry, chipState, chips, flightStep, groupByDay, mediaWasRemoved, mergePosts, needsYou, statsLine, statusLabel, weekStrip } from './postView'
 import { isDraft, needsFinishing, postedByApi, sentByHand, type Post } from './types'
 
 function post(over: Partial<Post>): Post {
@@ -137,5 +137,15 @@ describe('ago', () => {
     expect(ago('2026-10-30T11:55:00Z', now)).toBe('5 min ago')
     expect(ago('2026-10-30T09:00:00Z', now)).toBe('3 h ago')
     expect(ago('2026-10-28T12:00:00Z', now)).toBe('2 d ago')
+  })
+})
+
+describe('flightStep', () => {
+  const g = (...rows: Partial<Post>[]) => ({ key: 'k', lead: post(rows[0]), rows: rows.map((r, i) => post({ num: i + 1, ...r })) })
+  it('says where a post in flight is', () => {
+    expect(flightStep(g({ status: 'posted' }, { status: 'posting' }))).toBe('Posting…')
+    expect(flightStep(g({ status: 'scheduled' }))).toBe('Waiting for the next run')
+    expect(flightStep(g({ status: 'posted' }, { status: 'partial' }))).toBe('Waiting for the next run')
+    expect(flightStep(g({ status: 'posted' }))).toBe('Posted')
   })
 })
