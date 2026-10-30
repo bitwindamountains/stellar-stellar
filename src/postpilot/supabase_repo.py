@@ -78,6 +78,20 @@ class SupabaseRepository:
         ]
         return len(self._request("GET", "posts", params=params))
 
+    def recent_posted(self, since: datetime) -> list[Post]:
+        """Posts that went live since `since`, newest first. Call after load() (needs the accounts)."""
+        params = {
+            "select": "*",
+            "status": "eq.posted",
+            "posted_at": f"gte.{since.isoformat()}",
+            "order": "posted_at.desc",
+        }
+        rows = self._request("GET", "posts", params=params)
+        return [Post(row=r["num"], cells=_to_cells(r, self.accounts)) for r in rows]
+
+    def save_stats(self, num: int, stats: dict) -> None:
+        self._request("PATCH", "posts", params={"num": f"eq.{num}"}, json={"stats": stats})
+
     def tokens(self, account: str, platform: str) -> tuple[dict, str] | None:
         """A saved login's tokens (decrypted from Vault) and expiry ('' = never), or None if not connected."""
         rows = self._request(
