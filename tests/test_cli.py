@@ -290,3 +290,20 @@ def test_stats_store_error_keeps_exit_code_and_dry_run_skips(monkeypatch):
     assert calls == [["facebook", "instagram"]]
     assert invoke(monkeypatch, ["publish", "--dry-run"], StatsRepo(), env=env).exit_code == 0
     assert len(calls) == 1
+
+
+def test_stats_any_error_keeps_exit_code_and_prints_after_report(monkeypatch):
+    def fake_refresh(repo, fetchers, now):
+        raise ValueError("token abc in here")
+
+    monkeypatch.setattr(cli.stats, "refresh", fake_refresh)
+    env = {
+        "SUPABASE_URL": "https://x.supabase.co",
+        "SUPABASE_SERVICE_ROLE_KEY": "k",
+        "META_GRAPH_VERSION": "v23.0",
+        "GITHUB_ACTIONS": "true",
+    }
+    result = invoke(monkeypatch, ["publish"], StatsRepo(), env=env)
+    assert result.exit_code == 0 and "Stats skipped: ValueError" in result.output
+    assert "abc" not in result.output
+    assert result.output.index("posted,") < result.output.index("Stats skipped")

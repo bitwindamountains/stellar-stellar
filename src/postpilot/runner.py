@@ -93,7 +93,7 @@ def run(
             report.posted.append(post.row)
         elif sentinel == COMMENT_NOT_ADDED:
             why = f"Gave up after {post.get('attempts') or 0} attempt(s). {post.get('last_error')}".strip()
-            fields = {"status": "failed", "last_error": why}
+            fields = {"status": "failed", "last_error": "; ".join(filter(None, [why, _comment_notes(post)]))}
             report.failed.append(post.row)
         else:
             pending = [p for p in post.platforms if not post.done(p)]

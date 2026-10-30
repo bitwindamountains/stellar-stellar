@@ -122,8 +122,9 @@ def validate(post: Post, accounts: dict[str, Account]) -> list[str]:
         if INSTAGRAM in platforms:
             if _telegram_len(first) > IG_COMMENT_MAX:  # UTF-16 units, like JS .length
                 errors.append(f"First comment: Instagram allows at most {IG_COMMENT_MAX:,} characters")
-        by_hand = any(p in ASSISTED_PLATFORMS and not (account and account.by_api(p)) for p in platforms)
-        if by_hand and _telegram_len(first) + TELEGRAM_OVERHEAD > TELEGRAM_MESSAGE_MAX:
+        # Every assisted platform gets the comment in Telegram, connected TikTok drafts included.
+        assisted = any(p in ASSISTED_PLATFORMS for p in platforms)
+        if assisted and _telegram_len(first) + TELEGRAM_OVERHEAD > TELEGRAM_MESSAGE_MAX:
             errors.append("First comment too long for the phone handoff")
     if len(post.title_for("youtube")) > YOUTUBE_TITLE_MAX:
         errors.append(f"YouTube titles max {YOUTUBE_TITLE_MAX} characters")

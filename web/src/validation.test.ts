@@ -105,5 +105,10 @@ describe('X and connected logins (mirrors validation.py)', () => {
     expectError({ ...video, firstComment: 'x'.repeat(4037) }, 'First comment too long for the phone handoff')
     expect(validate(draft({ ...video, firstComment: 'x'.repeat(4036) }), true)).toEqual([])
     expect(validate(draft({ firstComment: 'x'.repeat(5000) }), true)).toEqual([])
+    // TikTok drafts get the comment block in Telegram too, even when TikTok is connected.
+    const tiktok = { ...video, platforms: ['tiktok' as const] }
+    expectError({ ...tiktok, account: linked, firstComment: 'x'.repeat(4037) }, 'First comment too long for the phone handoff')
+    expect(validate(draft({ ...tiktok, account: linked, firstComment: 'x'.repeat(4036) }), true)).toEqual([])
+    expectError({ ...tiktok, account: undefined, firstComment: 'x'.repeat(4037) }, 'First comment too long for the phone handoff')
   })
 })

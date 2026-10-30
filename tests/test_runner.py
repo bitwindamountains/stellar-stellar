@@ -459,6 +459,16 @@ def test_exhausted_comment_only_ends_posted():
     assert report.posted == [2] and not report.failed
 
 
+def test_exhausted_with_platform_left_fails_and_says_comment_is_by_hand():
+    cells = dict(status="partial", attempts="3", fb_post_id="P1", first_comment="hi", last_error="Meta down.")
+    repo = FakeRepository([row(platforms="facebook,instagram", **cells, **IMG)], ACCOUNTS)
+    report = go_c(repo, Platforms(), Comments(facebook=[]))
+    r = repo.row(2)
+    assert (r["status"], r["fb_comment_id"]) == ("failed", "not-added") and report.failed == [2]
+    want = "Gave up after 3 attempt(s). Meta down.; Comment not added on Facebook: add it by hand"
+    assert r["last_error"] == want
+
+
 def stuck(**cells):
     return row(
         status="posting",

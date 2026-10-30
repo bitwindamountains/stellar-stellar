@@ -216,7 +216,7 @@ export default function Composer({ num }: { num?: number }) {
       publish_at: status === 'scheduled' && mode === 'now' ? new Date().toISOString()
         : publishAt ? zonedToUtc(publishAt, tz) : null,
       caption,
-      ...(commentLocked ? {} : { first_comment: firstComment }),
+      ...(commentLocked ? {} : { first_comment: firstComment.trim() }),
       media_type: mediaType,
       media_urls: mediaUrl ? [mediaUrl] : [],
       link,
@@ -240,7 +240,8 @@ export default function Composer({ num }: { num?: number }) {
     }
     const added = active.filter((a) => !rowOf(a.id))
     if (added.length) {
-      const { error } = await supabase.from('posts').insert(added.map(fieldsFor))
+      // New rows always get the comment: the lock only protects rows that are already live.
+      const { error } = await supabase.from('posts').insert(added.map((a) => ({ ...fieldsFor(a), first_comment: firstComment.trim() })))
       if (error) failures.push(error.message)
     }
     const ok = !failures.length && !conflict
@@ -397,8 +398,9 @@ export default function Composer({ num }: { num?: number }) {
                   </span>
                   <textarea id="caption" className="input" value={caption} onChange={(e) => setCaption(e.target.value)} {...invalid('caption')} />
                   <label htmlFor="first-comment" className="legend">First comment <span style={{ fontWeight: 400, color: 'var(--muted)' }}>(optional)</span></label>
-                  <textarea id="first-comment" className="input" value={firstComment} readOnly={commentLocked} onChange={(e) => setFirstComment(e.target.value)} />
-                  <span style={{ fontSize: 13, color: 'var(--muted)' }}>
+                  <textarea id="first-comment" className="input" value={firstComment} readOnly={commentLocked} onChange={(e) => setFirstComment(e.target.value)}
+                    {...invalid('caption')} aria-describedby={shown('caption').length ? 'first-comment-hint err-caption' : 'first-comment-hint'} />
+                  <span id="first-comment-hint" style={{ fontSize: 13, color: 'var(--muted)' }}>
                     {commentLocked ? 'Already live: add or change the comment in Facebook/Instagram.'
                       : "Posted as a comment on Facebook and Instagram; copy it on your phone for the others. Instagram links aren't clickable."}
                   </span>
