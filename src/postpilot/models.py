@@ -21,6 +21,9 @@ PERMALINK_COLUMN = {
     TIKTOK: "tiktok_permalink",
 }
 COMMENT_COLUMN = {FACEBOOK: "fb_comment_id", INSTAGRAM: "ig_comment_id"}
+# Stored in the comment column when we give up, so a filled column always means: never comment again.
+COMMENT_NOT_ADDED = "not-added"  # certainly not posted (permanent, auth, or out of retries)
+COMMENT_UNCLEAR = "unclear"  # no clear answer: it may have been posted
 SENT_BY_HAND = (
     "telegram"  # TikTok's ID when it went out through Telegram: still done, never auto-posted later
 )
