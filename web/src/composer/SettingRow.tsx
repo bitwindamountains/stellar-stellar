@@ -22,7 +22,8 @@ export default function SettingRow({ name, icon, label, value, warnings = [], al
         <span className="s-value">{value}</span>
         <Chevron />
       </button>
-      <FieldError id={`err-${name}`} messages={warnings} alert={alert} />
+      {/* Re-keyed so the list mounts fresh with role="alert" and is announced when it turns into an alert. */}
+      <FieldError key={String(alert)} id={`err-${name}`} messages={warnings} alert={alert} />
     </div>
   )
 }
