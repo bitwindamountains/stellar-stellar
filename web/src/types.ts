@@ -45,6 +45,17 @@ export function isConnected(account: Account | undefined, c: Connection): boolea
   return !!account?.connections?.some((x) => x.platform === c)
 }
 
+export interface PlatformStats {
+  as_of: string
+  views?: number
+  reach?: number
+  likes?: number
+  comments?: number
+  shares?: number
+  top_comments?: { author: string; text: string; likes: number; at: string }[]
+}
+export type PostStats = Partial<Record<'facebook' | 'instagram', PlatformStats>>
+
 export interface Post {
   num: number
   account_id: number
@@ -52,6 +63,7 @@ export interface Post {
   platforms: Platform[]
   publish_at: string | null
   caption: string
+  first_comment: string
   media_type: MediaType
   media_urls: string[]
   link: string
@@ -62,6 +74,9 @@ export interface Post {
   fb_permalink: string
   ig_media_id: string
   ig_permalink: string
+  fb_comment_id: string // may hold the sentinels 'not-added' / 'unclear': not a real ID
+  ig_comment_id: string
+  stats: PostStats
   x_post_id: string
   x_permalink: string
   tiktok_id: string
