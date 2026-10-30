@@ -1,7 +1,7 @@
 import time
 from collections.abc import Callable
 
-from postpilot.graph import fetch_permalink
+from postpilot.graph import fetch_permalink, insight
 from postpilot.models import Account, PlatformError, Post, PublishResult
 
 
@@ -35,3 +35,23 @@ def publish(
         raise PlatformError("transient", "Instagram is still processing the image; will retry next run")
     media_id = graph.post(f"{account.ig_user_id}/media_publish", safe=False, creation_id=container)["id"]
     return PublishResult(media_id, fetch_permalink(graph, media_id, "permalink"))
+
+
+def stats(graph, media_id: str) -> dict:
+    data = graph.get(media_id, fields="like_count,comments_count")
+    out = {"likes": data["like_count"], "comments": data["comments_count"]}
+    for key in ("reach", "views"):
+        value = insight(graph, media_id, key)
+        if value is not None:
+            out[key] = value
+    raw = graph.get(f"{media_id}/comments", fields="text,username,like_count,timestamp", limit="50")
+    out["top_comments"] = [
+        {
+            "author": c.get("username", ""),
+            "text": c.get("text", ""),
+            "likes": c.get("like_count", 0),
+            "at": c.get("timestamp", ""),
+        }
+        for c in raw.get("data", [])
+    ]
+    return out
