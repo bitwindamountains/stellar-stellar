@@ -103,7 +103,7 @@ function NeedItem({ group: g, now, tz, accountOf, retrying, onRetry }: {
       <span className="need-meta mono">
         {g.rows.map((r) => r.platforms.map((p) => PLATFORM_CODES[p]).join(' · ')).join(' + ')} · {when}
       </span>
-      <a className="need-caption" href={groupHref(g.rows)}>{g.lead.caption || 'No caption'}</a>
+      <a className="need-caption" href={groupHref(g.rows)}><span>{g.lead.caption || 'No caption'}</span></a>
       {rows.map((r) => <p key={r.num} className="need-why">{who(r)}{why(r)}</p>)}
       <div className="need-actions">
         {rows.filter(awaitingHandoff).map((r) => (
