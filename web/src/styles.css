@@ -67,49 +67,132 @@ body:has(.auth)::before { background: radial-gradient(circle, rgba(255, 255, 255
   to { transform: translate3d(-3%, 4%, 0) rotate(-4deg) scale(1.02); }
 }
 
-.page { min-height: 100dvh; padding: 24px 24px calc(96px + env(safe-area-inset-bottom)); }
+.page { min-height: 100dvh; padding: 24px 24px calc(64px + env(safe-area-inset-bottom)); }
 .wrap { max-width: 1240px; margin: 0 auto; display: flex; flex-direction: column; gap: 64px; }
 
-/* Floating island nav: liquid glass that stays put while the page scrolls under it.
-   Layers: ::before refracts what's behind (SVG #lg-refract in index.html), ::after frosts and tints it and
-   carries the specular rim. Separate layers, so a browser without SVG backdrop filters still gets the frost. */
-.island {
-  position: sticky; top: 16px; z-index: 10;
-  align-self: center; display: flex; flex-wrap: wrap; justify-content: center; align-items: center; gap: 4px;
-  padding: 6px; border-radius: 999px;
+/* Liquid glass: a surface that floats over the sky and lets it show through. Two layers, so a browser
+   without SVG backdrop filters still gets the frost:
+   ::before refracts what's behind (SVG #lg-refract in index.html);
+   ::after  frosts and tints it (--glass-fill), with a specular sheen at the top and the light rim (--glass-rim).
+   Where blur isn't available, or less transparency is asked for, it turns solid (--glass-solid). */
+.glass {
+  --glass-fill: linear-gradient(180deg, rgba(255, 255, 255, 0.62), rgba(255, 255, 255, 0.42));
+  --glass-rim: rgba(255, 255, 255, 0.95);
+  --glass-blur: 12px;
+  --glass-solid: var(--card);
+  position: relative; isolation: isolate;
   box-shadow: 0 0 0 1px rgba(21, 23, 27, 0.07), 0 18px 40px -20px rgba(21, 23, 27, 0.3);
 }
-.island::before, .island::after {
+.glass::before, .glass::after {
   content: ''; position: absolute; inset: 0; z-index: -1; border-radius: inherit; pointer-events: none;
 }
-.island::before { backdrop-filter: url(#lg-refract); }
-.island::after {
-  background: linear-gradient(180deg, rgba(255, 255, 255, 0.42), rgba(255, 255, 255, 0.22));
-  backdrop-filter: blur(6px) saturate(200%) brightness(1.05); -webkit-backdrop-filter: blur(6px) saturate(200%) brightness(1.05);
+.glass::before { backdrop-filter: url(#lg-refract); }
+.glass::after {
+  background: radial-gradient(80% 60% at 30% 0%, rgba(255, 255, 255, 0.16), transparent 70%), var(--glass-fill);
+  backdrop-filter: blur(var(--glass-blur)) saturate(180%) brightness(1.05);
+  -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(180%) brightness(1.05);
   box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.95), /* light catching the top edge */
-    inset 0 -1px 1px rgba(255, 255, 255, 0.5),
-    inset 0 0 0 1px rgba(255, 255, 255, 0.35),
-    inset 0 -10px 20px -14px rgba(21, 23, 27, 0.12); /* thickness toward the bottom */
+    inset 0 1px 0 var(--glass-rim), /* light catching the top edge */
+    inset 0 -1px 1px rgba(255, 255, 255, 0.3),
+    inset 0 0 0 1px rgba(255, 255, 255, 0.14),
+    inset 0 -10px 20px -14px rgba(21, 23, 27, 0.14); /* thickness toward the bottom */
 }
-.island a, .island button {
-  display: flex; align-items: center; gap: 10px; min-height: 44px; padding: 0 18px; border: 0; border-radius: 999px;
-  background: transparent; color: var(--ink); text-decoration: none; font-size: 14px; font-weight: 500; cursor: pointer;
-  transition: background-color 150ms ease, transform 140ms var(--ease-out);
+
+/* Main nav: night glass, a piece of the sky with a few stars caught in it. Phone: a floating capsule at the
+   bottom with the raised (+). From 900px: a sidebar. Text on it stays light (AA on the darkest and lightest
+   thing that can scroll under it). */
+.nav {
+  --glass-fill:
+    radial-gradient(circle, rgba(255, 255, 255, 0.42) 0.6px, transparent 1.1px) 7px 9px / 34px 34px,
+    radial-gradient(circle, rgba(255, 255, 255, 0.22) 0.5px, transparent 1px) 23px 26px / 47px 47px,
+    linear-gradient(180deg, rgba(28, 34, 68, 0.64), rgba(13, 16, 34, 0.74));
+  --glass-rim: rgba(255, 255, 255, 0.26);
+  --glass-blur: 18px;
+  --glass-solid: #151a34;
+  position: fixed; z-index: 20; left: 12px; right: 12px; bottom: calc(10px + env(safe-area-inset-bottom));
+  max-width: 480px; margin: 0 auto; height: 66px; padding: 0 8px; border-radius: 999px;
+  display: flex; align-items: center; gap: 2px; color: #f4f5fa;
+  box-shadow: 0 0 0 1px rgba(10, 13, 30, 0.5), 0 22px 44px -18px rgba(10, 13, 30, 0.65);
 }
-.island a:active, .island button:active { transform: scale(0.97); }
-.island a[aria-current='page'] { background: var(--ink); color: #fff; font-weight: 500; }
-.island .brand { color: var(--ink); font-weight: 600; font-size: 15px; letter-spacing: -0.01em; padding-left: 10px; }
-/* Sign out: set apart by a divider at the end of the nav; armed (first tap) it turns amber and asks again. */
-.island .signout {
-  position: relative; margin-left: 13px; color: var(--ink-2);
-  background: rgba(255, 255, 255, 0.72); box-shadow: inset 0 0 0 1px rgba(21, 23, 27, 0.14);
+.nav :focus-visible { outline-color: #b9c6ff; }
+.nav a {
+  flex: 1 1 0; min-width: 44px; height: 54px; display: flex; flex-direction: column; align-items: center;
+  justify-content: center; gap: 4px; border-radius: 999px; color: rgba(232, 235, 250, 0.86); text-decoration: none;
+  font-size: 11px; font-weight: 500; letter-spacing: 0.01em; white-space: nowrap;
+  transition: color 150ms ease, background-color 150ms ease, transform 140ms var(--ease-out);
 }
-.island .signout::before {
-  content: ''; position: absolute; left: -9px; top: 12px; bottom: 12px; width: 1px; background: rgba(21, 23, 27, 0.14);
+.nav a:active { transform: scale(0.97); }
+.nav svg { width: 22px; height: 22px; flex: none; }
+.nav a[aria-current='page'] { color: #fff; background: rgba(255, 255, 255, 0.1); box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.12); }
+.nav a[aria-current='page'] > svg { color: #c3ceff; filter: drop-shadow(0 0 6px rgba(140, 165, 255, 0.7)); }
+.nav .nav-brand { display: none; }
+/* The (+) rises out of the bar: a small planet of the accent blue, lit from above. */
+.nav .nav-new { flex: 0 0 64px; height: 64px; margin-top: -30px; background: none; box-shadow: none; }
+.nav-orb {
+  width: 56px; height: 56px; flex: none; border-radius: 50%; display: grid; place-items: center; color: #fff;
+  background:
+    radial-gradient(70% 55% at 50% 15%, rgba(255, 255, 255, 0.38), transparent 70%),
+    linear-gradient(180deg, #4f6cf6, var(--accent) 60%, #1f37b0);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.45), inset 0 -3px 8px rgba(10, 20, 80, 0.45),
+    0 0 0 1px rgba(255, 255, 255, 0.16), 0 12px 24px -8px rgba(43, 75, 216, 0.9), 0 0 28px -6px rgba(120, 150, 255, 0.6);
+  transition: transform 140ms var(--ease-out);
 }
-.island .signout-short { display: none; }
-.island .signout.armed { background: var(--warn-tint); color: var(--warn-ink); box-shadow: inset 0 0 0 1px rgba(181, 71, 8, 0.3); }
+.nav-orb svg { width: 24px; height: 24px; stroke-width: 2; }
+.nav .nav-new .nav-label { display: none; }
+.nav .nav-new[aria-current='page'] .nav-orb { box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.45), 0 0 0 2px #c3ceff, 0 12px 24px -8px rgba(43, 75, 216, 0.9); }
+
+/* Sign out: two taps; armed (first tap) it turns amber and asks again. Phone: a small glass button top right. */
+.signout {
+  display: flex; align-items: center; justify-content: center; gap: 10px; min-width: 44px; min-height: 44px;
+  padding: 0 14px; border: 0; border-radius: 999px; color: rgba(226, 230, 248, 0.82); background: rgba(255, 255, 255, 0.07);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.12); font-size: 13px; font-weight: 500; cursor: pointer;
+  transition: background-color 150ms ease, color 150ms ease, transform 140ms var(--ease-out);
+}
+.signout:active { transform: scale(0.97); }
+.signout-short { display: none; }
+.signout.armed { background: var(--warn-tint); color: var(--warn-ink); box-shadow: inset 0 0 0 1px rgba(181, 71, 8, 0.3); }
+
+@media (max-width: 899px) {
+  .app { padding-bottom: calc(76px + env(safe-area-inset-bottom)); } /* the bar never covers the end of a page */
+  .app.composing { padding-bottom: 0; }
+  .composing .nav { display: none; }
+  .nav .signout {
+    position: fixed; top: calc(12px + env(safe-area-inset-top)); right: 12px; padding: 0 12px; gap: 6px;
+    background: rgba(15, 19, 38, 0.58); backdrop-filter: blur(14px) saturate(180%); -webkit-backdrop-filter: blur(14px) saturate(180%);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.22), 0 0 0 1px rgba(255, 255, 255, 0.1), 0 10px 24px -12px rgba(5, 7, 20, 0.6);
+  }
+  .nav .signout.armed { background: var(--warn-tint); }
+  .signout:not(.armed) .signout-text, .signout-long { display: none; }
+  .signout-short { display: inline; }
+}
+@media (min-width: 900px) {
+  .app { padding-left: 248px; }
+  .nav {
+    left: 16px; top: 16px; bottom: 16px; right: auto; width: 216px; height: auto; max-width: none; margin: 0;
+    flex-direction: column; align-items: stretch; gap: 2px; padding: 14px 10px 10px; border-radius: 28px;
+  }
+  .nav a { flex: none; flex-direction: row; justify-content: flex-start; gap: 12px; height: 46px; padding: 0 14px; border-radius: 14px; font-size: 14px; letter-spacing: 0; }
+  .nav .nav-brand { display: flex; margin-bottom: 14px; padding: 0 12px; color: #fff; font-size: 16px; font-weight: 600; letter-spacing: -0.01em; }
+  .nav .nav-brand svg { color: #c3ceff; }
+  .nav .nav-new {
+    flex: none; height: 50px; margin: 10px 0; padding: 0 6px 0 18px; flex-direction: row-reverse; justify-content: space-between;
+    border-radius: 999px; color: #fff; background: linear-gradient(180deg, #3d5cf0, var(--accent));
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.28), 0 12px 24px -12px rgba(43, 75, 216, 0.9);
+  }
+  .nav .nav-new .nav-label { display: inline; font-size: 14px; }
+  .nav-orb { width: 38px; height: 38px; background: rgba(255, 255, 255, 0.16); box-shadow: none; }
+  .nav-orb svg { width: 16px; height: 16px; }
+  .nav .nav-new[aria-current='page'] { box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.28), 0 0 0 2px #c3ceff; }
+  .nav .nav-new[aria-current='page'] .nav-orb { box-shadow: none; }
+  .nav .signout { margin-top: auto; justify-content: flex-start; height: 46px; padding: 0 14px; border-radius: 14px; }
+}
+
+/* Shared night sky behind every screen: dark at the top, fading into the page by ~40vh. Fixed, so scrolling
+   never repaints it. Uses the same aurora, stars and grain as the .sky headers. */
+.starfield {
+  position: fixed; inset: 0 0 auto; height: 46vh; z-index: -1; overflow: hidden; pointer-events: none; isolation: isolate;
+  -webkit-mask-image: linear-gradient(180deg, #000 50%, transparent); mask-image: linear-gradient(180deg, #000 50%, transparent);
+}
 
 /* Headings */
 .hero { display: flex; flex-direction: column; gap: 20px; max-width: 760px; }
@@ -123,14 +206,16 @@ h2 { margin: 0; font-size: 18px; font-weight: 600; letter-spacing: -0.01em; }
   --accent-ink: #b9c6ff; --muted: rgba(232, 235, 248, 0.72); --pad: clamp(28px, 5vw, 56px);
   position: relative; isolation: isolate; overflow: hidden; max-width: none; padding: var(--pad);
   border-radius: 36px; color: #f4f5fa;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.14), 0 0 0 1px rgba(15, 19, 38, 0.6), 0 50px 90px -50px rgba(16, 20, 42, 0.7);
+}
+.sky, .starfield {
   background:
     radial-gradient(60% 90% at 0% 0%, rgba(43, 75, 216, 0.55), transparent 70%),
     radial-gradient(50% 80% at 100% 100%, rgba(232, 146, 96, 0.36), transparent 70%),
     linear-gradient(160deg, #181d3a, #0f1326);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.14), 0 0 0 1px rgba(15, 19, 38, 0.6), 0 50px 90px -50px rgba(16, 20, 42, 0.7);
 }
-.sky::before, .sky::after { content: ''; position: absolute; z-index: -1; pointer-events: none; }
-.sky::before {
+.sky::before, .sky::after, .starfield::before, .starfield::after { content: ''; position: absolute; z-index: -1; pointer-events: none; }
+.sky::before, .starfield::before {
   inset: -40%;
   background:
     radial-gradient(22% 30% at 62% 38%, rgba(120, 170, 235, 0.32), transparent 70%),
@@ -138,7 +223,7 @@ h2 { margin: 0; font-size: 18px; font-weight: 600; letter-spacing: -0.01em; }
     radial-gradient(18% 20% at 72% 66%, rgba(242, 164, 119, 0.24), transparent 70%);
   animation: drift 32s ease-in-out infinite alternate; will-change: transform;
 }
-.sky::after {
+.sky::after, .starfield::after {
   inset: 0;
   background:
     radial-gradient(circle, rgba(255, 255, 255, 0.55) 0.7px, transparent 1.2px) 0 0 / 46px 46px,
@@ -213,10 +298,10 @@ h2 { margin: 0; font-size: 18px; font-weight: 600; letter-spacing: -0.01em; }
 }
 @keyframes fade-out { to { opacity: 0; } }
 /* Pointer parallax (App sets --px/--py on desktop): stars, rocks and route shift by different amounts. */
-.sky::after { inset: -12px; translate: calc(var(--px, 0) * -5px) calc(var(--py, 0) * -4px); }
+.sky::after, .starfield::after { inset: -12px; translate: calc(var(--px, 0) * -5px) calc(var(--py, 0) * -4px); }
 .belt { translate: calc(var(--px, 0) * -16px) calc(var(--py, 0) * -10px); }
 .flight { translate: calc(var(--px, 0) * 9px) calc(var(--py, 0) * 6px); }
-.sky::after, .belt, .flight { transition: translate 700ms var(--ease-out); }
+.sky::after, .starfield::after, .belt, .flight { transition: translate 700ms var(--ease-out); }
 
 /* Double-bezel: outer tray + inner core */
 /* The tray is frosted glass over the backdrop; the core sits on it like a machined plate. */
@@ -350,9 +435,9 @@ button.chip:active { transform: scale(0.96); }
 
 /* Hover only where a real pointer exists: taps on phones would leave these stuck on. */
 @media (hover: hover) and (pointer: fine) {
-  .island a:not([aria-current='page']):hover, .island button:hover { background: rgba(21, 23, 27, 0.05); }
-  .island .signout:not(.armed):hover { background: #fff; color: var(--ink); }
-  .island .signout.armed:hover { background: var(--warn-tint); }
+  .nav a:not([aria-current='page']):not(.nav-new):not(.nav-brand):hover { background: rgba(255, 255, 255, 0.07); color: #fff; }
+  .nav .nav-new:hover { background: linear-gradient(180deg, #3352e6, #2441c4); }
+  .signout:not(.armed):hover { background: rgba(255, 255, 255, 0.12); color: #fff; }
   .row:hover { background: #f7f7f3; }
   .btn:not(:disabled):hover .knob { transform: translate(2px, -1px); }
   .step:not(:disabled):hover { background: #fafaf7; }
@@ -413,25 +498,11 @@ button.chip:active { transform: scale(0.96); }
 @media (prefers-reduced-motion: reduce) {
   .rise, .rows > li { animation: fade 160ms ease both; animation-delay: 0ms !important; }
   .btn:active, .row:active, .tile:active, .step:active, .filters button:active,
-  .island a:active, .island button:active, button.chip:active { transform: none; }
+  .nav a:active, .signout:active, button.chip:active { transform: none; }
 }
 
 @media (max-width: 767px) {
-  .page { padding: 16px 16px calc(112px + env(safe-area-inset-bottom)); }
-  /* Phone: the island becomes a bottom tab bar within thumb reach. */
-  .island {
-    position: fixed; z-index: 10; left: 12px; right: 12px; bottom: calc(12px + env(safe-area-inset-bottom));
-    top: auto; flex-wrap: nowrap; justify-content: space-between;
-  }
-  .island .brand { display: none; }
-  /* Phone: an icon at the end of the tab bar; armed it asks "Sure?". Room comes from dropping New post's knob. */
-  .island .signout { flex: none; gap: 6px; padding: 0 13px; margin-left: 9px; }
-  .island .signout::before { left: -7px; }
-  .island .signout:not(.armed) .signout-text, .island .signout-long { display: none; }
-  .island .signout-short { display: inline; }
-  .island .btn.primary .knob { display: none; }
-  .island a { flex: 1; justify-content: center; padding: 0 10px; }
-  .island .btn.primary { flex: 1.4; padding: 0 12px; white-space: nowrap; }
+  .page { padding: 16px 16px calc(32px + env(safe-area-inset-bottom)); }
   .filters { scrollbar-width: none; align-self: stretch; }
   .row {
     grid-template-columns: 56px minmax(0, 1fr); grid-template-areas: 'thumb time' 'thumb body' 'pill pill';
@@ -473,24 +544,29 @@ button.chip:active { transform: scale(0.96); }
 }
 
 /* Glass falls back to solid when people ask for less transparency or more contrast. */
+@supports not (backdrop-filter: blur(1px)) {
+  .glass::before { display: none; }
+  .glass::after { background: var(--glass-solid); }
+}
 @media (prefers-reduced-transparency: reduce) {
-  .island::before { backdrop-filter: none; }
-  .island::after { background: #fff; backdrop-filter: none; -webkit-backdrop-filter: none; }
+  .glass::before { display: none; }
+  .glass::after { background: var(--glass-solid); backdrop-filter: none; -webkit-backdrop-filter: none; }
+  .nav .signout { background: #151a34; backdrop-filter: none; -webkit-backdrop-filter: none; }
   .tray { background: #e9e9e4; backdrop-filter: none; -webkit-backdrop-filter: none; }
 }
 @media (prefers-contrast: more) {
-  body::before, body::after, .sky::before, .sky::after, .belt { display: none; }
+  body::before, body::after, .sky::before, .sky::after, .belt, .starfield { display: none; }
   .sky { background: #0f1326; }
   html:has(.auth) { background: var(--ground); }
   .auth .flight { display: none; }
   :root { --muted: #3b3f46; --hair: rgba(21, 23, 27, 0.4); }
-  .island { box-shadow: 0 0 0 1px var(--ink); }
-  .island::before { backdrop-filter: none; }
-  .island::after { background: #fff; backdrop-filter: none; -webkit-backdrop-filter: none; }
+  .glass { box-shadow: 0 0 0 1px var(--ink); }
+  .glass::before { display: none; }
+  .glass::after { background: var(--glass-solid); backdrop-filter: none; -webkit-backdrop-filter: none; }
   .tray, .step, .week-day, .chip.queued, .pill.scheduled, .pill.draft { box-shadow: 0 0 0 1px rgba(21, 23, 27, 0.5); }
 }
 @media (prefers-reduced-motion: reduce) {
-  .skeleton, body::after, .sky::before { animation: none; }
+  .skeleton, body::after, .sky::before, .starfield::before { animation: none; }
   .skeleton { opacity: 0.7; }
   .contrail { animation: none; stroke-dasharray: none; }
   /* Rocks hold still where the negative delays left them, scattered across the sky. */
@@ -533,7 +609,7 @@ button.chip:active { transform: scale(0.96); }
 @media (max-width: 767px) {
   /* Post now / Schedule stay in thumb reach above the tab bar. */
   .actions {
-    position: sticky; bottom: calc(84px + env(safe-area-inset-bottom)); z-index: 5;
+    position: sticky; bottom: calc(12px + env(safe-area-inset-bottom)); z-index: 5;
     margin: 0 -10px; padding: 10px; border-radius: 24px; background: rgba(255, 255, 255, 0.92);
     box-shadow: 0 12px 30px -16px rgba(21, 23, 27, 0.35); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px);
   }
@@ -588,9 +664,8 @@ button.week-day:active { transform: scale(0.97); }
 }
 
 /* Sticky bars never hide the focused field: scrolling into view leaves room for them. */
-html { scroll-padding-top: 96px; }
+html { scroll-padding-top: 24px; }
 @media (max-width: 767px) { html { scroll-padding-top: 16px; scroll-padding-bottom: 180px; } }
-.island .signout { min-width: 44px; justify-content: center; }
 /* Full-row links in the Queue sidebar and "Going out": easy to hit with a thumb. */
 .side-links { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; }
 .side-links a { display: flex; align-items: center; justify-content: space-between; gap: 12px; min-height: 44px; color: var(--ink); text-decoration: none; font-size: 14px; }

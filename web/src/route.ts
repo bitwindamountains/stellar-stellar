@@ -23,3 +23,12 @@ export function takeQuery(): URLSearchParams {
 export function go(path: string): void {
   window.location.hash = path
 }
+
+// The tab to go back to after a task screen (composer, post detail). Storage can be blocked (private mode).
+const TAB_KEY = 'pp-last-tab'
+export function rememberTab(path: string): void {
+  try { sessionStorage.setItem(TAB_KEY, path) } catch { /* not remembered: back goes to Today */ }
+}
+export function lastTab(): string {
+  try { return sessionStorage.getItem(TAB_KEY) ?? '/' } catch { return '/' }
+}
