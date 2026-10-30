@@ -125,3 +125,26 @@ def test_tiktok_draft_is_labelled_and_its_video_not_resent():
     assert [c[0] for c in calls] == ["sendMessage", "sendMessage"]  # the video is already in TikTok's inbox
     assert "TikTok (video is in your TikTok inbox)" in calls[0][1]["text"]
     assert "<pre>Hi</pre>" in calls[1][1]["text"]
+
+
+def _assist_calls(**cells):
+    calls = []
+
+    def record(request):
+        calls.append(json.loads(request.content))
+        return ok(len(calls))
+
+    http = httpx.Client(transport=httpx.MockTransport(record))
+    post = Post(row=7, cells={"caption": "Ube latte", **cells})
+    send_assist(http, "T", "C", post, ["tiktok"])
+    return calls
+
+
+def test_assist_sends_first_comment():
+    calls = _assist_calls(first_comment="  Link in bio <3  ")
+    assert calls[-1]["text"] == "<b>First comment</b>\n<pre>Link in bio &lt;3</pre>"
+    assert calls[-1]["parse_mode"] == "HTML"
+
+
+def test_assist_without_comment_unchanged():
+    assert len(_assist_calls(first_comment="   ")) == len(_assist_calls()) == 2

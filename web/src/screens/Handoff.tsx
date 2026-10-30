@@ -123,6 +123,7 @@ export default function Handoff({ num }: { num: number }) {
               The video is in your TikTok inbox. Open TikTok, tap the notification, paste the caption and post.</p>}
             {titleFor(variants, p) && copyButton(`${p}-title`, 'Copy title', titleFor(variants, p))}
             {textOf(p) && copyButton(`${p}-text`, 'Copy caption', textOf(p))}
+            {post.first_comment && copyButton(`${p}-comment`, 'Copy comment', post.first_comment)}
             {OPEN_URL[p] && <a href={isDraft(post, p) ? 'https://www.tiktok.com/' : OPEN_URL[p]} target="_blank" rel="noopener" className="step">Open {PLATFORM_NAMES[p]}</a>}
           </li>
         ))}

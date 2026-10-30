@@ -22,6 +22,7 @@ TLDS += "|ph|sg|my|jp|us|uk|ca|au"
 URL = re.compile(rf"https?://\S+|\b(?:[a-z0-9-]+\.)+(?:{TLDS})\b(?:/\S*)?", re.IGNORECASE)
 IG_CAPTION_MAX = 2200
 IG_HASHTAGS_MAX = 30
+IG_COMMENT_MAX = 2200  # Meta documents no comment limits; the caption limit is the safe bound
 TELEGRAM_MESSAGE_MAX = 4096
 TELEGRAM_OVERHEAD = 60  # platform label line and title label (Telegram counts text after parsing tags)
 NON_JPEG = (".png", ".webp", ".gif", ".heic", ".heif", ".avif", ".bmp", ".tif", ".tiff", ".svg")
@@ -116,6 +117,15 @@ def validate(post: Post, accounts: dict[str, Account]) -> list[str]:
         if size > TELEGRAM_MESSAGE_MAX:
             over = size - TELEGRAM_MESSAGE_MAX
             errors.append(f"{p} caption too long for the Telegram assist: shorten it by {over:,} characters")
+    first = post.get("first_comment")
+    if first:
+        if INSTAGRAM in platforms:
+            if _telegram_len(first) > IG_COMMENT_MAX:  # UTF-16 units, like JS .length
+                errors.append(f"First comment: Instagram allows at most {IG_COMMENT_MAX:,} characters")
+        # Every assisted platform gets the comment in Telegram, connected TikTok drafts included.
+        assisted = any(p in ASSISTED_PLATFORMS for p in platforms)
+        if assisted and _telegram_len(first) + TELEGRAM_OVERHEAD > TELEGRAM_MESSAGE_MAX:
+            errors.append("First comment too long for the phone handoff")
     if len(post.title_for("youtube")) > YOUTUBE_TITLE_MAX:
         errors.append(f"YouTube titles max {YOUTUBE_TITLE_MAX} characters")
     return errors

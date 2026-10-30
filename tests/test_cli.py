@@ -6,6 +6,7 @@ from typer.testing import CliRunner
 
 from postpilot import cli
 from postpilot.cli import app
+from postpilot.runner import Report
 
 ENV = {"GOOGLE_SHEET_ID": "s", "GOOGLE_SERVICE_ACCOUNT_FILE": "f", "META_GRAPH_VERSION": "v23.0"}
 ACCOUNTS = [{"account": "main", "fb_page_id": "PAGE", "ig_user_id": "IG", "token_env": "T"}]
@@ -256,3 +257,61 @@ def test_failed_refresh_is_not_repeated_in_the_same_run(monkeypatch):
         with pytest.raises(cli.PlatformError):
             token(account(connected={"x"}), "x")
     assert calls == ["R1"]
+
+
+def test_publish_passes_meta_commenters(monkeypatch):
+    seen = {}
+
+    def fake_run(*args, **kwargs):
+        seen.update(kwargs)
+        return Report()
+
+    monkeypatch.setattr(cli, "run", fake_run)
+    assert invoke(monkeypatch, ["publish", "--dry-run"], FakeRepository([], ACCOUNTS)).exit_code == 0
+    assert set(seen["commenters"]) == {"facebook", "instagram"}
+
+
+class StatsRepo(NudgeRepo):
+    def __init__(self):
+        super().__init__(1)
+
+    def recent_posted(self, since):
+        return []
+
+
+def test_stats_store_error_keeps_exit_code_and_dry_run_skips(monkeypatch):
+    calls = []
+
+    def fake_refresh(repo, fetchers, now):
+        calls.append(sorted(fetchers))
+        raise cli.StoreError("down")
+
+    monkeypatch.setattr(cli.stats, "refresh", fake_refresh)
+    env = {
+        "SUPABASE_URL": "https://x.supabase.co",
+        "SUPABASE_SERVICE_ROLE_KEY": "k",
+        "META_GRAPH_VERSION": "v23.0",
+        "GITHUB_ACTIONS": "true",
+    }
+    result = invoke(monkeypatch, ["publish"], StatsRepo(), env=env)
+    assert result.exit_code == 0 and "Stats skipped: down" in result.output
+    assert calls == [["facebook", "instagram"]]
+    assert invoke(monkeypatch, ["publish", "--dry-run"], StatsRepo(), env=env).exit_code == 0
+    assert len(calls) == 1
+
+
+def test_stats_any_error_keeps_exit_code_and_prints_after_report(monkeypatch):
+    def fake_refresh(repo, fetchers, now):
+        raise ValueError("token abc in here")
+
+    monkeypatch.setattr(cli.stats, "refresh", fake_refresh)
+    env = {
+        "SUPABASE_URL": "https://x.supabase.co",
+        "SUPABASE_SERVICE_ROLE_KEY": "k",
+        "META_GRAPH_VERSION": "v23.0",
+        "GITHUB_ACTIONS": "true",
+    }
+    result = invoke(monkeypatch, ["publish"], StatsRepo(), env=env)
+    assert result.exit_code == 0 and "Stats skipped: ValueError" in result.output
+    assert "abc" not in result.output
+    assert result.output.index("posted,") < result.output.index("Stats skipped")

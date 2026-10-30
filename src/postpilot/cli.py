@@ -5,7 +5,7 @@ from datetime import UTC, datetime
 import httpx
 import typer
 
-from postpilot import facebook, instagram, oauth, telegram, tiktok, x
+from postpilot import facebook, instagram, oauth, stats, telegram, tiktok, x
 from postpilot.config import Config, ConfigError, load_config
 from postpilot.graph import GraphClient
 from postpilot.models import DEFAULT_TIMEZONE, PlatformError, StoreError
@@ -102,6 +102,24 @@ def publish(
 
         return publish_one
 
+    def meta_comment(module):
+        def comment_one(post, account, object_id):
+            graph = GraphClient(cfg.meta_graph_version, token(account, "meta"), http=http)
+            return module.comment(graph, object_id, post.get("first_comment"))
+
+        return comment_one
+
+    stats_http = httpx.Client(timeout=10)  # stats must not stall the run: short timeout, no retries
+
+    def meta_stats(module):
+        def stats_one(post, account, object_id):
+            graph = GraphClient(cfg.meta_graph_version, token(account, "meta"), http=stats_http, attempts=1)
+            return module.stats(graph, object_id)
+
+        return stats_one
+
+    fetchers = {"facebook": meta_stats(facebook), "instagram": meta_stats(instagram)}
+    commenters = {"facebook": meta_comment(facebook), "instagram": meta_comment(instagram)}
     publishers = {
         "facebook": meta(facebook),
         "instagram": meta(instagram),
@@ -127,6 +145,7 @@ def publish(
             cfg,
             now,
             dry_run=dry_run,
+            commenters=commenters,
         )
     except StoreError as e:
         raise _fail(f"Store error: {e}") from None
@@ -142,6 +161,14 @@ def publish(
         f"{prefix}{len(report.posted)} posted, {len(report.partial)} retrying, "
         f"{len(report.failed)} failed, {len(report.missed)} missed."
     )
+    if not dry_run and hasattr(repo, "recent_posted"):
+        try:
+            for line in stats.refresh(repo, fetchers, now):
+                typer.echo(line)
+        except StoreError as e:
+            typer.echo(f"Stats skipped: {e}")
+        except Exception as e:  # stats never change the exit code; no message text (it can hold a token)
+            typer.echo(f"Stats skipped: {type(e).__name__}")
     if report.failed or report.missed:
         raise typer.Exit(1)
 

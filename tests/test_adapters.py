@@ -108,3 +108,199 @@ def test_fb_and_ig_use_their_own_text():
         sleep=lambda s: None,
     )
     assert g.calls[0][2]["caption"] == "IG only"
+
+
+def test_comment_posts_to_comments_edge_and_returns_id():
+    g = FakeGraph([{"id": "C1"}, {"id": "C2"}])
+    assert facebook.comment(g, "PAGE_1", "hi") == "C1"
+    assert instagram.comment(g, "MEDIA", "hi") == "C2"
+    assert g.calls == [
+        ("POST", "PAGE_1/comments", {"message": "hi"}, False),
+        ("POST", "MEDIA/comments", {"message": "hi"}, False),
+    ]
+
+
+def test_comment_timeout_is_unknown_not_retried():
+    import httpx
+
+    from postpilot.graph import GraphClient
+
+    calls = []
+
+    def boom(r):
+        calls.append(r)
+        raise httpx.ReadTimeout("timed out", request=r)
+
+    g = GraphClient("v1", "T", http=httpx.Client(transport=httpx.MockTransport(boom)), sleep=lambda s: None)
+    with pytest.raises(PlatformError) as e:
+        instagram.comment(g, "MEDIA", "hi")
+    assert e.value.kind == "unknown" and len(calls) == 1
+    assert calls[0].url.path.endswith("/MEDIA/comments") and b"message=hi" in calls[0].content
+
+
+def _routed(routes):
+    """FakeGraph-free: route by (path, metric) -> dict or PlatformError."""
+
+    class G:
+        def get(self, path, **params):
+            r = routes[(path, params.get("metric"))]
+            if isinstance(r, Exception):
+                raise r
+            return r
+
+    return G()
+
+
+def _ig_routes():
+    ins = lambda n, v: {"data": [{"name": n, "values": [{"value": v}]}]}  # noqa: E731
+    return {
+        ("M", None): {"like_count": 5, "comments_count": 2},
+        ("M/insights", "reach"): ins("reach", 100),
+        ("M/insights", "views"): ins("views", 150),
+        ("M/comments", None): {
+            "data": [
+                {"text": "nice", "username": "bob", "like_count": 3, "timestamp": "2026-01-01T00:00:00+0000"}
+            ]
+        },
+    }
+
+
+IG_COMMENT = {"author": "bob", "text": "nice", "likes": 3, "at": "2026-01-01T00:00:00+0000"}
+
+
+def test_ig_stats_happy_path():
+    assert instagram.stats(_routed(_ig_routes()), "M") == {
+        "likes": 5, "comments": 2, "reach": 100, "views": 150, "top_comments": [IG_COMMENT],
+    }  # fmt: skip
+
+
+def test_ig_stats_retired_metric_only_loses_itself():
+    routes = _ig_routes()
+    routes[("M/insights", "views")] = PlatformError("permanent", "Meta rejected the post: x (code 100)")
+    out = instagram.stats(_routed(routes), "M")
+    assert "views" not in out and out["reach"] == 100 and out["likes"] == 5 and out["top_comments"]
+
+
+def _fb_routes(shares=True):
+    ins = lambda n, v: {"data": [{"name": n, "values": [{"value": v}]}]}  # noqa: E731
+    post_fields = {
+        "reactions": {"data": [], "summary": {"total_count": 7}},
+        "comments": {"data": [], "summary": {"total_count": 1}},
+    }
+    if shares:
+        post_fields["shares"] = {"count": 4}
+    return {
+        ("P", None): post_fields,
+        ("P/insights", "post_media_view"): ins("post_media_view", 90),
+        ("P/insights", "post_total_media_view_unique"): ins("post_total_media_view_unique", 60),
+        ("P/comments", None): {
+            "data": [{"from": {"name": "Ann"}, "message": "hi", "like_count": 1, "created_time": "T"}]
+        },
+    }
+
+
+def test_fb_stats_happy_path_and_no_shares_key_when_absent():
+    out = facebook.stats(_routed(_fb_routes()), "P")
+    assert out == {
+        "likes": 7, "comments": 1, "shares": 4, "views": 90, "reach": 60,
+        "top_comments": [{"author": "Ann", "text": "hi", "likes": 1, "at": "T"}],
+    }  # fmt: skip
+    assert "shares" not in facebook.stats(_routed(_fb_routes(shares=False)), "P")
+
+
+def test_stats_fields_error_propagates():
+    routes = _ig_routes()
+    routes[("M", None)] = PlatformError("auth", "x")
+    with pytest.raises(PlatformError):
+        instagram.stats(_routed(routes), "M")
+
+
+# --- real GraphClient + MockTransport: asserts the exact request params -------------------------
+
+
+def _client(routes):
+    """routes: {(path, metric|None): json | status-400 marker}. Returns (client, requests)."""
+    import httpx
+
+    from postpilot.graph import GraphClient
+
+    seen = []
+
+    def handler(r):
+        seen.append(r)
+        key = (r.url.path.split("/", 2)[2], r.url.params.get("metric"))
+        body = routes[key]
+        if body == "ERR":
+            return httpx.Response(400, json={"error": {"code": 100, "message": "bad metric"}})
+        return httpx.Response(200, json=body)
+
+    return GraphClient(
+        "v1", "T", http=httpx.Client(transport=httpx.MockTransport(handler)), sleep=lambda s: None
+    ), seen
+
+
+def _params(seen, path, metric=None):
+    (r,) = [r for r in seen if r.url.path.endswith("/" + path) and r.url.params.get("metric") == metric]
+    return dict(r.url.params)
+
+
+def _ins(name, value):
+    return {"data": [{"name": name, "values": [{"value": value}]}]}
+
+
+def test_ig_stats_sends_exact_graph_params():
+    g, seen = _client(_ig_routes())
+    instagram.stats(g, "M")
+    assert _params(seen, "M")["fields"] == "like_count,comments_count"
+    assert _params(seen, "M/insights", "reach") == {"metric": "reach"}
+    assert _params(seen, "M/insights", "views") == {"metric": "views"}
+    assert _params(seen, "M/comments") == {"fields": "text,username,like_count,timestamp", "limit": "50"}
+
+
+def test_fb_stats_sends_exact_graph_params():
+    g, seen = _client(_fb_routes())
+    facebook.stats(g, "P")
+    assert _params(seen, "P")["fields"] == (
+        "reactions.summary(total_count).limit(0),comments.summary(total_count).limit(0),shares"
+    )
+    assert _params(seen, "P/insights", "post_media_view") == {"metric": "post_media_view"}
+    assert _params(seen, "P/insights", "post_total_media_view_unique") == {
+        "metric": "post_total_media_view_unique"
+    }
+    assert _params(seen, "P/comments") == {
+        "fields": "from{name},message,like_count,created_time",
+        "filter": "toplevel",
+        "limit": "50",
+    }
+
+
+def test_ig_stats_hidden_like_count_drops_only_likes():
+    routes = _ig_routes()
+    routes[("M", None)] = {"comments_count": 2}
+    g, _ = _client(routes)
+    out = instagram.stats(g, "M")
+    assert "likes" not in out and out["comments"] == 2 and out["reach"] == 100 and out["top_comments"]
+
+
+def test_fb_stats_missing_reactions_drops_only_likes():
+    routes = _fb_routes()
+    del routes[("P", None)]["reactions"]
+    g, _ = _client(routes)
+    out = facebook.stats(g, "P")
+    assert "likes" not in out and out["comments"] == 1 and out["shares"] == 4 and out["views"] == 90
+
+
+def test_fb_stats_one_insight_error_loses_only_that_key():
+    routes = _fb_routes()
+    routes[("P/insights", "post_total_media_view_unique")] = "ERR"
+    g, _ = _client(routes)
+    out = facebook.stats(g, "P")
+    assert "reach" not in out and out["views"] == 90 and out["likes"] == 7 and out["top_comments"]
+
+
+def test_fb_stats_comments_error_propagates():
+    routes = _fb_routes()
+    routes[("P/comments", None)] = "ERR"
+    g, _ = _client(routes)
+    with pytest.raises(PlatformError):
+        facebook.stats(g, "P")

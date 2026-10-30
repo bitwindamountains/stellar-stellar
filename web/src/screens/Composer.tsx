@@ -54,6 +54,7 @@ export default function Composer({ num }: { num?: number }) {
   // Daily posting is the common case, so new posts default to going out now.
   const [mode, setMode] = useState<'now' | 'later'>(restored?.mode ?? 'now')
   const [caption, setCaption] = useState(restored?.caption ?? '')
+  const [firstComment, setFirstComment] = useState(restored?.firstComment ?? '')
   const [variants, setVariants] = useState<Variants>(restored?.variants ?? {})
   const [tab, setTab] = useState<'all' | Platform>('all')
   const [mediaType, setMediaType] = useState<MediaType>(restored?.mediaType ?? 'none')
@@ -97,6 +98,7 @@ export default function Composer({ num }: { num?: number }) {
       setPublishAt(lead.publish_at ? utcToZoned(lead.publish_at, tz) : '')
       setMode(lead.publish_at && new Date(lead.publish_at) > new Date() ? 'later' : 'now')
       setCaption(lead.caption)
+      setFirstComment(lead.first_comment ?? '')
       setVariants((lead.variants as Variants) ?? {})
       setMediaType(lead.media_type)
       setMediaUrl(lead.media_urls[0] ?? '')
@@ -106,8 +108,8 @@ export default function Composer({ num }: { num?: number }) {
 
   useEffect(() => {
     if (num) return
-    saveDraft({ targets, caption, variants, mediaType, mediaUrl, link, mode, publishAt })
-  }, [num, targets, caption, variants, mediaType, mediaUrl, link, mode, publishAt])
+    saveDraft({ targets, caption, firstComment, variants, mediaType, mediaUrl, link, mode, publishAt })
+  }, [num, targets, caption, firstComment, variants, mediaType, mediaUrl, link, mode, publishAt])
 
   useEffect(() => {
     if (num) return
@@ -128,10 +130,12 @@ export default function Composer({ num }: { num?: number }) {
   const lead = active[0] // its time zone sets the time for every account
   const tz = lead?.timezone ?? accounts?.[0]?.timezone ?? 'Asia/Manila'
   const chosen = PLATFORMS.filter((p) => active.some((a) => targets[a.id].includes(p)))
-  const base = { publishAt, caption, variants, mediaType, mediaUrls: mediaUrl ? [mediaUrl] : [], link }
+  const base = { publishAt, caption, firstComment, variants, mediaType, mediaUrls: mediaUrl ? [mediaUrl] : [], link }
   const editing = tab !== 'all' && chosen.includes(tab) ? tab : 'all' // a deselected platform's tab falls back
   const problems = problemsFor(active, targets, base, mode === 'later')
   const locked = rows.some((r) => r.status === 'posting')
+  // Once live, the comment can't be added from here (the publisher only posts it with the post).
+  const commentLocked = rows.some((r) => r.fb_post_id || r.ig_media_id)
   const when = mode === 'now' ? 'once posted' : publishAt ? publishAt.slice(11, 16) : 'post time'
   const rowOf = (id: number) => rows.find((r) => r.account_id === id)
   const errors = bySection(problems)
@@ -212,6 +216,7 @@ export default function Composer({ num }: { num?: number }) {
       publish_at: status === 'scheduled' && mode === 'now' ? new Date().toISOString()
         : publishAt ? zonedToUtc(publishAt, tz) : null,
       caption,
+      ...(commentLocked ? {} : { first_comment: firstComment.trim() }),
       media_type: mediaType,
       media_urls: mediaUrl ? [mediaUrl] : [],
       link,
@@ -235,7 +240,8 @@ export default function Composer({ num }: { num?: number }) {
     }
     const added = active.filter((a) => !rowOf(a.id))
     if (added.length) {
-      const { error } = await supabase.from('posts').insert(added.map(fieldsFor))
+      // New rows always get the comment: the lock only protects rows that are already live.
+      const { error } = await supabase.from('posts').insert(added.map((a) => ({ ...fieldsFor(a), first_comment: firstComment.trim() })))
       if (error) failures.push(error.message)
     }
     const ok = !failures.length && !conflict
@@ -254,7 +260,7 @@ export default function Composer({ num }: { num?: number }) {
     // An upload is removed once its by-hand post is marked done (see Handoff), so don't copy a dead link.
     const gone = rows.some(mediaWasRemoved)
     saveDraft({
-      targets, caption, variants, link, mode: 'now', publishAt: '',
+      targets, caption, firstComment, variants, link, mode: 'now', publishAt: '',
       mediaType: gone ? 'none' : mediaType,
       mediaUrl: gone ? '' : mediaUrl,
       note: gone ? 'The original file was removed after you posted it by hand. Add it again.' : undefined,
@@ -391,6 +397,13 @@ export default function Composer({ num }: { num?: number }) {
                     <span className="mono" aria-live="polite">{caption.length.toLocaleString('en')} chars · {hashtagCount(caption)} hashtags</span>
                   </span>
                   <textarea id="caption" className="input" value={caption} onChange={(e) => setCaption(e.target.value)} {...invalid('caption')} />
+                  <label htmlFor="first-comment" className="legend">First comment <span style={{ fontWeight: 400, color: 'var(--muted)' }}>(optional)</span></label>
+                  <textarea id="first-comment" className="input" value={firstComment} readOnly={commentLocked} onChange={(e) => setFirstComment(e.target.value)}
+                    {...invalid('caption')} aria-describedby={shown('caption').length ? 'first-comment-hint err-caption' : 'first-comment-hint'} />
+                  <span id="first-comment-hint" style={{ fontSize: 13, color: 'var(--muted)' }}>
+                    {commentLocked ? 'Already live: add or change the comment in Facebook/Instagram.'
+                      : "Posted as a comment on Facebook and Instagram; copy it on your phone for the others. Instagram links aren't clickable."}
+                  </span>
                 </>
               ) : (
                 <PlatformText p={editing} base={caption} variants={variants} set={setVariant} />
@@ -519,7 +532,7 @@ export default function Composer({ num }: { num?: number }) {
             </div>
           </section>
           {chosen.length > 0 && (
-            <PostPreview platforms={chosen} caption={caption} variants={variants} link={link} mediaType={mediaType} mediaUrl={mediaUrl}
+            <PostPreview platforms={chosen} caption={caption} firstComment={firstComment} variants={variants} link={link} mediaType={mediaType} mediaUrl={mediaUrl}
               accountFor={(p) => active.find((a) => targets[a.id].includes(p))?.name ?? ''} />
           )}
           {active.length > 0 && (
@@ -546,7 +559,7 @@ export default function Composer({ num }: { num?: number }) {
 // Where a blocked save puts focus for each section.
 const FOCUS: Record<Section, string> = {
   media: '#media-file',
-  caption: '#caption, #v-title, #v-caption',
+  caption: '#caption, #v-title, #v-caption, #first-comment',
   where: '#where .toggle:not(:disabled)',
   when: '#when, #when-mode button',
 }

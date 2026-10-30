@@ -1,9 +1,10 @@
 // Mirror of src/postpilot/validation.py for instant feedback. The publisher re-checks; keep messages in sync.
 import { textFor, titleFor, type Variants } from './content'
-import { byHand, isConnected, PLATFORM_NAMES, type Account, type MediaType, type Platform } from './types'
+import { byHand, isAssisted, isConnected, PLATFORM_NAMES, type Account, type MediaType, type Platform } from './types'
 
 export const IG_CAPTION_MAX = 2200
 export const IG_HASHTAGS_MAX = 30
+export const IG_COMMENT_MAX = 2200 // Meta documents no comment limits; the caption limit is the safe bound
 export const TELEGRAM_MESSAGE_MAX = 4096
 const TELEGRAM_OVERHEAD = 60 // platform label line and title label (Telegram counts text after parsing tags)
 const NON_JPEG = /\.(png|webp|gif|heic|heif|avif|bmp|tiff?|svg)$/i // links with no extension get the benefit of the doubt
@@ -50,6 +51,7 @@ export interface Draft {
   mediaType: MediaType
   mediaUrls: string[]
   link: string
+  firstComment?: string // undefined = none
 }
 
 export function hashtagCount(text: string): number {
@@ -103,6 +105,15 @@ export function validate(d: Draft, requireTime: boolean): string[] {
     const size = body.length + titleFor(d.variants, p).length + TELEGRAM_OVERHEAD
     if (size > TELEGRAM_MESSAGE_MAX)
       errors.push(`${PLATFORM_NAMES[p]} caption too long for the phone handoff: shorten it by ${(size - TELEGRAM_MESSAGE_MAX).toLocaleString('en')} characters`)
+  }
+  const first = d.firstComment ?? ''
+  if (first) {
+    if (has('instagram')) {
+      if (first.length > IG_COMMENT_MAX) errors.push(`First comment: Instagram allows at most ${IG_COMMENT_MAX.toLocaleString('en')} characters`)
+    }
+    // Every assisted platform gets the comment in Telegram, connected TikTok drafts included.
+    if (d.platforms.some(isAssisted) && first.length + TELEGRAM_OVERHEAD > TELEGRAM_MESSAGE_MAX)
+      errors.push('First comment too long for the phone handoff')
   }
   if (titleFor(d.variants, 'youtube').length > YOUTUBE_TITLE_MAX) errors.push(`YouTube titles max ${YOUTUBE_TITLE_MAX} characters`)
   return errors

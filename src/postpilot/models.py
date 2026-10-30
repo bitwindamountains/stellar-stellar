@@ -20,6 +20,10 @@ PERMALINK_COLUMN = {
     X: "x_permalink",
     TIKTOK: "tiktok_permalink",
 }
+COMMENT_COLUMN = {FACEBOOK: "fb_comment_id", INSTAGRAM: "ig_comment_id"}
+# Stored in the comment column when we give up, so a filled column always means: never comment again.
+COMMENT_NOT_ADDED = "not-added"  # certainly not posted (permanent, auth, or out of retries)
+COMMENT_UNCLEAR = "unclear"  # no clear answer: it may have been posted
 SENT_BY_HAND = (
     "telegram"  # TikTok's ID when it went out through Telegram: still done, never auto-posted later
 )
@@ -109,6 +113,15 @@ class Post:
             return {}
         return value if isinstance(value, dict) else {}
 
+    @property
+    def stats(self) -> dict:
+        """Per-platform counts {platform: {...}}. Bad JSON counts as none."""
+        try:
+            value = json.loads(self.get("stats") or "{}")
+        except ValueError:
+            return {}
+        return value if isinstance(value, dict) else {}
+
     def _variant(self, platform: str, key: str) -> str:
         variant = self.variants.get(platform)
         return str(variant.get(key) or "").strip() if isinstance(variant, dict) else ""
@@ -126,6 +139,15 @@ class Post:
         if platform in ID_COLUMN:
             return bool(self.get(ID_COLUMN[platform]))
         return bool(self.get("tg_message_id"))
+
+    def comment_pending(self, platform: str) -> bool:
+        """The platform's post is out but its first comment isn't: comment once, never twice."""
+        return bool(
+            self.get("first_comment")
+            and platform in COMMENT_COLUMN
+            and self.done(platform)
+            and not self.get(COMMENT_COLUMN[platform])
+        )
 
 
 @dataclass(frozen=True)
