@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 
-/** Hash routes: #/ queue, #/new, #/edit/12, #/handoff/12, #/accounts. Hash routing needs no server rewrites. */
+/** Hash routes: #/ today, #/new, #/edit/12, #/handoff/12, #/accounts. Hash routing needs no server rewrites. */
 export function useRoute(): string[] {
   // A ?query after the route (e.g. #/accounts?connected=x after a login) is read by the screen itself.
   const read = () => window.location.hash.replace(/^#\/?/, '').split('?')[0].split('/').filter(Boolean)

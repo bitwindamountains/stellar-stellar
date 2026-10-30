@@ -2,7 +2,7 @@ import type { Session } from '@supabase/supabase-js'
 import { useEffect, useState } from 'react'
 import { Asteroids, FlightPath } from './icons'
 import Nav from './Nav'
-import { rememberTab, useRoute } from './route'
+import { lastTab, rememberTab, useRoute } from './route'
 import Accounts from './screens/Accounts'
 import Composer from './screens/Composer'
 import Handoff from './screens/Handoff'
@@ -55,10 +55,13 @@ export default function App() {
 
   // Writing gets the whole phone screen: no tab bar there (the desktop sidebar stays).
   const composing = screen === 'new' || screen === 'edit'
+  // The tab a task screen belongs to: post detail is in History, an edit in the tab it was opened from.
+  const fromTab = (Object.keys(TABS).find((k) => TABS[k] === lastTab()) ?? 'today') as typeof screen
+  const current = screen === 'post' ? 'history' : screen === 'edit' ? fromTab : screen
   return (
     <div className={composing ? 'app composing' : 'app'}>
       <Starfield />
-      <Nav current={screen} />
+      <Nav current={current} />
       <div className="page">
         <div className="wrap">
           {route.screen === 'today' && <Today />}

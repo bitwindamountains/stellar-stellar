@@ -13,6 +13,7 @@ export default function Today() {
   const { posts, accounts, error: loadError, loaded, reload } = usePosts()
   const [actionError, setActionError] = useState('')
   const [retrying, setRetrying] = useState<number | null>(null)
+  // ponytail: one zone for all accounts (the first's); use each group's lead account zone if accounts in different zones are ever added.
   const tz = accounts[0]?.timezone ?? Intl.DateTimeFormat().resolvedOptions().timeZone
   const now = new Date()
   const { needsYou, goingOut, outToday } = useMemo(() => todayView(posts, new Date(), tz), [posts, tz])

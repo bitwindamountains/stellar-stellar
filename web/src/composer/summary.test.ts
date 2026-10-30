@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { linkSummary, whenSummary, whereSummary } from './summary'
+import { initialWhen, linkSummary, whenSummary, whereSummary } from './summary'
 import type { Account } from '../types'
 
 const acct = (id: number, name: string) => ({ id, name, timezone: 'Asia/Manila' }) as Account
@@ -46,5 +46,21 @@ describe('linkSummary', () => {
   it('shows the raw text, cut to 24 characters, when it is not a link', () => {
     expect(linkSummary('shop dot example dot com slash sale')).toBe('shop dot example dot com')
     expect(linkSummary('nope')).toBe('nope')
+  })
+})
+
+describe('initialWhen', () => {
+  const draft = { mode: 'now' as const, publishAt: '2026-11-05T18:00' }
+  it('schedules a day from Planned at 9 am', () => {
+    expect(initialWhen('2026-11-02', null)).toEqual({ mode: 'later', publishAt: '2026-11-02T09:00' })
+  })
+  it('lets the day win over a restored draft', () => {
+    expect(initialWhen('2026-11-02', draft)).toEqual({ mode: 'later', publishAt: '2026-11-02T09:00' })
+  })
+  it('keeps the draft time with no day', () => {
+    expect(initialWhen(undefined, draft)).toEqual({ mode: 'now', publishAt: '2026-11-05T18:00' })
+  })
+  it('posts now with neither', () => {
+    expect(initialWhen(undefined, null)).toEqual({ mode: 'now', publishAt: '' })
   })
 })
