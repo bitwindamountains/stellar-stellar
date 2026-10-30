@@ -33,8 +33,16 @@ describe('todayView', () => {
   ], now, TZ)
   it('sorts posts into the three lists', () => {
     expect(nums(v.needsYou)).toEqual([5, 1])
-    expect(nums(v.goingOut)).toEqual([2, 5, 6])
+    expect(nums(v.goingOut)).toEqual([2, 6]) // stale 5 is in needsYou only
     expect(nums(v.outToday)).toEqual([3])
+  })
+  it('a partial group dated today is in needsYou only', () => {
+    const t = todayView([
+      post({ num: 7, group_id: 'p', status: 'partial', publish_at: '2026-10-30T04:00:00Z' }),
+      post({ num: 8, group_id: 'p', status: 'scheduled', publish_at: '2026-10-30T04:00:00Z' }),
+    ], now, TZ)
+    expect(nums(t.needsYou)).toEqual([7])
+    expect(t.goingOut).toEqual([])
   })
   it('leaves tomorrow out and a fresh claim out of needsYou', () => {
     expect([...v.needsYou, ...v.goingOut, ...v.outToday].map((g) => g.lead.num)).not.toContain(4)

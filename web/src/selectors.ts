@@ -36,7 +36,9 @@ export function todayView(posts: Post[], now: Date, tz: string) {
   const needsYou = groups
     .filter((g) => g.rows.some((r) => needsAttention(r, now)))
     .sort((a, b) => when(b).localeCompare(when(a)) || newest(a, b))
-  const goingOut = plannedOn(posts, localDay(now.toISOString(), tz), tz)
+  // A stuck (stale) or half-done (partial) post is a problem to check, so it shows only under Needs you.
+  const held = (g: PostGroup) => g.rows.some((r) => isStale(r, now) || r.status === 'partial')
+  const goingOut = plannedOn(posts, localDay(now.toISOString(), tz), tz).filter((g) => !held(g))
   const today = localDay(now.toISOString(), tz)
   const outToday = groups
     .filter((g) => g.lead.posted_at && localDay(g.lead.posted_at, tz) === today && !goingOut.includes(g))
