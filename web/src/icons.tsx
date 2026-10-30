@@ -1,4 +1,4 @@
-import { useEffect, useState, type CSSProperties } from 'react'
+import type { CSSProperties } from 'react'
 import type { Platform } from './types'
 
 // Thin-stroke inline icons; decorative unless a label is given.
@@ -13,18 +13,10 @@ export const Logo = () => (
 // Decorative flight path for the night-sky headers (.sky in styles.css): a dashed route, a contrail that
 // travels along it, and the logo plane landing at the end.
 const ROUTE = 'M8 212C120 200 196 120 300 112S470 40 552 22'
-// The composer calls launchNext() after a successful "Post now"; the next flight path to mount (the queue's,
-// a moment later) plays the take-off once: the route draws in full, then the plane climbs away and returns.
-let launchPending = false
-export const launchNext = () => { launchPending = true }
-export const FlightPath = () => {
-  const [launch] = useState(() => launchPending)
-  useEffect(() => { launchPending = false }, [])
-  return (
-  <svg className={launch ? 'flight launch' : 'flight'} viewBox="0 0 560 230" fill="none" aria-hidden="true" focusable="false">
+export const FlightPath = () => (
+  <svg className="flight" viewBox="0 0 560 230" fill="none" aria-hidden="true" focusable="false">
     <path d={ROUTE} stroke="rgba(255,255,255,0.28)" strokeWidth="1.2" strokeDasharray="2 7" strokeLinecap="round" />
     <path className="contrail" d={ROUTE} pathLength={100} stroke="url(#contrail)" strokeWidth="2" strokeLinecap="round" />
-    {launch && <path className="trail" d={ROUTE} pathLength={100} stroke="#ffd9c2" strokeWidth="1.6" strokeLinecap="round" />}
     <circle cx="8" cy="212" r="4" fill="#0f1326" stroke="rgba(255,255,255,0.6)" strokeWidth="1.2" />
     <g transform="translate(540 8) rotate(8)" stroke="#fff" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round">
       <g className="plane">
@@ -39,8 +31,7 @@ export const FlightPath = () => {
       </linearGradient>
     </defs>
   </svg>
-  )
-}
+)
 // Platform marks etched into the asteroids, drawn in the same thin stroke as the other icons.
 const MARKS = {
   fb: <path d="M14.5 6.5H13a2.5 2.5 0 0 0-2.5 2.5v11M7.5 12.5h6" />,
@@ -148,11 +139,39 @@ export const Plus = () => (
     <path d="M12 5v14M5 12h14" />
   </svg>
 )
+// Tab icons: 24px grid, same thin stroke. Today is a star (the app's sky), not a generic house.
+const Tab = ({ d }: { d: string }) => (
+  <svg width="22" height="22" viewBox="0 0 24 24" strokeWidth={1.6} {...base} aria-hidden="true" focusable="false"><path d={d} /></svg>
+)
+export const TodayIcon = () => <Tab d="M12 3.5c.6 4.4 2.6 6.6 7 7.5-4.4.9-6.4 3.1-7 7.5-.6-4.4-2.6-6.6-7-7.5 4.4-.9 6.4-3.1 7-7.5Z" />
+export const PlannedIcon = () => <Tab d="M5.5 6.5h13a1.5 1.5 0 0 1 1.5 1.5v10.5a1.5 1.5 0 0 1-1.5 1.5h-13A1.5 1.5 0 0 1 4 18.5V8a1.5 1.5 0 0 1 1.5-1.5ZM4 10.5h16M8.5 4v4M15.5 4v4M8.5 14h2" />
+export const HistoryIcon = () => <Tab d="M4.5 12a7.5 7.5 0 1 0 2.2-5.3L4.5 9M4.5 5v4h4M12 8v4.5l3 2" />
+export const AccountsIcon = () => <Tab d="M12 12a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7ZM5 20c.8-3.4 3.6-5.5 7-5.5s6.2 2.1 7 5.5" />
+// Composer: close, setting rows (media, where, when, link), their chevron, more, preview.
+export const Close = () => <Tab d="M6.5 6.5l11 11M17.5 6.5l-11 11" />
+export const MediaIcon = () => <Tab d="M5.5 5h13A1.5 1.5 0 0 1 20 6.5v11a1.5 1.5 0 0 1-1.5 1.5h-13A1.5 1.5 0 0 1 4 17.5v-11A1.5 1.5 0 0 1 5.5 5ZM4 15.5l4.5-4.5 4 4 2.5-2.5 5 5M15 9.5h.5" />
+export const WhereIcon = () => <Tab d="M4 11.2 20 4.5l-6.7 16-2.3-7-7-2.3ZM11 13.5l4.2-4.2" />
+export const WhenIcon = () => <Tab d="M12 20a8 8 0 1 0 0-16 8 8 0 0 0 0 16ZM12 8v4.5l3 1.8" />
+export const LinkIcon = () => <Tab d="M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1 1M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1-1" />
+export const Chevron = () => (
+  <svg width="16" height="16" viewBox="0 0 24 24" strokeWidth={1.8} {...base} aria-hidden="true" focusable="false" style={{ flex: 'none' }}><path d="m9.5 6 6 6-6 6" /></svg>
+)
+export const More = () => (
+  <svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true" focusable="false"><circle cx="6" cy="12" r="1.6" /><circle cx="12" cy="12" r="1.6" /><circle cx="18" cy="12" r="1.6" /></svg>
+)
+export const Eye = () => <Tab d="M2.8 12S6 5.5 12 5.5 21.2 12 21.2 12 18 18.5 12 18.5 2.8 12 2.8 12ZM12 14.8a2.8 2.8 0 1 0 0-5.6 2.8 2.8 0 0 0 0 5.6Z" />
 export const Arrow = () => (
   <svg width="14" height="14" viewBox="0 0 24 24" strokeWidth={1.6} {...base} aria-hidden="true">
     <path d="M5 12h14M13 6l6 6-6 6" />
   </svg>
 )
+// "Opens in a new tab" mark for outbound links (the ↗ character renders as an emoji on some phones).
+export const NewTab = () => (
+  <svg width="14" height="14" viewBox="0 0 24 24" strokeWidth={1.8} {...base} aria-hidden="true" style={{ flex: 'none' }}>
+    <path d="M9 6h9v9M18 6 6 18" />
+  </svg>
+)
+
 export const Check = ({ label }: { label?: string }) => (
   <svg width="18" height="18" viewBox="0 0 24 24" strokeWidth={1.6} {...base}
     {...(label ? { role: 'img', 'aria-label': label } : { 'aria-hidden': true })} style={{ flex: 'none' }}>

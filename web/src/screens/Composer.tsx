@@ -1,19 +1,22 @@
 import { useEffect, useState } from 'react'
+import { flushSync } from 'react-dom'
 import { cleanVariants, isCustomized, textFor, type Variant, type Variants } from '../content'
-import { Alert, Arrow, Asteroids, Check, FlightPath, launchNext } from '../icons'
+import { Arrow, Asteroids, Check, Close, Eye, FlightPath, LinkIcon, MediaIcon, More, WhenIcon, WhereIcon } from '../icons'
 import { publishSoon } from '../actions'
 import { postLinks } from '../groups'
 import { toJpeg } from '../media'
 import { mediaWasRemoved } from '../postView'
 import PostPreview from '../PostPreview'
+import Sheet from '../Sheet'
+import SettingRow, { FieldError } from '../composer/SettingRow'
+import { initialWhen, linkSummary, whenSummary, whereSummary } from '../composer/summary'
 import { takeShared } from '../share'
 import { draftTargets, loadDraft, rememberChoices, rememberedTargets, saveDraft, type Targets } from '../prefs'
-import { go, takeQuery } from '../route'
-import { reveal } from '../scroll'
+import { go, lastTab, takeQuery } from '../route'
 import { bySection, SECTIONS, type Section } from '../fields'
 import { supabase } from '../supabase'
 import { quickTimes, utcToZoned, zonedToUtc } from '../time'
-import { ACCOUNT_SELECT, byHand, canPost, isConnected, isDone, postedByApi, PLATFORM_CODES, PLATFORM_NAMES, PLATFORMS, type Account, type MediaType, type Platform, type Post } from '../types'
+import { ACCOUNT_SELECT, canPost, isConnected, isDone, postedByApi, PLATFORM_NAMES, PLATFORMS, type Account, type MediaType, type Platform, type Post } from '../types'
 import { hashtagCount, IG_CAPTION_MAX, validate, YOUTUBE_TITLE_MAX } from '../validation'
 
 const ACCEPT = 'image/jpeg,image/png,image/webp,video/mp4,video/quicktime'
@@ -45,14 +48,37 @@ function problemsFor(active: Account[], targets: Targets, base: Omit<Parameters<
   return [...byMessage].map(([m, names]) => (active.length === 1 || names.length === active.length ? m : `${names.join(', ')}: ${m}`))
 }
 
-export default function Composer({ num }: { num?: number }) {
+type SheetName = '' | 'media' | 'where' | 'when' | 'link' | 'preview' | 'more'
+
+/** Wide screens keep the preview beside the form; narrow ones open it in a sheet. */
+function useWide(): boolean {
+  const query = '(min-width: 1024px)'
+  const [wide, setWide] = useState(() => matchMedia(query).matches)
+  useEffect(() => {
+    const m = matchMedia(query)
+    const on = () => setWide(m.matches)
+    m.addEventListener('change', on)
+    return () => m.removeEventListener('change', on)
+  }, [])
+  return wide
+}
+
+export default function Composer({ num, day }: { num?: number; day?: string }) {
   const [restored] = useState(() => (num ? null : loadDraft()))
+  const hasDraft = !!restored && !!(restored.caption || restored.mediaUrl)
+  // Opened from a day on Planned ("Add a post on …"): 9 am that day, even over a restored draft.
+  // Kept from the first render: the ?day= is stripped below, so a later App render passes no day.
+  const [fromDay] = useState(num ? undefined : day)
+  const [start] = useState(() => initialWhen(fromDay, restored))
   const [accounts, setAccounts] = useState<Account[] | null>(null) // null = still loading
   const [rows, setRows] = useState<Post[]>([]) // the stored rows when editing (several for a multi-account post)
   const [targets, setTargets] = useState<Targets>({})
-  const [publishAt, setPublishAt] = useState(restored?.publishAt ?? '')
+  const [publishAt, setPublishAt] = useState(start.publishAt)
   // Daily posting is the common case, so new posts default to going out now.
-  const [mode, setMode] = useState<'now' | 'later'>(restored?.mode ?? 'now')
+  const [mode, setMode] = useState<'now' | 'later'>(start.mode)
+  const [sheet, setSheet] = useState<SheetName>('')
+  const [commentOpen, setCommentOpen] = useState(false)
+  const wide = useWide()
   const [caption, setCaption] = useState(restored?.caption ?? '')
   const [firstComment, setFirstComment] = useState(restored?.firstComment ?? '')
   const [variants, setVariants] = useState<Variants>(restored?.variants ?? {})
@@ -91,6 +117,9 @@ export default function Composer({ num }: { num?: number }) {
       const all = first.group_id ? await supabase.from('posts').select('*').eq('group_id', first.group_id).order('num') : null
       if (all?.error) return setError(all.error.message)
       const list = (all?.data as Post[] | undefined) ?? [first]
+      // Nothing left to change on a post that went out everywhere: show how it did instead.
+      // Replace, not push: Back from the detail must not land here and bounce forward again.
+      if (list.every((r) => r.status === 'posted')) return location.replace(`#/history/${num}`)
       const lead = list[0]
       const tz = accounts.find((a) => a.id === lead.account_id)?.timezone ?? 'Asia/Manila'
       setRows(list)
@@ -113,9 +142,8 @@ export default function Composer({ num }: { num?: number }) {
 
   useEffect(() => {
     if (num) return
-    // Opened from an empty day on the Queue's week strip: schedule for that day.
-    const date = takeQuery().get('date')
-    if (date && /^\d{4}-\d{2}-\d{2}$/.test(date)) { setMode('later'); setPublishAt(`${date}T09:00`) }
+    // The ?day= is already applied: drop it so a reload restores the draft as you left it.
+    takeQuery()
     // Opened from the Android share sheet: attach the shared file and text once.
     if (!window.location.hash.endsWith('/shared')) return
     takeShared().then((shared) => {
@@ -136,7 +164,6 @@ export default function Composer({ num }: { num?: number }) {
   const locked = rows.some((r) => r.status === 'posting')
   // Once live, the comment can't be added from here (the publisher only posts it with the post).
   const commentLocked = rows.some((r) => r.fb_post_id || r.ig_media_id)
-  const when = mode === 'now' ? 'once posted' : publishAt ? publishAt.slice(11, 16) : 'post time'
   const rowOf = (id: number) => rows.find((r) => r.account_id === id)
   const errors = bySection(problems)
   // Errors show once a section has been left (or after a blocked save), not while you're still filling it in.
@@ -146,6 +173,11 @@ export default function Composer({ num }: { num?: number }) {
     setTouched((t) => (t.includes(s) ? t : [...t, s]))
   }
   const invalid = (s: Section) => (shown(s).length ? { 'aria-invalid': true, 'aria-describedby': `err-${s}` } : {})
+  // Closing a section's sheet counts as leaving it.
+  const closeSheet = (s: SheetName) => () => {
+    if ((SECTIONS as readonly string[]).includes(s)) setTouched((t) => (t.includes(s as Section) ? t : [...t, s as Section]))
+    setSheet((cur) => (cur === s ? '' : cur))
+  }
 
   function setVariant(p: Platform, key: keyof Variant, value: string) {
     setVariants((cur) => ({ ...cur, [p]: { ...cur[p], [key]: value } }))
@@ -205,10 +237,11 @@ export default function Composer({ num }: { num?: number }) {
     const blocked = problemsFor(active, targets, base, status === 'scheduled' && mode === 'later')
     if (blocked.length || !lead) {
       // Move focus to the first section with a problem; its message is right under it.
+      // A sheet open (Enter in its field) makes the page inert: close it first, then focus.
+      flushSync(() => setSheet(''))
       const first = SECTIONS.find((s) => bySection(blocked)[s].length)
       const target = first && document.querySelector<HTMLElement>(FOCUS[first])
-      if (target) target.focus()
-      else reveal('checks', 'center')
+      target?.focus()
       return
     }
     setBusy('save')
@@ -247,12 +280,14 @@ export default function Composer({ num }: { num?: number }) {
     const ok = !failures.length && !conflict
     if (ok && status === 'scheduled' && mode === 'now') await publishSoon()
     setBusy('')
+    // Enter in a sheet's field submits too: close it, so the error isn't behind an inert page.
+    if (failures.length || conflict) setSheet('')
     if (failures.length) return setError(failures.join(' · '))
     if (conflict) return setError(PUBLISHING_NOW)
     rememberChoices(mediaType, Object.fromEntries(active.map((a) => [a.id, targets[a.id]])))
     if (!num) saveDraft(null)
-    if (status === 'scheduled' && mode === 'now') launchNext()
-    go('/')
+    // Replace, not push: Back from the tab must not reopen the editor (the installed app has no browser chrome).
+    location.replace(`#${lastTab()}`)
   }
 
   // Copies the content into a fresh draft; the new rows get their own IDs, so it really posts again.
@@ -274,11 +309,12 @@ export default function Composer({ num }: { num?: number }) {
     const { data, error } = await supabase.from('posts').delete().in('num', rows.map((r) => r.num)).neq('status', 'posting').select('num')
     if (error) return setError(error.message)
     if (data.length < rows.length) return setError(PUBLISHING_NOW)
-    go('/')
+    location.replace(`#${lastTab()}`)
   }
 
-  // Wait for accounts before choosing a screen, so the empty state never flashes on load.
-  if (accounts === null) return <div className="tray" aria-busy="true"><div className="core"><div className="skeleton" aria-hidden="true" /><div className="skeleton" aria-hidden="true" /></div></div>
+  // Wait for accounts (and, when editing, the post) before choosing a screen, so nothing flashes on load.
+  const skeleton = <div className="tray" aria-busy="true"><div className="core"><div className="skeleton" aria-hidden="true" /><div className="skeleton" aria-hidden="true" /></div></div>
+  if (accounts === null) return skeleton
   if (accounts.length === 0 && !error) {
     return (
       <section className="hero sky rise">
@@ -290,288 +326,293 @@ export default function Composer({ num }: { num?: number }) {
       </section>
     )
   }
+  if (num && !rows.length && !error) return skeleton
 
-  const planText = (p: Platform, a: Account) => {
-    const row = rowOf(a.id)
-    if (row && isDone(row, p)) return 'Already done. It will not be posted again.'
-    if (p === 'facebook') return link && mediaUrl ? 'Posted to your Page with the link in the caption.' : 'Posted to your Page.'
-    if (p === 'instagram') return 'Posted as a single image. Retries up to 3 times if Instagram is busy.'
-    if (p === 'x') return link ? 'Posted to X with the link (X charges more for posts with links).' : 'Posted to X.'
-    if (p === 'tiktok' && !byHand(p, a)) return 'Uploaded to your TikTok drafts; finish it in TikTok.'
-    return 'Sent to your phone with the caption ready to paste.'
-  }
   const links = rows.flatMap((r) => postLinks(r).map((l) => ({ ...l, account: r.account_id })))
   const accountName = (id: number) => accounts.find((a) => a.id === id)?.name ?? ''
+  const canDelete = rows.length > 0 && !rows.some(postedByApi)
+  const showComment = commentOpen || !!firstComment
+  const mediaValue = busy === 'upload' ? 'Uploading…' : !mediaUrl ? 'None' : mediaType === 'video' ? 'Video' : 'Photo'
+
+  // The preview, with the per-platform text editors above it (a sheet on phone, a column on wide screens).
+  const preview = (
+    <div className="c-preview">
+      {chosen.length > 0 && (
+        <div className="c-pv-edit">
+          <span id="pv-edit" className="legend">Text per platform</span>
+          <div role="group" aria-labelledby="pv-edit" className="filters" style={{ alignSelf: 'flex-start', maxWidth: '100%' }}>
+            <button type="button" aria-pressed={editing === 'all'} onClick={() => setTab('all')}>All platforms</button>
+            {chosen.map((p) => (
+              <button key={p} type="button" aria-pressed={editing === p} onClick={() => setTab(p)}>
+                {PLATFORM_NAMES[p]}{isCustomized(variants, p) && <span aria-label=" (customized)" style={{ color: 'var(--accent)' }}> ●</span>}
+              </button>
+            ))}
+          </div>
+          {editing !== 'all' && (
+            <fieldset className="bare" disabled={locked}>
+              <PlatformText p={editing} base={caption} variants={variants} set={setVariant} />
+            </fieldset>
+          )}
+        </div>
+      )}
+      {chosen.length > 0 ? (
+        <PostPreview platforms={chosen} caption={caption} firstComment={firstComment} variants={variants} link={link} mediaType={mediaType} mediaUrl={mediaUrl}
+          accountFor={(p) => active.find((a) => targets[a.id].includes(p))?.name ?? ''} />
+      ) : (
+        <p className="c-quiet">Pick where it goes to see how it will look.</p>
+      )}
+    </div>
+  )
 
   return (
-    <>
-      <header className="hero sky rise">
-        <h1>{num ? `Edit post #${num}` : 'Write it once'}</h1>
-        <p>Pick where it goes, on one account or several. PostPilot checks it now, not at post time.</p>
-        {restored?.note && <p className="notice" role="status" style={{ fontSize: 14 }}>{restored.note}</p>}
-        {restored && (restored.caption || restored.mediaUrl) && (
-          <p style={{ fontSize: 14 }}>
-            Draft restored from last time.{' '}
-            <button type="button" className="link-btn" onClick={() => { saveDraft(null); window.location.reload() }}>Start fresh</button>
-          </p>
-        )}
-        {locked && <p className="notice" role="status">This post is being published right now. Edit it after the run finishes.</p>}
-        {rows.filter((r) => r.last_error).map((r) => (
-          <p key={r.num} className="notice" role="status">{rows.length > 1 ? `${accountName(r.account_id)}: ` : ''}{r.last_error}</p>
-        ))}
-        {rows.length > 0 && (
-          <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 10 }}>
-            {links.map((l) => (
-              <a key={`${l.account}-${l.platform}`} className="btn light" href={l.url} target="_blank" rel="noopener">
-                View on {NAMED[l.platform]}{rows.length > 1 ? ` · ${accountName(l.account)}` : ''}<span className="knob"><Arrow /></span>
-              </a>
+    <form className={wide ? 'compose wide' : 'compose'} onSubmit={(e) => { e.preventDefault(); save('scheduled') }}
+      onKeyDown={(e) => {
+        if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') { e.preventDefault(); save('scheduled') }
+      }}
+      onPaste={(e) => {
+        const file = e.clipboardData.files[0]
+        if (file && ACCEPT.split(',').includes(file.type)) { e.preventDefault(); upload(file) }
+      }}
+      onDragOver={(e) => { if (e.dataTransfer.types.includes('Files')) { e.preventDefault(); setDragging(true) } }}
+      onDragLeave={(e) => { if (e.currentTarget === e.target) setDragging(false) }}
+      onDrop={(e) => {
+        const file = e.dataTransfer.files[0]
+        if (!file) return
+        e.preventDefault()
+        setDragging(false)
+        upload(file)
+      }}>
+      <div className="c-main">
+        <div className="c-top rise">
+          <a className="c-round glass" href={`#${lastTab()}`} aria-label="Close"
+            onClick={(e) => { e.preventDefault(); location.replace(`#${lastTab()}`) }}><Close /></a>
+          <h1>{num ? 'Edit post' : 'New post'}</h1>
+          {!wide && <button type="button" className="c-pill glass" onClick={() => setSheet('preview')} aria-haspopup="dialog"><Eye />Preview</button>}
+        </div>
+
+        {(restored?.note || hasDraft || locked || error || rows.some((r) => r.last_error)) && (
+          <div className="c-notes">
+            {restored?.note && <p className="notice" role="status">{restored.note}</p>}
+            {hasDraft && (
+              <p className="c-restored">
+                Draft restored from last time.{' '}
+                <button type="button" className="link-btn" onClick={() => {
+                  saveDraft(null)
+                  location.replace(`#/new${fromDay ? `?day=${fromDay}` : ''}`) // keep the Planned day across the reload
+                  location.reload()
+                }}>Start fresh</button>
+              </p>
+            )}
+            {locked && <p className="notice" role="status">This post is being published right now. Edit it after the run finishes.</p>}
+            {rows.filter((r) => r.last_error).map((r) => (
+              <p key={r.num} className="notice" role="status">{rows.length > 1 ? `${accountName(r.account_id)}: ` : ''}{r.last_error}</p>
             ))}
-            <button type="button" className="btn" onClick={postAgain}>Post again</button>
+            {error && <p className="notice" role="alert">{error}</p>}
           </div>
         )}
-        {error && <p className="notice" role="alert">{error}</p>}
-        <FlightPath />
-        <Asteroids />
-      </header>
 
-      <form className="split" onSubmit={(e) => { e.preventDefault(); save('scheduled') }}
-        onKeyDown={(e) => {
-          if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') { e.preventDefault(); save('scheduled') }
-        }}
-        onPaste={(e) => {
-          const file = e.clipboardData.files[0]
-          if (file && ACCEPT.split(',').includes(file.type)) { e.preventDefault(); upload(file) }
-        }}
-        onDragOver={(e) => { if (e.dataTransfer.types.includes('Files')) { e.preventDefault(); setDragging(true) } }}
-        onDragLeave={(e) => { if (e.currentTarget === e.target) setDragging(false) }}
-        onDrop={(e) => {
-          const file = e.dataTransfer.files[0]
-          if (!file) return
-          e.preventDefault()
-          setDragging(false)
-          upload(file)
-        }}>
-        <section className="main tray rise" aria-label="Post">
-          <fieldset className="core" disabled={locked} style={{ gap: 28, border: 0, margin: 0, minWidth: 0 }}>
-            <div className="field" onBlur={touch('media')}>
-              <span className="legend">Media</span>
-              {/* The whole box is the file picker: click, drop or paste. */}
-              <label className={`dropzone${dragging ? ' over' : ''}`}>
-                <span className="thumb" aria-hidden="true" style={mediaType === 'image' && mediaUrl ? { width: 64, height: 64, backgroundImage: `url("${mediaUrl}")`, color: 'transparent' } : { width: 64, height: 64 }}>
-                  {mediaType === 'none' ? 'None' : mediaType}
-                </span>
-                <span className="dz-text">
-                  <span className="dz-title">{busy === 'upload' ? 'Uploading…' : dragging ? 'Drop to upload' : mediaUrl ? `${mediaType === 'video' ? 'Video' : 'Image'} added` : 'Add a photo or video'}</span>
-                  <span className="dz-hint">{mediaUrl ? 'Click to replace it' : 'Click, drop or paste · JPEG, PNG, WebP, MP4 · up to 50 MB'}</span>
-                </span>
-                <span className="btn dark" aria-hidden="true" style={{ minHeight: 44 }}>{mediaUrl ? 'Replace' : 'Choose file'}</span>
-                <input id="media-file" type="file" className="sr-only" accept={ACCEPT} disabled={busy === 'upload'} {...invalid('media')}
-                  onChange={(e) => e.target.files?.[0] && upload(e.target.files[0])} />
-              </label>
-              <FieldError section="media" messages={shown('media')} />
-              {mediaUrl && (
-                <button type="button" className="link-btn" onClick={() => {
-                  setMediaUrl('')
-                  setMediaType('none')
-                  const remembered = rememberedTargets('none')
-                  if (!num && remembered) setTargets(remembered)
-                }}>
-                  Remove media
-                </button>
+        <fieldset className={dragging ? 'bare c-write tray rise over' : 'bare c-write tray rise'} disabled={locked} onBlur={touch('caption')}>
+          <div className="core">
+            <label htmlFor="caption" className="sr-only">Caption, used everywhere unless a platform overrides it</label>
+            <textarea id="caption" className="c-caption" placeholder={dragging ? 'Drop to add it' : 'Write your post…'} value={caption}
+              onChange={(e) => setCaption(e.target.value)} {...invalid('caption')} />
+            <div className="c-meta">
+              {!showComment && (
+                <button type="button" className="link-btn" aria-expanded="false" onClick={() => setCommentOpen(true)}>+ First comment</button>
               )}
+              <span className="mono" aria-live="polite">{caption.length.toLocaleString('en')} chars · {hashtagCount(caption)} hashtags</span>
             </div>
+            {showComment && (
+              <div className="field">
+                <label htmlFor="first-comment">First comment <span style={{ fontWeight: 400, color: 'var(--muted)' }}>(optional)</span></label>
+                <textarea id="first-comment" className="input" value={firstComment} readOnly={commentLocked} autoFocus={commentOpen && !firstComment}
+                  onChange={(e) => setFirstComment(e.target.value)}
+                  {...invalid('caption')} aria-describedby={shown('caption').length ? 'first-comment-hint err-caption' : 'first-comment-hint'} />
+                <span id="first-comment-hint" style={{ fontSize: 13, color: 'var(--muted)' }}>
+                  {commentLocked ? 'Already live: add or change the comment in Facebook/Instagram.'
+                    : "Posted as a comment on Facebook and Instagram; copy it on your phone for the others. Instagram links aren't clickable."}
+                </span>
+              </div>
+            )}
+            {/* Unlike the rows, caption problems wait until you've left the caption: an empty post isn't a mistake yet. */}
+            <FieldError id="err-caption" messages={shown('caption')} />
+          </div>
+        </fieldset>
 
-            <div className="field" style={{ gap: 12 }} onBlur={touch('caption')}>
-              <div role="group" aria-label="Edit the text for" className="filters" style={{ alignSelf: 'flex-start', maxWidth: '100%' }}>
-                <button type="button" aria-pressed={editing === 'all'} onClick={() => setTab('all')}>All platforms</button>
-                {chosen.map((p) => (
-                  <button key={p} type="button" aria-pressed={editing === p} onClick={() => setTab(p)}>
-                    {PLATFORM_NAMES[p]}{isCustomized(variants, p) && <span aria-label=" (customized)" style={{ color: 'var(--accent)' }}> ●</span>}
+        <div className="c-rows tray rise">
+          <div className="core flush">
+            <SettingRow name="media" label="Media" value={mediaValue} warnings={errors.media} alert={shown('media').length > 0} onOpen={() => setSheet('media')}
+              icon={mediaType === 'image' && mediaUrl ? <span className="s-thumb" style={{ backgroundImage: `url("${mediaUrl}")` }} /> : <MediaIcon />} />
+            <SettingRow name="where" label="Where" value={whereSummary(targets, accounts)} warnings={errors.where} alert={shown('where').length > 0}
+              icon={<WhereIcon />} onOpen={() => setSheet('where')} />
+            <SettingRow name="when" label="When" value={whenSummary(mode, publishAt, tz)} warnings={errors.when} alert={shown('when').length > 0}
+              icon={<WhenIcon />} onOpen={() => setSheet('when')} />
+            <SettingRow name="link" label="Link" value={linkSummary(link)} icon={<LinkIcon />} onOpen={() => setSheet('link')} />
+          </div>
+        </div>
+
+        <div className="c-bar glass">
+          {rows.length > 0 && (
+            <button type="button" className="c-round c-more" aria-label="More actions" aria-haspopup="dialog" onClick={() => setSheet('more')}><More /></button>
+          )}
+          <button type="button" className="btn" disabled={busy !== '' || locked} onClick={() => save('draft')}>Save draft</button>
+          <button type="submit" className="btn primary" disabled={busy !== '' || locked}>
+            {busy === 'save' ? 'Saving…' : mode === 'now' ? 'Post now' : 'Schedule'}
+            <span className="knob"><Arrow /></span>
+          </button>
+        </div>
+      </div>
+
+      {wide && <aside className="c-side rise" aria-label="Preview">{preview}</aside>}
+
+      <Sheet open={sheet === 'media'} onClose={closeSheet('media')} title="Media">
+        <fieldset className="bare field" disabled={locked}>
+          {/* The whole box is the file picker: click, drop or paste. */}
+          <label className={`dropzone${dragging ? ' over' : ''}`}>
+            <span className="thumb" aria-hidden="true" style={mediaType === 'image' && mediaUrl ? { width: 64, height: 64, backgroundImage: `url("${mediaUrl}")`, color: 'transparent' } : { width: 64, height: 64 }}>
+              {mediaType === 'none' ? 'None' : mediaType}
+            </span>
+            <span className="dz-text">
+              <span className="dz-title">{busy === 'upload' ? 'Uploading…' : dragging ? 'Drop to upload' : mediaUrl ? `${mediaType === 'video' ? 'Video' : 'Image'} added` : 'Add a photo or video'}</span>
+              <span className="dz-hint">{mediaUrl ? 'Tap to replace it' : 'Tap, drop or paste · JPEG, PNG, WebP, MP4 · up to 50 MB'}</span>
+            </span>
+            <span className="btn dark" aria-hidden="true" style={{ minHeight: 44 }}>{mediaUrl ? 'Replace' : 'Choose file'}</span>
+            <input id="media-file" type="file" className="sr-only" accept={ACCEPT} disabled={busy === 'upload'} {...invalid('media')}
+              onChange={(e) => e.target.files?.[0] && upload(e.target.files[0])} />
+          </label>
+          <FieldError messages={errors.media} alert={false} />
+          {/* The page behind a sheet is inert, so an upload failure is shown (and announced) here too. */}
+          {error && <p className="notice" role="alert">{error}</p>}
+          {mediaUrl && (
+            <button type="button" className="link-btn" onClick={() => {
+              setMediaUrl('')
+              setMediaType('none')
+              const remembered = rememberedTargets('none')
+              if (!num && remembered) setTargets(remembered)
+            }}>
+              Remove media
+            </button>
+          )}
+        </fieldset>
+      </Sheet>
+
+      <Sheet open={sheet === 'where'} onClose={closeSheet('where')} title="Where">
+        <fieldset id="where" className="bare" disabled={locked} style={{ display: 'flex', flexDirection: 'column', gap: 12 }} {...invalid('where')}>
+          <legend className="sr-only">Where</legend>
+          {accounts.map((a) => {
+            const row = rowOf(a.id)
+            // Only this account's own logins (plus anything an older post already had here, so it can be unticked).
+            const usable = PLATFORMS.filter((p) => !isHandPlatform(p) && (ownLogin(p, a) || (p !== 'tiktok' && !!targets[a.id]?.includes(p))))
+            const picked = (targets[a.id] ?? []).filter((p) => usable.includes(p))
+            return (
+              <div key={a.id} className="target" data-on={picked.length ? '' : undefined}>
+                <span style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 12 }}>
+                  <span style={{ fontSize: 15, fontWeight: 600 }}>{a.name}</span>
+                  <span className="mono">{picked.length ? `${picked.length} selected` : usable.length ? 'Not posting here' : ''}</span>
+                </span>
+                {usable.length ? (
+                  <div role="group" aria-label={`Platforms for ${a.name}`} style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+                    {usable.map((p) => {
+                      const done = !!row && row.platforms.includes(p) && isDone(row, p)
+                      const on = !!targets[a.id]?.includes(p)
+                      return (
+                        <button key={p} type="button" className="toggle" aria-pressed={on} disabled={done}
+                          title={done ? 'Already posted here' : undefined} onClick={() => toggle(a.id, p)}>
+                          {on && <Check />}
+                          {PLATFORM_NAMES[p]}
+                          <span className="toggle-mode">{done ? 'Posted' : p === 'tiktok' ? 'Drafts' : 'Auto'}</span>
+                        </button>
+                      )
+                    })}
+                  </div>
+                ) : (
+                  <span style={{ fontSize: 14, color: 'var(--muted)' }}>No logins yet. <a href="#/accounts">Connect one on Accounts</a>.</span>
+                )}
+              </div>
+            )
+          })}
+          {/* By-hand platforms belong to no login: they come to your phone, once, whichever accounts you pick. */}
+          <div className="target" data-on={handOn.length ? '' : undefined}>
+            <span style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 12 }}>
+              <span style={{ fontSize: 15, fontWeight: 600 }}>To your phone</span>
+              <span className="mono">{handOn.length ? `${handOn.length} selected` : 'Post these by hand'}</span>
+            </span>
+            <div role="group" aria-label="Platforms you post by hand" style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+              {handPlatforms.map((p) => {
+                const on = handOn.includes(p)
+                const done = rows.some((r) => r.platforms.includes(p) && isDone(r, p))
+                return (
+                  <button key={p} type="button" className="toggle" aria-pressed={on} disabled={done}
+                    title={done ? 'Already sent to your phone' : undefined} onClick={() => toggleHand(p)}>
+                    {on && <Check />}
+                    {PLATFORM_NAMES[p]}
+                    <span className="toggle-mode">{done ? 'Sent' : 'By hand'}</span>
+                  </button>
+                )
+              })}
+            </div>
+            <span style={{ fontSize: 13, color: 'var(--muted)' }}>The caption and file come to Telegram and the handoff page; you post them yourself.</span>
+          </div>
+          <FieldError messages={errors.where} alert={false} />
+        </fieldset>
+      </Sheet>
+
+      <Sheet open={sheet === 'when'} onClose={closeSheet('when')} title="When">
+        <fieldset className="bare field" disabled={locked}>
+          <div id="when-mode" role="group" aria-label="When to post" className="filters" style={{ alignSelf: 'flex-start' }}>
+            <button type="button" aria-pressed={mode === 'now'} onClick={() => setMode('now')}>Post now</button>
+            <button type="button" aria-pressed={mode === 'later'} onClick={() => setMode('later')}>Schedule</button>
+          </div>
+          {mode === 'later' && (
+            <>
+              <label htmlFor="when" className="sr-only">Post at ({tz})</label>
+              <input id="when" className="input" type="datetime-local" value={publishAt} onChange={(e) => setPublishAt(e.target.value)} {...invalid('when')} />
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                {quickTimes(tz).map((c) => (
+                  <button key={c.label} type="button" className="chip queued" onClick={() => setPublishAt(c.value)}
+                    aria-pressed={publishAt === c.value} style={{ height: 44, padding: '0 14px', cursor: 'pointer', border: 0, fontFamily: 'var(--sans)' }}>
+                    {c.label}
                   </button>
                 ))}
               </div>
-              {editing === 'all' ? (
-                <>
-                  <span style={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'space-between', gap: '4px 12px' }}>
-                    <label htmlFor="caption" className="legend">Caption <span style={{ fontWeight: 400, color: 'var(--muted)' }}>· used everywhere unless a platform overrides it</span></label>
-                    <span className="mono" aria-live="polite">{caption.length.toLocaleString('en')} chars · {hashtagCount(caption)} hashtags</span>
-                  </span>
-                  <textarea id="caption" className="input" value={caption} onChange={(e) => setCaption(e.target.value)} {...invalid('caption')} />
-                  <label htmlFor="first-comment" className="legend">First comment <span style={{ fontWeight: 400, color: 'var(--muted)' }}>(optional)</span></label>
-                  <textarea id="first-comment" className="input" value={firstComment} readOnly={commentLocked} onChange={(e) => setFirstComment(e.target.value)}
-                    {...invalid('caption')} aria-describedby={shown('caption').length ? 'first-comment-hint err-caption' : 'first-comment-hint'} />
-                  <span id="first-comment-hint" style={{ fontSize: 13, color: 'var(--muted)' }}>
-                    {commentLocked ? 'Already live: add or change the comment in Facebook/Instagram.'
-                      : "Posted as a comment on Facebook and Instagram; copy it on your phone for the others. Instagram links aren't clickable."}
-                  </span>
-                </>
-              ) : (
-                <PlatformText p={editing} base={caption} variants={variants} set={setVariant} />
-              )}
-              <FieldError section="caption" messages={shown('caption')} />
-            </div>
-
-            <fieldset id="where" style={{ margin: 0, padding: 0, border: 0, display: 'flex', flexDirection: 'column', gap: 12 }} onBlur={touch('where')} {...invalid('where')}>
-              <legend className="legend" style={{ padding: 0, marginBottom: 12 }}>Where</legend>
-              {accounts.map((a) => {
-                const row = rowOf(a.id)
-                // Only this account's own logins (plus anything an older post already had here, so it can be unticked).
-                const usable = PLATFORMS.filter((p) => !isHandPlatform(p) && (ownLogin(p, a) || (p !== 'tiktok' && !!targets[a.id]?.includes(p))))
-                const picked = (targets[a.id] ?? []).filter((p) => usable.includes(p))
-                return (
-                  <div key={a.id} className="target" data-on={picked.length ? '' : undefined}>
-                    <span style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 12 }}>
-                      <span style={{ fontSize: 15, fontWeight: 600 }}>{a.name}</span>
-                      <span className="mono">{picked.length ? `${picked.length} selected` : usable.length ? 'Not posting here' : ''}</span>
-                    </span>
-                    {usable.length ? (
-                      <div role="group" aria-label={`Platforms for ${a.name}`} style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
-                        {usable.map((p) => {
-                          const done = !!row && row.platforms.includes(p) && isDone(row, p)
-                          const on = !!targets[a.id]?.includes(p)
-                          return (
-                            <button key={p} type="button" className="toggle" aria-pressed={on} disabled={done}
-                              title={done ? 'Already posted here' : undefined} onClick={() => toggle(a.id, p)}>
-                              {on && <Check />}
-                              {PLATFORM_NAMES[p]}
-                              <span className="toggle-mode">{done ? 'Posted' : p === 'tiktok' ? 'Drafts' : 'Auto'}</span>
-                            </button>
-                          )
-                        })}
-                      </div>
-                    ) : (
-                      <span style={{ fontSize: 14, color: 'var(--muted)' }}>No logins yet. <a href="#/accounts">Connect one on Accounts</a>.</span>
-                    )}
-                  </div>
-                )
-              })}
-              {/* By-hand platforms belong to no login: they come to your phone, once, whichever accounts you pick. */}
-              <div className="target" data-on={handOn.length ? '' : undefined}>
-                <span style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 12 }}>
-                  <span style={{ fontSize: 15, fontWeight: 600 }}>To your phone</span>
-                  <span className="mono">{handOn.length ? `${handOn.length} selected` : 'Post these by hand'}</span>
-                </span>
-                <div role="group" aria-label="Platforms you post by hand" style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
-                  {handPlatforms.map((p) => {
-                    const on = handOn.includes(p)
-                    const done = rows.some((r) => r.platforms.includes(p) && isDone(r, p))
-                    return (
-                      <button key={p} type="button" className="toggle" aria-pressed={on} disabled={done}
-                        title={done ? 'Already sent to your phone' : undefined} onClick={() => toggleHand(p)}>
-                        {on && <Check />}
-                        {PLATFORM_NAMES[p]}
-                        <span className="toggle-mode">{done ? 'Sent' : 'By hand'}</span>
-                      </button>
-                    )
-                  })}
-                </div>
-                <span style={{ fontSize: 13, color: 'var(--muted)' }}>The caption and file come to Telegram and the handoff page; you post them yourself.</span>
-              </div>
-              <FieldError section="where" messages={shown('where')} />
-            </fieldset>
-
-            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 16 }}>
-              <div className="field" style={{ flex: '1 1 280px', minWidth: 0 }} onBlur={touch('when')}>
-                <span className="legend">When</span>
-                <div id="when-mode" role="group" aria-label="When to post" className="filters" style={{ alignSelf: 'flex-start' }}>
-                  <button type="button" aria-pressed={mode === 'now'} onClick={() => setMode('now')}>Post now</button>
-                  <button type="button" aria-pressed={mode === 'later'} onClick={() => setMode('later')}>Schedule</button>
-                </div>
-                {mode === 'later' && (
-                  <>
-                    <label htmlFor="when" className="sr-only">Post at ({tz})</label>
-                    <input id="when" className="input" type="datetime-local" value={publishAt} onChange={(e) => setPublishAt(e.target.value)} {...invalid('when')} />
-                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
-                      {quickTimes(tz).map((c) => (
-                        <button key={c.label} type="button" className="chip queued" onClick={() => setPublishAt(c.value)}
-                          aria-pressed={publishAt === c.value} style={{ height: 44, padding: '0 14px', cursor: 'pointer', border: 0, fontFamily: 'var(--sans)' }}>
-                          {c.label}
-                        </button>
-                      ))}
-                    </div>
-                    <span style={{ fontSize: 13, color: 'var(--muted)' }}>{tz} time{active.length > 1 ? ', for every account' : ''}</span>
-                  </>
-                )}
-                <FieldError section="when" messages={shown('when')} />
-              </div>
-              <div className="field" style={{ flex: '1 1 280px', minWidth: 0 }}>
-                <label htmlFor="link">Link <span style={{ fontWeight: 400, color: 'var(--muted)' }}>· Facebook and X</span></label>
-                <input id="link" className="input" type="url" inputMode="url" placeholder="https://" value={link} onChange={(e) => setLink(e.target.value)} />
-              </div>
-            </div>
-
-            <div className="actions">
-              {rows.length > 0 && !rows.some(postedByApi) && (
-                <button type="button" className="btn danger" onClick={remove} style={{ marginRight: 'auto' }}>Delete</button>
-              )}
-              <button type="button" className="btn" disabled={busy !== ''} onClick={() => save('draft')}>Save draft</button>
-              <button type="submit" className="btn primary" disabled={busy !== ''}>
-                {busy === 'save' ? 'Saving…' : mode === 'now' ? 'Post now' : publishAt ? `Schedule for ${when}` : 'Schedule'}
-                <span className="knob"><Arrow /></span>
-              </button>
-            </div>
-          </fieldset>
-        </section>
-
-        <aside className="side" aria-label="Checks, preview and plan">
-          <section className="tray rise" id="checks">
-            <div className="core">
-              <h2>Checks</h2>
-              <ul aria-live="polite" style={{ listStyle: 'none', margin: 0, padding: 0, display: 'flex', flexDirection: 'column', gap: 12, fontSize: 14, lineHeight: 1.45 }}>
-                {problems.length === 0 ? (
-                  <li className="ok" style={{ display: 'flex', gap: 12 }}><Check label="OK" />Ready to schedule</li>
-                ) : (
-                  problems.map((p) => (
-                    <li key={p} style={{ display: 'flex', gap: 12, padding: 14, borderRadius: 16,
-                      background: tried ? 'var(--warn-tint)' : 'var(--well)', color: tried ? '#6e2e05' : 'var(--ink-2)' }}>
-                      <Alert label="To fix" />{p}
-                    </li>
-                  ))
-                )}
-              </ul>
-            </div>
-          </section>
-          {chosen.length > 0 && (
-            <PostPreview platforms={chosen} caption={caption} firstComment={firstComment} variants={variants} link={link} mediaType={mediaType} mediaUrl={mediaUrl}
-              accountFor={(p) => active.find((a) => targets[a.id].includes(p))?.name ?? ''} />
+              <span style={{ fontSize: 13, color: 'var(--muted)' }}>{tz} time{active.length > 1 ? ', for every account' : ''}</span>
+            </>
           )}
-          {active.length > 0 && (
-            <section className="tray rise">
-              <div className="core dark">
-                <h2 style={{ color: '#fff' }}>{mode === 'now' ? 'When you post' : `At ${when}`}</h2>
-                <ol style={{ listStyle: 'none', margin: 0, padding: 0 }}>
-                  {active.flatMap((a) => targets[a.id].map((p) => ({ a, p }))).map(({ a, p }, i) => (
-                    <li key={`${a.id}-${p}`} style={{ display: 'flex', gap: 16, padding: '14px 0', borderTop: i ? '1px solid rgba(255,255,255,0.08)' : 0 }}>
-                      <span className="mono" style={{ width: 32, lineHeight: '20px', color: byHand(p, a) ? '#afc0ff' : '#c9cbcf' }}>{PLATFORM_CODES[p]}</span>
-                      <span style={{ fontSize: 14, lineHeight: 1.45 }}>{active.length > 1 && <strong style={{ fontWeight: 600 }}>{ownLogin(p, a) ? a.name : 'Your phone'}: </strong>}{planText(p, a)}</span>
-                    </li>
-                  ))}
-                </ol>
-              </div>
-            </section>
-          )}
-        </aside>
-      </form>
-    </>
+          <FieldError messages={errors.when} alert={false} />
+        </fieldset>
+      </Sheet>
+
+      <Sheet open={sheet === 'link'} onClose={closeSheet('link')} title="Link">
+        <fieldset className="bare field" disabled={locked}>
+          <label htmlFor="link">Link <span style={{ fontWeight: 400, color: 'var(--muted)' }}>· Facebook and X</span></label>
+          <input id="link" className="input" type="url" inputMode="url" placeholder="https://" value={link} onChange={(e) => setLink(e.target.value)} />
+        </fieldset>
+      </Sheet>
+
+      <Sheet open={sheet === 'preview' && !wide} onClose={closeSheet('preview')} title="Preview">{preview}</Sheet>
+
+      <Sheet open={sheet === 'more'} onClose={closeSheet('more')} title="More">
+        <div className="c-more-list">
+          {links.map((l) => (
+            <a key={`${l.account}-${l.platform}`} className="btn light" href={l.url} target="_blank" rel="noopener">
+              View on {NAMED[l.platform]}{rows.length > 1 ? ` · ${accountName(l.account)}` : ''}<span className="knob"><Arrow /></span>
+            </a>
+          ))}
+          <button type="button" className="btn" onClick={postAgain}>Post again</button>
+          {/* Close the sheet first, so a failed delete's message isn't hidden behind it. */}
+          {canDelete && <button type="button" className="btn danger" disabled={locked} onClick={() => { setSheet(''); remove() }}>Delete</button>}
+        </div>
+      </Sheet>
+    </form>
   )
 }
 
-// Where a blocked save puts focus for each section.
+// Where a blocked save puts focus for each section: the caption, or the row that opens the section's sheet.
 const FOCUS: Record<Section, string> = {
-  media: '#media-file',
-  caption: '#caption, #v-title, #v-caption, #first-comment',
-  where: '#where .toggle:not(:disabled)',
-  when: '#when, #when-mode button',
-}
-
-/** A section's problems, right under it; the field points at it with aria-describedby. */
-function FieldError({ section, messages }: { section: Section; messages: string[] }) {
-  if (!messages.length) return null
-  return (
-    <ul id={`err-${section}`} className="field-error">
-      {messages.map((m) => <li key={m}><Alert label="Problem" />{m}</li>)}
-    </ul>
-  )
+  media: '#row-media',
+  caption: '#caption',
+  where: '#row-where',
+  when: '#row-when',
 }
 
 function PlatformText({ p, base, variants, set }: {

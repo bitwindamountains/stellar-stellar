@@ -1,4 +1,9 @@
+import type { Variants } from './content'
+import { mediaWasRemoved } from './postView'
+import { saveDraft } from './prefs'
+import { go } from './route'
 import { supabase } from './supabase'
+import type { Post } from './types'
 
 /** Ask the publisher to run now. Without the dispatch function deployed, the next 30-minute run picks it up. */
 export async function publishSoon(): Promise<void> {
@@ -15,4 +20,20 @@ export async function retryNow(num: number): Promise<string | null> {
   if (error) return error.message
   await publishSoon()
   return null
+}
+
+/** Copies a post (all its account rows) into a fresh "now" draft and opens New post; nothing posts until Save. */
+export function startPostAgain(rows: Post[]): void {
+  const lead = rows[0]
+  // An upload is removed once its by-hand post is marked done (see Handoff), so don't copy a dead link.
+  const gone = rows.some(mediaWasRemoved)
+  saveDraft({
+    targets: Object.fromEntries(rows.map((r) => [r.account_id, r.platforms])),
+    caption: lead.caption, firstComment: lead.first_comment, variants: (lead.variants as Variants) ?? {}, link: lead.link,
+    mode: 'now', publishAt: '',
+    mediaType: gone ? 'none' : lead.media_type,
+    mediaUrl: gone ? '' : lead.media_urls[0] ?? '',
+    note: gone ? 'The original file was removed after you posted it by hand. Add it again.' : undefined,
+  })
+  go('/new')
 }
