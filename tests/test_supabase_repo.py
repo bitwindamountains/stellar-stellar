@@ -1,4 +1,5 @@
 import json
+from datetime import date
 
 import httpx
 import pytest
@@ -257,3 +258,27 @@ def test_recent_posted_and_save_stats():
     r.save_stats(12, {"facebook": {"likes": 1}})
     assert calls[-1].method == "PATCH" and calls[-1].url.params["num"] == "eq.12"
     assert json.loads(calls[-1].content) == {"stats": {"facebook": {"likes": 1}}}
+
+
+def test_claim_nudge_is_once_per_day():
+    sent = set()
+
+    def handler(request):
+        assert request.url.path.endswith("/nudges") and request.method == "POST"
+        assert request.headers["Prefer"] == "resolution=ignore-duplicates,return=representation"
+        day = json.loads(request.content)["day"]
+        if day in sent:
+            return httpx.Response(201, json=[])  # duplicate ignored: nothing inserted
+        sent.add(day)
+        return httpx.Response(201, json=[{"day": day}])
+
+    r, _ = repo(handler)
+    assert r.claim_nudge(date(2026, 10, 5)) is True
+    assert r.claim_nudge(date(2026, 10, 5)) is False
+    assert r.claim_nudge(date(2026, 10, 6)) is True
+
+
+def test_claim_nudge_error_is_a_store_error():
+    r, _ = repo(lambda req: httpx.Response(500, json={"message": "boom"}))
+    with pytest.raises(StoreError):
+        r.claim_nudge(date(2026, 10, 5))

@@ -1,5 +1,5 @@
 import json
-from datetime import datetime
+from datetime import date, datetime
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 import httpx
@@ -67,6 +67,20 @@ class SupabaseRepository:
             if rows:
                 claimed[num] = Post(row=num, cells=_to_cells(rows[0], self.accounts))
         return claimed
+
+    def claim_nudge(self, day: date) -> bool:
+        """Mark `day`'s nudge as sent. False if a run already did, so it goes out at most once a day."""
+        try:
+            r = self.http.post(
+                f"{self.base}/nudges",
+                json={"day": day.isoformat()},
+                headers={**self.headers, "Prefer": "resolution=ignore-duplicates,return=representation"},
+            )
+        except httpx.TransportError:
+            raise StoreError("Couldn't reach Supabase (network problem)") from None
+        if not r.is_success:
+            raise StoreError(f"Supabase {r.status_code} on nudges: request failed")
+        return bool(r.json())
 
     def count_live_between(self, start: datetime, end: datetime) -> int:
         """Posts planned or done in [start, end). Failed and missed ones don't count."""
