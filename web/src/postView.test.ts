@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { canRetry, chipState, chips, groupByDay, mediaWasRemoved, mergePosts, needsYou, statusLabel, weekStrip } from './postView'
+import { ago, canRetry, chipState, chips, groupByDay, mediaWasRemoved, mergePosts, needsYou, statsLine, statusLabel, weekStrip } from './postView'
 import { isDraft, needsFinishing, postedByApi, sentByHand, type Post } from './types'
 
 function post(over: Partial<Post>): Post {
@@ -115,5 +115,27 @@ describe('sentByHand', () => {
   it('posts live on an automatic platform cannot be deleted', () => {
     expect(postedByApi(post({ x_post_id: '1' }))).toBe(true)
     expect(postedByApi(post({ tiktok_id: 'telegram' }))).toBe(false)
+  })
+})
+
+describe('statsLine', () => {
+  it('compacts and joins present counts', () => {
+    expect(statsLine({ as_of: 'x', views: 1200, likes: 48, comments: 6, shares: 2 })).toBe('1.2k views · 48 likes · 6 comments · 2 shares')
+    expect(statsLine({ as_of: 'x', views: 2000, likes: 12500 })).toBe('2k views · 12.5k likes')
+    expect(statsLine({ as_of: 'x', views: 1_000_000 })).toBe('1m views')
+  })
+  it('falls back to reach and leaves out missing values', () => {
+    expect(statsLine({ as_of: 'x', reach: 310, likes: 4 })).toBe('310 reach · 4 likes')
+    expect(statsLine({ as_of: 'x' })).toBe('')
+  })
+})
+
+describe('ago', () => {
+  const now = new Date('2026-10-30T12:00:00Z')
+  it('says how long ago', () => {
+    expect(ago('2026-10-30T11:59:40Z', now)).toBe('just now')
+    expect(ago('2026-10-30T11:55:00Z', now)).toBe('5 min ago')
+    expect(ago('2026-10-30T09:00:00Z', now)).toBe('3 h ago')
+    expect(ago('2026-10-28T12:00:00Z', now)).toBe('2 d ago')
   })
 })

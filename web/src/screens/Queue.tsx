@@ -2,10 +2,10 @@ import { useCallback, useEffect, useMemo, useState, type CSSProperties } from 'r
 import { retryNow } from '../actions'
 import { groupHref, groupPosts, groupStatus, postLinks, type PostGroup } from '../groups'
 import { Arrow, Asteroids, Check, Constellation, FlightPath, PlatformMark } from '../icons'
-import { awaitingHandoff, canRetry, chips, groupByDay, mergePosts, needsYou, timeOf, weekStrip } from '../postView'
+import { ago, awaitingHandoff, canRetry, chips, groupByDay, mergePosts, needsYou, statsLine, timeOf, weekStrip } from '../postView'
 import { reveal } from '../scroll'
 import { supabase } from '../supabase'
-import { ACCOUNT_SELECT, canPost, isConnected, needsFinishing, PLATFORM_CODES, sentByHand, type Account, type Post, type Run } from '../types'
+import { ACCOUNT_SELECT, canPost, isConnected, needsFinishing, PLATFORM_CODES, sentByHand, type Account, type PlatformStats, type Post, type Run } from '../types'
 
 type Filter = 'all' | 'auto' | 'hand' | 'needs' | 'posted'
 const NAMED = { facebook: 'Facebook', instagram: 'Instagram', x: 'X', tiktok: 'TikTok' } as Record<string, string>
@@ -228,6 +228,32 @@ export default function Queue() {
                             ))}
                           </div>
                         )}
+                        {filter === 'posted' && g.rows.map((r) => {
+                          const who = multi ? `${accountOf(r.account_id)?.name ?? ''} · ` : ''
+                          const note = r.status === 'posted' ? r.last_error : null
+                          const shown = (Object.entries(r.stats ?? {}) as [string, PlatformStats][]).filter(([, s]) => statsLine(s) || s.top_comments?.length)
+                          if (!note && shown.length === 0) return null
+                          return (
+                            <div key={r.num} className="r-stats">
+                              {shown.map(([platform, s]) => (
+                                <div key={platform}>
+                                  {statsLine(s) && <p className="mono">{who}{NAMED[platform]} · {statsLine(s)} · as of {ago(s.as_of)}</p>}
+                                  {!!s.top_comments?.length && (
+                                    <details>
+                                      <summary>Top comments ({s.top_comments.length})</summary>
+                                      <ul>
+                                        {s.top_comments.slice(0, 5).map((c, i) => (
+                                          <li key={i}><strong>{c.author}</strong> {c.text} <span className="mono">♥ {c.likes}</span></li>
+                                        ))}
+                                      </ul>
+                                    </details>
+                                  )}
+                                </div>
+                              ))}
+                              {note && <p className="r-note">{who}{note}</p>}
+                            </div>
+                          )
+                        })}
                       </li>
                     )
                   })}
