@@ -6,7 +6,9 @@ import { rememberTab, useRoute } from './route'
 import Accounts from './screens/Accounts'
 import Composer from './screens/Composer'
 import Handoff from './screens/Handoff'
+import History from './screens/History'
 import Planned from './screens/Planned'
+import PostDetail from './screens/PostDetail'
 import SignIn from './screens/SignIn'
 import Today from './screens/Today'
 import { parseRoute } from './selectors'
@@ -61,7 +63,8 @@ export default function App() {
         <div className="wrap">
           {route.screen === 'today' && <Today />}
           {route.screen === 'planned' && <Planned day={route.day} />}
-          {(route.screen === 'history' || route.screen === 'post') && <p style={{ color: '#f4f5fa' }}>Coming soon</p>}
+          {route.screen === 'history' && <History />}
+          {route.screen === 'post' && <PostDetail num={route.num} />}
           {route.screen === 'new' && <Composer />}
           {route.screen === 'edit' && <Composer num={route.num} />}
           {route.screen === 'accounts' && <Accounts />}
