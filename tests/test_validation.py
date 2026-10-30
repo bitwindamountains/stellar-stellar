@@ -192,3 +192,8 @@ def test_first_comment_too_long_for_phone_handoff():
     assert msg in errors(platforms="youtube", first_comment="x" * 4037, **video)
     assert msg not in errors(platforms="youtube", first_comment="x" * 4036, **video)
     assert msg not in errors(platforms="facebook", first_comment="x" * 5000)
+    # TikTok drafts get the comment block in Telegram too, even when TikTok is connected.
+    tiktok = {"platforms": "tiktok", **video}
+    assert msg in linked_errors(**tiktok, first_comment="x" * 4037)
+    assert msg not in linked_errors(**tiktok, first_comment="x" * 4036)
+    assert msg in errors(account="nobody", **tiktok, first_comment="x" * 4037)

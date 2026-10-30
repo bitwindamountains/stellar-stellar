@@ -1,6 +1,6 @@
 // Mirror of src/postpilot/validation.py for instant feedback. The publisher re-checks; keep messages in sync.
 import { textFor, titleFor, type Variants } from './content'
-import { byHand, isConnected, PLATFORM_NAMES, type Account, type MediaType, type Platform } from './types'
+import { byHand, isAssisted, isConnected, PLATFORM_NAMES, type Account, type MediaType, type Platform } from './types'
 
 export const IG_CAPTION_MAX = 2200
 export const IG_HASHTAGS_MAX = 30
@@ -111,7 +111,8 @@ export function validate(d: Draft, requireTime: boolean): string[] {
     if (has('instagram')) {
       if (first.length > IG_COMMENT_MAX) errors.push(`First comment: Instagram allows at most ${IG_COMMENT_MAX.toLocaleString('en')} characters`)
     }
-    if (d.platforms.some((p) => byHand(p, d.account)) && first.length + TELEGRAM_OVERHEAD > TELEGRAM_MESSAGE_MAX)
+    // Every assisted platform gets the comment in Telegram, connected TikTok drafts included.
+    if (d.platforms.some(isAssisted) && first.length + TELEGRAM_OVERHEAD > TELEGRAM_MESSAGE_MAX)
       errors.push('First comment too long for the phone handoff')
   }
   if (titleFor(d.variants, 'youtube').length > YOUTUBE_TITLE_MAX) errors.push(`YouTube titles max ${YOUTUBE_TITLE_MAX} characters`)

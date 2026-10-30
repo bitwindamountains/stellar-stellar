@@ -600,7 +600,12 @@ html { scroll-padding-top: 96px; }
 /* Posted tab: stats, top comments, notes */
 .r-stats { padding: 0 16px 12px 164px; display: flex; flex-direction: column; gap: 4px; font-size: 13px; color: var(--muted); overflow-wrap: anywhere; }
 .r-stats p { margin: 0; }
-.r-stats summary { cursor: pointer; min-height: 32px; display: flex; align-items: center; }
+.r-stats summary { cursor: pointer; min-height: 44px; display: flex; align-items: center; gap: 6px; }
+/* display:flex drops the native marker, so draw one that turns when open. */
+.r-stats summary::before { content: '▸'; display: inline-block; transition: transform 150ms ease-out; }
+.r-stats details[open] > summary::before { transform: rotate(90deg); }
+.r-stats summary::-webkit-details-marker { display: none; }
+@media (prefers-reduced-motion: reduce) { .r-stats summary::before { transition: none; } }
 .r-stats details ul { margin: 0 0 4px; padding-left: 18px; color: var(--ink-2); }
 .r-stats details li { margin: 4px 0; }
 @media (max-width: 767px) { .r-stats { padding-left: 84px; } }

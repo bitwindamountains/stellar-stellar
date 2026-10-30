@@ -109,9 +109,11 @@ def publish(
 
         return comment_one
 
+    stats_http = httpx.Client(timeout=10)  # stats must not stall the run: short timeout, no retries
+
     def meta_stats(module):
         def stats_one(post, account, object_id):
-            graph = GraphClient(cfg.meta_graph_version, token(account, "meta"), http=http)
+            graph = GraphClient(cfg.meta_graph_version, token(account, "meta"), http=stats_http, attempts=1)
             return module.stats(graph, object_id)
 
         return stats_one
@@ -152,12 +154,6 @@ def publish(
         repo.record_run(**counts, duration_ms=int((time.monotonic() - started) * 1000), dry_run=False)
     if not dry_run and assist and cfg.nudge_hour is not None and hasattr(repo, "count_live_between"):
         _nudge_if_empty(repo, cfg, http, now)
-    if not dry_run and hasattr(repo, "recent_posted"):
-        try:
-            for line in stats.refresh(repo, fetchers, now):
-                typer.echo(line)
-        except StoreError as e:
-            typer.echo(f"Stats skipped: {e}")
     for line in report.lines:
         typer.echo(line)
     prefix = "Dry run: " if dry_run else ""
@@ -165,6 +161,14 @@ def publish(
         f"{prefix}{len(report.posted)} posted, {len(report.partial)} retrying, "
         f"{len(report.failed)} failed, {len(report.missed)} missed."
     )
+    if not dry_run and hasattr(repo, "recent_posted"):
+        try:
+            for line in stats.refresh(repo, fetchers, now):
+                typer.echo(line)
+        except StoreError as e:
+            typer.echo(f"Stats skipped: {e}")
+        except Exception as e:  # stats never change the exit code; no message text (it can hold a token)
+            typer.echo(f"Stats skipped: {type(e).__name__}")
     if report.failed or report.missed:
         raise typer.Exit(1)
 

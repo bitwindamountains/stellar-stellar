@@ -87,6 +87,28 @@ def test_refresh_skips_by_hand_and_empty_ids():
     assert calls == [] and repo.saved == []
 
 
+def test_refresh_skips_post_with_unknown_account_and_any_exception():
+    def broken_token(p, a, i):
+        raise KeyError("access_token secret")  # e.g. token() blowing up inside the fetcher
+
+    orphan = Post(row=2, cells={"account": "gone", "fb_post_id": "F2", "stats": "{}"})
+    repo = Repo([post(), orphan])
+    lines = stats.refresh(repo, {"facebook": ok({"likes": 1}), "instagram": broken_token}, NOW)
+    assert lines == [
+        "row 1: stats skipped on instagram (KeyError)",
+        "row 2: stats skipped on facebook (KeyError)",
+    ]
+    assert [n for n, _ in repo.saved] == [1]
+
+
+def test_refresh_stops_when_time_budget_is_spent():
+    ticks = iter([0, 0, 30, 61, 999])  # start, then one tick before each post
+    repo = Repo([post(n) for n in range(1, 5)])
+    lines = stats.refresh(repo, {"facebook": ok({})}, NOW, budget_s=60, clock=lambda: next(ticks))
+    assert [n for n, _ in repo.saved] == [1, 2]
+    assert lines == ["stats: stopped after 2 post(s), time budget reached"]
+
+
 def test_refresh_respects_limit():
     repo = Repo([post(n) for n in range(1, 6)])
     stats.refresh(repo, {"facebook": ok({})}, NOW, limit=2)
