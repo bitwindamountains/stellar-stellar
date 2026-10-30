@@ -7,6 +7,8 @@ from postpilot.config import Config
 from postpilot.models import (
     ASSISTED_PLATFORMS,
     COMMENT_COLUMN,
+    COMMENT_NOT_ADDED,
+    COMMENT_UNCLEAR,
     FINISH_IN_APP,
     ID_COLUMN,
     PERMALINK_COLUMN,
@@ -79,22 +81,27 @@ def run(
         why = f"Not posted: more than {cfg.late_grace_minutes} minutes late. Edit it to post now or later."
         updates[post.row] = {"status": "missed", "last_error": why}
         report.missed.append(post.row)
-    for post, kind in [(p, "permanent") for p in s.exhausted] + [(p, "unknown") for p in s.stale]:
-        # Live everywhere, only first comments left: the post is out, so it's posted (comment by hand).
+    closing = [(p, COMMENT_NOT_ADDED) for p in s.exhausted] + [(p, COMMENT_UNCLEAR) for p in s.stale]
+    for post, sentinel in closing:
+        # Give up pending first comments for good (a stale run may have posted them): never comment again.
         comments = [p for p in post.platforms if post.comment_pending(p)]
+        gave_up = {COMMENT_COLUMN[p]: sentinel for p in comments}
+        post.cells.update(gave_up)
         if comments and all(post.done(p) for p in post.platforms):
-            notes = "; ".join(_comment_note(p, kind) for p in comments)
-            updates[post.row] = {"status": "posted", "posted_at": stamp, "last_error": notes}
+            # Live everywhere, only first comments were left: the post is out, so it's posted.
+            fields = {"status": "posted", "posted_at": stamp, "last_error": _comment_notes(post)}
             report.posted.append(post.row)
-        elif kind == "permanent":
+        elif sentinel == COMMENT_NOT_ADDED:
             why = f"Gave up after {post.get('attempts') or 0} attempt(s). {post.get('last_error')}".strip()
-            updates[post.row] = {"status": "failed", "last_error": why}
+            fields = {"status": "failed", "last_error": why}
             report.failed.append(post.row)
         else:
             pending = [p for p in post.platforms if not post.done(p)]
             why = f"Run stopped while posting. Check {', '.join(pending)}, then reschedule if it's missing."
-            updates[post.row] = {"status": "failed", "last_error": why}
+            notes = [_comment_note(p, "unknown") for p in comments]
+            fields = {"status": "failed", "last_error": "; ".join([why, *notes])}
             report.failed.append(post.row)
+        updates[post.row] = {**gave_up, **fields}
     for post, errors in s.invalid:
         updates[post.row] = {"status": "failed", "last_error": "; ".join(errors)}
     report.failed += [p.row for p, _ in s.invalid]
@@ -150,6 +157,17 @@ def _comment_note(platform: str, kind: str) -> str:
     return f"Comment not added on {name}: add it by hand"
 
 
+def _comment_notes(post: Post, reconnect: tuple[str, ...] = ()) -> str:
+    """Notes for the comments given up on this row (in any run), read from the sentinels stored on it."""
+    kinds = {COMMENT_UNCLEAR: "unknown", COMMENT_NOT_ADDED: "permanent"}
+    notes = []
+    for p in post.platforms:
+        kind = kinds.get(post.get(COMMENT_COLUMN[p])) if p in COMMENT_COLUMN else None
+        if kind:
+            notes.append(_comment_note(p, "auth" if p in reconnect else kind))
+    return "; ".join(notes)
+
+
 def _publish_row(post, account, publishers, assist, commenters, write, cfg, stamp, report, dry_run) -> None:
     def save(fields: dict[str, str]) -> None:
         post.cells.update(fields)
@@ -174,18 +192,22 @@ def _publish_row(post, account, publishers, assist, commenters, write, cfg, stam
         done_now.append(platform)
 
     # First comments: once per platform, only after its post is out. Failures never undo a live post.
-    comment_errors: list[tuple[str, PlatformError]] = []
+    comment_errors: list[tuple[str, PlatformError]] = []  # retryable: tried again by a later run
+    gave_up: list[tuple[str, str]] = []  # (platform, note kind), stored as a sentinel right away
     for platform in post.platforms:
         if not (account.by_api(platform) and platform in commenters and post.comment_pending(platform)):
             continue
         try:
             comment_id = commenters[platform](post, account, post.get(ID_COLUMN[platform]))
-        except PlatformError as e:
-            comment_errors.append((platform, e))
-            continue
-        except Exception as e:  # never surface raw text: it may contain URLs with tokens
-            unexpected = PlatformError("unknown", f"Unexpected {type(e).__name__}; check if it was added")
-            comment_errors.append((platform, unexpected))
+        except Exception as e:
+            if not isinstance(e, PlatformError):  # never surface raw text: it may contain URLs with tokens
+                e = PlatformError("unknown", f"Unexpected {type(e).__name__}; check if it was added")
+            if e.retryable:
+                comment_errors.append((platform, e))
+            else:
+                sentinel = COMMENT_UNCLEAR if e.kind == "unknown" else COMMENT_NOT_ADDED
+                save({COMMENT_COLUMN[platform]: sentinel})
+                gave_up.append((platform, e.kind))
             continue
         save({COMMENT_COLUMN[platform]: comment_id})
         done_now.append(f"{platform} comment")
@@ -213,22 +235,21 @@ def _publish_row(post, account, publishers, assist, commenters, write, cfg, stam
             except PlatformError as e:
                 errors.append(("telegram", e))
 
+    failures = errors + [(f"{p} comment", e) for p, e in comment_errors]
     attempts_left = int(post.get("attempts") or 0) < cfg.max_attempts  # empty in a dry run (no claim)
-    # A partial retries every pending comment, so it's only safe when no comment outcome is unclear/final.
-    comments_retryable = all(e.retryable for _, e in comment_errors)
-    if errors:
-        retry = all(e.retryable for _, e in errors) and comments_retryable and attempts_left
-        failures = errors + [(f"{p} comment", e) for p, e in comment_errors]
-        message = "; ".join(f"{platform}: {e}" for platform, e in failures)
+    retry = bool(failures) and all(e.retryable for _, e in failures) and attempts_left
+    if comment_errors and not attempts_left:  # out of retries: give these comments up too
+        for p, _ in comment_errors:
+            save({COMMENT_COLUMN[p]: COMMENT_NOT_ADDED})
+            gave_up.append((p, "permanent"))
+    if retry or errors:
+        notes = [_comment_note(p, kind) for p, kind in gave_up]
+        message = "; ".join([*(f"{platform}: {e}" for platform, e in failures), *notes])
         final = {"status": "partial" if retry else "failed", "last_error": message}
         (report.partial if retry else report.failed).append(post.row)
-    elif comment_errors and comments_retryable and attempts_left:
-        message = "; ".join(f"{p} comment: {e}" for p, e in comment_errors)
-        final = {"status": "partial", "last_error": message}
-        report.partial.append(post.row)
     else:
-        notes = "; ".join(_comment_note(p, e.kind) for p, e in comment_errors)
-        final = {"status": "posted", "posted_at": stamp, "last_error": notes}
+        reconnect = tuple(p for p, kind in gave_up if kind == "auth")
+        final = {"status": "posted", "posted_at": stamp, "last_error": _comment_notes(post, reconnect)}
         report.posted.append(post.row)
     write({post.row: final})
     verb = "would publish" if dry_run else "published"

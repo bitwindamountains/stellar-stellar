@@ -339,26 +339,31 @@ def test_retryable_comment_failure_is_partial():
     )
     report = go_c(last, Platforms(facebook=[]), Comments(facebook=[PlatformError("transient", "busy")]))
     r = last.row(2)
-    assert (r["status"], r["attempts"]) == ("posted", "3") and r["posted_at"]
+    assert (r["status"], r["attempts"], r["fb_comment_id"]) == ("posted", "3", "not-added") and r["posted_at"]
     assert r["last_error"] == "Comment not added on Facebook: add it by hand"
     assert report.posted == [2] and not report.failed
+    assert report.lines[0].endswith(": Comment not added on Facebook: add it by hand")
 
 
 @pytest.mark.parametrize(
-    "kind, note",
+    "kind, sentinel, note",
     [
-        ("permanent", "Comment not added on Instagram: add it by hand"),
-        ("auth", "Comment not added on Instagram: reconnect Meta in Accounts to allow comments"),
-        ("unknown", "Comment on Instagram may not have been added: check, and add it by hand if missing"),
+        ("permanent", "not-added", "Comment not added on Instagram: add it by hand"),
+        ("auth", "not-added", "Comment not added on Instagram: reconnect Meta in Accounts to allow comments"),
+        (
+            "unknown",
+            "unclear",
+            "Comment on Instagram may not have been added: check, and add it by hand if missing",
+        ),
     ],
 )
-def test_permanent_and_unknown_comment_failure_end_posted(kind, note):
+def test_permanent_and_unknown_comment_failure_end_posted(kind, sentinel, note):
     repo = FakeRepository([row(platforms="instagram", first_comment="hi", **IMG)], ACCOUNTS)
     comments = Comments(instagram=[PlatformError(kind, "no")])
     report = go_c(repo, Platforms(instagram=[PublishResult("M1", "")]), comments)
     r = repo.row(2)
-    assert (r["status"], r["last_error"], r["ig_comment_id"]) == ("posted", note, "")
-    assert report.posted == [2]
+    assert (r["status"], r["last_error"], r["ig_comment_id"]) == ("posted", note, sentinel)
+    assert report.posted == [2] and report.lines[0].endswith(note)
     go_c(repo, Platforms(instagram=[]), comments)  # posted: never commented again
     assert len(comments.calls) == 1
 
@@ -372,7 +377,7 @@ def test_comment_failure_does_not_stop_other_platform():
     assert (r["fb_post_id"], r["ig_media_id"], r["fb_comment_id"], r["ig_comment_id"]) == (
         "P1",
         "M1",
-        "",
+        "not-added",
         "IC1",
     )
     assert r["status"] == "posted" and r["last_error"] == "Comment not added on Facebook: add it by hand"
@@ -386,24 +391,60 @@ def test_post_error_keeps_todays_rules_with_comment_failure_in_message():
     go_c(repo, plats, comments)
     r = repo.row(2)
     assert r["status"] == "partial" and "instagram: busy" in r["last_error"] and "slow" in r["last_error"]
+    assert r["fb_comment_id"] == ""  # certainly not posted: retried next run
 
 
-def test_unknown_comment_with_retryable_post_error_is_never_retried():
+def test_unknown_comment_with_retryable_post_error_is_stored_and_never_retried():
     repo = FakeRepository([row(platforms="facebook,instagram", first_comment="hi", **IMG)], ACCOUNTS)
-    plats = Platforms(facebook=[PublishResult("P1", "")], instagram=[PlatformError("transient", "busy")])
-    comments = Comments(facebook=[PlatformError("unknown", "timeout")])
+    plats = Platforms(
+        facebook=[PublishResult("P1", "")],
+        instagram=[PlatformError("transient", "busy"), PublishResult("M1", "")],
+    )
+    comments = Comments(facebook=[PlatformError("unknown", "timeout")], instagram=["IC1"])
     go_c(repo, plats, comments)
-    assert repo.row(2)["status"] == "failed"  # a retry could comment twice
+    r = repo.row(2)
+    unclear = "Comment on Facebook may not have been added: check, and add it by hand if missing"
+    assert (r["status"], r["fb_comment_id"]) == ("partial", "unclear")
+    assert "instagram: busy" in r["last_error"] and unclear in r["last_error"]
+
+    go_c(repo, plats, comments)
+    r = repo.row(2)
+    assert [c[0] for c in comments.calls] == ["facebook", "instagram"]  # Facebook never commented again
+    assert (r["status"], r["ig_comment_id"], r["last_error"]) == ("posted", "IC1", unclear)
+
+
+def test_given_up_comment_survives_a_reschedule():
+    repo = FakeRepository([row(platforms="facebook,instagram", first_comment="hi", **IMG)], ACCOUNTS)
+    plats = Platforms(
+        facebook=[PublishResult("P1", "")],
+        instagram=[PlatformError("permanent", "bad image"), PublishResult("M1", "")],
+    )
+    comments = Comments(facebook=[PlatformError("permanent", "no")], instagram=["IC1"])
+    go_c(repo, plats, comments)
+    r = repo.row(2)
+    assert (r["status"], r["fb_comment_id"]) == ("failed", "not-added")
+    assert "Comment not added on Facebook: add it by hand" in r["last_error"]
+
+    repo.write({2: {"status": "scheduled", "attempts": "0"}})  # the user reschedules it
+    go_c(repo, plats, comments)
+    assert [c[0] for c in comments.calls] == ["facebook", "instagram"]
+    assert repo.row(2)["status"] == "posted"
 
 
 def test_unknown_comment_beside_retryable_comment_is_never_retried():
     repo = FakeRepository([row(platforms="facebook,instagram", first_comment="hi", **IMG)], ACCOUNTS)
     plats = Platforms(facebook=[PublishResult("P1", "")], instagram=[PublishResult("M1", "")])
     comments = Comments(
-        facebook=[PlatformError("transient", "busy")], instagram=[PlatformError("unknown", "?")]
+        facebook=[PlatformError("transient", "busy"), "C1"], instagram=[PlatformError("unknown", "?")]
     )
     go_c(repo, plats, comments)
-    assert repo.row(2)["status"] == "posted"  # partial would comment on Instagram again
+    r = repo.row(2)
+    assert (r["status"], r["fb_comment_id"], r["ig_comment_id"]) == ("partial", "", "unclear")
+    go_c(repo, plats, comments)
+    r = repo.row(2)
+    assert [c[0] for c in comments.calls] == ["facebook", "instagram", "facebook"]
+    note = "Comment on Instagram may not have been added: check, and add it by hand if missing"
+    assert (r["status"], r["fb_comment_id"], r["last_error"]) == ("posted", "C1", note)
 
 
 def test_exhausted_comment_only_ends_posted():
@@ -414,28 +455,42 @@ def test_exhausted_comment_only_ends_posted():
     report = go_c(repo, Platforms(facebook=[]), comments)
     r = repo.row(2)
     assert (r["status"], r["last_error"]) == ("posted", "Comment not added on Facebook: add it by hand")
-    assert r["posted_at"] and comments.calls == []
+    assert r["fb_comment_id"] == "not-added" and r["posted_at"] and comments.calls == []
     assert report.posted == [2] and not report.failed
 
 
-def test_stale_comment_only_ends_posted():
-    stuck = row(
+def stuck(**cells):
+    return row(
         status="posting",
         claimed_at="2026-10-05T09:00:00+00:00",
-        platforms="facebook,instagram",
         fb_post_id="P1",
-        ig_media_id="M1",
-        ig_comment_id="IC1",
         first_comment="hi",
-        **IMG,
+        **cells,
     )
-    repo = FakeRepository([stuck], ACCOUNTS)
+
+
+def test_stale_comment_only_ends_posted():
+    repo = FakeRepository(
+        [stuck(platforms="facebook,instagram", ig_media_id="M1", ig_comment_id="IC1", **IMG)], ACCOUNTS
+    )
     comments = Comments(facebook=[])
     report = go_c(repo, Platforms(), comments)
     r = repo.row(2)
     note = "Comment on Facebook may not have been added: check, and add it by hand if missing"
-    assert (r["status"], r["last_error"]) == ("posted", note) and r["posted_at"]
+    assert (r["status"], r["last_error"], r["fb_comment_id"]) == ("posted", note, "unclear") and r[
+        "posted_at"
+    ]
     assert report.posted == [2] and not report.failed and comments.calls == []
+
+
+def test_stale_with_platform_left_fails_and_flags_the_comment():
+    repo = FakeRepository([stuck(platforms="facebook,tiktok", **VIDEO)], ACCOUNTS)
+    comments = Comments(facebook=[])
+    report = go_c(repo, Platforms(), comments)
+    r = repo.row(2)
+    assert (r["status"], r["fb_comment_id"]) == ("failed", "unclear") and report.failed == [2]
+    assert "Check tiktok" in r["last_error"]
+    assert "Comment on Facebook may not have been added: check" in r["last_error"]
 
 
 def test_dry_run_comments_nothing_written():
