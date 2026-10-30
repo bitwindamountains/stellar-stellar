@@ -1,6 +1,6 @@
 import type { CSSProperties } from 'react'
 import { groupHref, groupStatus, postLinks, type PostGroup } from './groups'
-import { Check, PlatformMark } from './icons'
+import { Check, NewTab, PlatformMark } from './icons'
 import { chips, flightStep } from './postView'
 import { utcToZoned } from './time'
 import type { Account } from './types'
@@ -67,7 +67,7 @@ export default function PostRow({ group: g, accountOf, tz, href }: {
         <div className="r-links">
           {links.map((l) => (
             <a key={`${l.who}-${l.platform}`} href={l.url} target="_blank" rel="noopener">
-              Open on {NAMED[l.platform]}{multi ? ` · ${l.who}` : ''}<span aria-hidden="true">↗</span><span className="sr-only"> (opens in a new tab)</span>
+              Open on {NAMED[l.platform]}{multi ? ` · ${l.who}` : ''}<NewTab /><span className="sr-only"> (opens in a new tab)</span>
             </a>
           ))}
         </div>
