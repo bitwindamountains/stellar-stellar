@@ -1,6 +1,6 @@
 import type { Session } from '@supabase/supabase-js'
-import { useEffect, useRef, useState } from 'react'
-import { Asteroids, Exit, FlightPath } from './icons'
+import { useEffect, useState } from 'react'
+import { Asteroids, FlightPath } from './icons'
 import Nav from './Nav'
 import { rememberTab, useRoute } from './route'
 import Accounts from './screens/Accounts'
@@ -58,7 +58,7 @@ export default function App() {
   return (
     <div className={composing ? 'app composing' : 'app'}>
       <Starfield />
-      <Nav current={screen}><SignOut /></Nav>
+      <Nav current={screen} />
       <div className="page">
         <div className="wrap">
           {route.screen === 'today' && <Today />}
@@ -78,27 +78,3 @@ export default function App() {
 const Starfield = () => (
   <div className="starfield" aria-hidden="true"><FlightPath /><Asteroids /></div>
 )
-
-// Visible but hard to hit by accident: set apart at the end of the nav, and it takes two taps. The first
-// arms it for 3 s; a second tap within 0.4 s (a double-tap slip) is ignored.
-function SignOut() {
-  const [armedAt, setArmedAt] = useState(0)
-  const timer = useRef(0)
-  useEffect(() => () => clearTimeout(timer.current), [])
-  function click() {
-    if (!armedAt) {
-      setArmedAt(Date.now())
-      timer.current = window.setTimeout(() => setArmedAt(0), 3000)
-    } else if (Date.now() - armedAt > 400) {
-      clearTimeout(timer.current)
-      supabase.auth.signOut()
-    }
-  }
-  return (
-    <button type="button" className={armedAt ? 'signout armed' : 'signout'} onClick={click}
-      aria-label={armedAt ? 'Tap again to sign out' : 'Sign out'}>
-      <Exit />
-      <span className="signout-text" aria-live="polite">{armedAt ? <><span className="signout-long">Tap again to sign out</span><span className="signout-short">Sure?</span></> : 'Sign out'}</span>
-    </button>
-  )
-}
