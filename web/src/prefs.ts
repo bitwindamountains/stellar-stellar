@@ -17,6 +17,7 @@ export interface SavedDraft {
   accountId?: number // older drafts
   platforms?: Platform[]
   caption: string
+  firstComment?: string
   variants: Variants
   mediaType: MediaType
   mediaUrl: string
