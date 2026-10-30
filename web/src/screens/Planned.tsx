@@ -10,6 +10,7 @@ const longDay = (day: string) => fmt(day, { weekday: 'long', day: 'numeric', mon
 /** The next seven days as a strip; pick a day to see what is going out, then drafts below. */
 export default function Planned({ day: routeDay }: { day?: string }) {
   const { posts, accounts, error, loaded } = usePosts()
+  // ponytail: one zone for all accounts (the first's); use each group's lead account zone if accounts in different zones are ever added.
   const tz = accounts[0]?.timezone ?? Intl.DateTimeFormat().resolvedOptions().timeZone
   // Calendar-day arithmetic on the local date, so DST never shifts "tomorrow".
   const tomorrow = addDays(localDay(new Date().toISOString(), tz), 1)

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { ago, awaitingHandoff, canRetry, chipState, chips, flightStep, mediaWasRemoved, mergePosts, runLine, statsLine, statusLabel } from './postView'
+import { ago, awaitingHandoff, canRetry, chipState, chips, errorNotes, flightStep, mediaWasRemoved, mergePosts, runLine, statsLine, statusLabel } from './postView'
 import { isDraft, needsFinishing, postedByApi, sentByHand, type Post } from './types'
 
 function post(over: Partial<Post>): Post {
@@ -120,5 +120,14 @@ describe('flightStep', () => {
     expect(flightStep(g({ status: 'scheduled' }))).toBe('Waiting for the next run')
     expect(flightStep(g({ status: 'posted' }, { status: 'partial' }))).toBe('Waiting for the next run')
     expect(flightStep(g({ status: 'posted' }))).toBe('Posted')
+  })
+})
+
+describe('errorNotes', () => {
+  const err = 'Gave up after 3 attempt(s). Token expired; Comment not added on Facebook: add it by hand; Comment on Instagram may not have been added: check, and add it by hand if missing'
+  it('keeps each comment note on its own platform and the rest once', () => {
+    expect(errorNotes(err, 'facebook')).toEqual({ general: 'Gave up after 3 attempt(s). Token expired', comment: ['Comment not added on Facebook: add it by hand'] })
+    expect(errorNotes(err, 'instagram').comment).toEqual(['Comment on Instagram may not have been added: check, and add it by hand if missing'])
+    expect(errorNotes('', 'facebook')).toEqual({ general: '', comment: [] })
   })
 })

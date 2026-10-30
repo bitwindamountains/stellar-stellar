@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { startPostAgain } from '../actions'
 import { postLinks } from '../groups'
-import { ago, compact } from '../postView'
+import { ago, compact, errorNotes } from '../postView'
 import { lastTab } from '../route'
 import { supabase } from '../supabase'
 import { sentByHand, type PlatformStats, type Post } from '../types'
@@ -24,6 +24,7 @@ function firstCommentNote(post: Post, p: Meta): { text: string; warn: boolean } 
 /** One post that went out: how it did per account and platform, its first comment, top comments. */
 export default function PostDetail({ num }: { num: number }) {
   const { accounts } = usePosts()
+  // ponytail: one zone for all accounts (the first's); use each group's lead account zone if accounts in different zones are ever added.
   const tz = accounts[0]?.timezone ?? Intl.DateTimeFormat().resolvedOptions().timeZone
   const [rows, setRows] = useState<Post[] | null>(null)
   const [error, setError] = useState('')
@@ -49,7 +50,7 @@ export default function PostDetail({ num }: { num: number }) {
 
   const back = lastTab()
   const head = (
-    <a className="h-back glass rise" href={`#${back}`}><span aria-hidden="true">‹</span>{TAB_NAMES[back] ?? 'Back'}</a>
+    <a className="h-back glass rise" href={`#${back}`} onClick={(e) => { e.preventDefault(); location.replace(`#${back}`) }}><span aria-hidden="true">‹</span>{TAB_NAMES[back] ?? 'Back'}</a>
   )
   if (error) return <div className="history">{head}<p className="notice" role="alert">Couldn't load this post: {error}</p></div>
   if (rows === null) return <div className="history" aria-busy="true">{head}<div className="tray"><div className="core flush"><div className="skeleton" aria-hidden="true" /><div className="skeleton" aria-hidden="true" /></div></div></div>
@@ -68,6 +69,7 @@ export default function PostDetail({ num }: { num: number }) {
   const when = at ? new Date(at).toLocaleString(undefined, { weekday: 'long', day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit', hourCycle: 'h23', timeZone: tz }) : ''
   const note = firstCommentNote(row, platform ?? 'facebook')
   const links = postLinks(row)
+  const notes = errorNotes(row.last_error, platform)
 
   return (
     <div className="history">
@@ -87,6 +89,8 @@ export default function PostDetail({ num }: { num: number }) {
           <p className="d-caption">{lead.caption || 'No caption'}</p>
         </div>
       </section>
+
+      {notes.general && <p className="d-note rise">{notes.general}</p>}
 
       {(rows.length > 1 || metas.length > 1) && (
         <div className="d-switch rise">
@@ -127,7 +131,7 @@ export default function PostDetail({ num }: { num: number }) {
           ) : (
             <p className="d-quiet">Posted by hand ({byHand.map((p) => NAMED[p] ?? p).join(', ') || 'phone'}) · no stats.</p>
           )}
-          {row.last_error && <p className="d-note">{row.last_error}</p>}
+          {notes.comment.map((n) => <p key={n} className="d-note">{n}</p>)}
           <div className="d-actions">
             {links.map((l) => (
               <a key={l.platform} className="btn light small" href={l.url} target="_blank" rel="noopener">

@@ -33,3 +33,9 @@ export function linkSummary(link: string): string {
     return raw.slice(0, 24)
   }
 }
+
+/** Opened from a day on Planned: 9 am that day, even over a restored draft; else the draft's choice, else now. */
+export function initialWhen(day: string | undefined, draft: { mode: 'now' | 'later'; publishAt: string } | null): { mode: 'now' | 'later'; publishAt: string } {
+  if (day) return { mode: 'later', publishAt: `${day}T09:00` }
+  return draft ? { mode: draft.mode ?? 'now', publishAt: draft.publishAt ?? '' } : { mode: 'now', publishAt: '' }
+}

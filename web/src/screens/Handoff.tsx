@@ -134,7 +134,7 @@ export default function Handoff({ num }: { num: number }) {
           style={{ justifyContent: 'space-between', minHeight: 60, paddingLeft: 24, paddingRight: 8, fontSize: 16 }}>
           {post.assist_done_at ? 'Marked as posted' : 'I posted it'}<span className="knob" style={{ width: 44, height: 44 }}><Check /></span>
         </button>
-        <a href="#/" className="btn" style={{ background: 'transparent' }}>Back to queue</a>
+        <a href="#/" className="btn" style={{ background: 'transparent' }}>Back to Today</a>
       </div>
     </Frame>
   )
