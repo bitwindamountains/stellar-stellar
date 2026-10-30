@@ -140,7 +140,7 @@ export default function Composer({ num, day }: { num?: number; day?: string }) {
 
   useEffect(() => {
     if (num) return
-    // Opened from an empty day on the Queue's week strip: schedule for that day.
+    // Opened from a day on Planned ("Add a post on …"): schedule for that day.
     const date = takeQuery().get('date')
     if (date && /^\d{4}-\d{2}-\d{2}$/.test(date)) { setMode('later'); setPublishAt(`${date}T09:00`) }
     // Opened from the Android share sheet: attach the shared file and text once.
