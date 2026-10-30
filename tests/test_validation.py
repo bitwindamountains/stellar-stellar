@@ -172,24 +172,18 @@ def test_shopee_is_by_hand_and_needs_no_media():
 IG_IMG = {"platforms": "instagram", "media_type": "image", "media_urls": "https://x/a.jpg"}
 
 
-@pytest.mark.parametrize(
-    ("comment", "expected"),
-    [
-        ("x" * 301, "First comment: Instagram allows at most 300 characters"),
-        ("#a #b #c #d #e", "First comment: Instagram allows at most 4 hashtags"),
-        ("https://a.co https://b.co", "First comment: Instagram allows at most 1 link"),
-        ("BUY NOW", "First comment: Instagram rejects all-caps comments"),
-    ],
-)
-def test_first_comment_instagram_rules(comment, expected):
-    assert expected in errors(**IG_IMG, first_comment=comment)
+def test_first_comment_instagram_limit_counts_utf16_units():
+    msg = "First comment: Instagram allows at most 2,200 characters"
+    assert msg not in errors(**IG_IMG, first_comment="x" * 2200)
+    assert msg in errors(**IG_IMG, first_comment="x" * 2201)
+    assert msg not in errors(**IG_IMG, first_comment="😀" * 1100)  # 2,200 units
+    assert msg in errors(**IG_IMG, first_comment="😀" * 1100 + "x")  # 2,201 units (1,101 code points)
 
 
 def test_first_comment_ok_and_empty_add_no_errors():
-    assert errors(**IG_IMG, first_comment="x" * 300 + "") == []
-    assert errors(**IG_IMG, first_comment="#a #b #c #d https://a.co 123") == []
     assert errors(**IG_IMG, first_comment="") == []
-    assert errors(platforms="facebook", first_comment="BUY " + "x" * 400) == []  # IG rules only apply to IG
+    assert errors(**IG_IMG, first_comment="BUY #a #b #c #d #e https://a.co https://b.co") == []
+    assert errors(platforms="facebook", first_comment="x" * 3000) == []  # IG rule only applies to IG
 
 
 def test_first_comment_too_long_for_phone_handoff():

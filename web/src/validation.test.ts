@@ -93,14 +93,14 @@ describe('X and connected logins (mirrors validation.py)', () => {
   })
   it('checks the first comment', () => {
     const ig = { platforms: ['instagram' as const], mediaType: 'image' as const, mediaUrls: ['https://x/a.jpg'] }
-    expectError({ ...ig, firstComment: 'x'.repeat(301) }, 'First comment: Instagram allows at most 300 characters')
-    expectError({ ...ig, firstComment: '#a #b #c #d #e' }, 'First comment: Instagram allows at most 4 hashtags')
-    expectError({ ...ig, firstComment: 'https://a.co https://b.co' }, 'First comment: Instagram allows at most 1 link')
-    expectError({ ...ig, firstComment: 'BUY NOW' }, 'First comment: Instagram rejects all-caps comments')
-    expect(validate(draft({ ...ig, firstComment: 'x'.repeat(300) }), true)).toEqual([])
-    expect(validate(draft({ ...ig, firstComment: '#a #b #c #d https://a.co 123' }), true)).toEqual([])
+    const msg = 'First comment: Instagram allows at most 2,200 characters'
+    expect(validate(draft({ ...ig, firstComment: 'x'.repeat(2200) }), true)).toEqual([])
+    expectError({ ...ig, firstComment: 'x'.repeat(2201) }, msg)
+    expect(validate(draft({ ...ig, firstComment: '\u{1F600}'.repeat(1100) }), true)).toEqual([]) // 2,200 UTF-16 units
+    expectError({ ...ig, firstComment: '\u{1F600}'.repeat(1100) + 'x' }, msg)
+    expect(validate(draft({ ...ig, firstComment: 'BUY #a #b #c #d #e https://a.co https://b.co' }), true)).toEqual([])
     expect(validate(draft({ ...ig, firstComment: '' }), true)).toEqual([])
-    expect(validate(draft({ firstComment: 'BUY ' + 'x'.repeat(400) }), true)).toEqual([])
+    expect(validate(draft({ firstComment: 'x'.repeat(3000) }), true)).toEqual([])
     const video = { platforms: ['youtube' as const], mediaType: 'video' as const, mediaUrls: ['https://x/a.mp4'] }
     expectError({ ...video, firstComment: 'x'.repeat(4037) }, 'First comment too long for the phone handoff')
     expect(validate(draft({ ...video, firstComment: 'x'.repeat(4036) }), true)).toEqual([])
