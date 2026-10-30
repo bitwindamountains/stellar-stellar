@@ -22,6 +22,7 @@ export default function Accounts() {
   const [form, setForm] = useState(EMPTY)
   const [error, setError] = useState('')
   const [saved, setSaved] = useState('')
+  const [arrival, setArrival] = useState<{ ok?: string; error?: string }>({}) // back from a platform's login page
   const [busy, setBusy] = useState<Connection | null>(null)
   const { run } = usePosts()
   const tz = accounts?.[0]?.timezone ?? Intl.DateTimeFormat().resolvedOptions().timeZone
@@ -35,9 +36,10 @@ export default function Accounts() {
     // Back from a platform's login page (see supabase/functions/connect).
     const q = takeQuery()
     const connected = q.get('connected') as Connection | null
-    if (connected && LOGIN_NAME[connected]) setSaved(`${LOGIN_NAME[connected]} connected.`)
     const failed = q.get('error')
-    if (failed) setError(failed)
+    const ok = connected && LOGIN_NAME[connected] ? `${LOGIN_NAME[connected]} connected.` : undefined
+    // Only when present: StrictMode runs this twice and the second run finds the query already taken.
+    if (ok || failed) setArrival({ ok, error: failed ?? undefined })
     load()
   }, [])
 
@@ -98,17 +100,21 @@ export default function Accounts() {
       <header className="acct-head rise">
         <div className="today-head">
           <h1>Accounts</h1>
-          <p>{runLine(run, tz)}</p>
+          {/* Wraps only between the "·" parts. */}
+          <p>{runLine(run, tz).split(' · ').map((part, i) => <span key={i} className="nowrap">{i ? ' · ' : ''}{part}</span>)}</p>
         </div>
         <SignOut />
       </header>
+
+      {arrival.error && <p className="notice rise" role="alert">{arrival.error}</p>}
+      {arrival.ok && <p className="banner-ok rise" role="status">{arrival.ok}</p>}
 
       <div className="split">
         <section className="main tray rise" aria-label="Your accounts">
           <div className="core flush">
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, padding: '20px 24px 4px' }}>
               <h2>Your accounts</h2>
-              <button type="button" className="btn" aria-pressed={editing === null} onClick={() => edit(null)} style={{ minHeight: 44 }}>+ Add account</button>
+              <button type="button" className="btn" aria-pressed={editing === null} onClick={() => edit(null)} style={{ minHeight: 44, whiteSpace: 'nowrap' }}>+ Add account</button>
             </div>
             <p style={{ margin: 0, padding: '0 24px', fontSize: 14, lineHeight: 1.5, color: 'var(--muted)' }}>
               One account per brand. Connect its logins once; tokens stay on the server and never reach this app.
