@@ -116,7 +116,8 @@ export default function Composer({ num, day }: { num?: number; day?: string }) {
       if (all?.error) return setError(all.error.message)
       const list = (all?.data as Post[] | undefined) ?? [first]
       // Nothing left to change on a post that went out everywhere: show how it did instead.
-      if (list.every((r) => r.status === 'posted')) return go(`/history/${num}`)
+      // Replace, not push: Back from the detail must not land here and bounce forward again.
+      if (list.every((r) => r.status === 'posted')) return location.replace(`#/history/${num}`)
       const lead = list[0]
       const tz = accounts.find((a) => a.id === lead.account_id)?.timezone ?? 'Asia/Manila'
       setRows(list)
@@ -278,6 +279,8 @@ export default function Composer({ num, day }: { num?: number; day?: string }) {
     const ok = !failures.length && !conflict
     if (ok && status === 'scheduled' && mode === 'now') await publishSoon()
     setBusy('')
+    // Enter in a sheet's field submits too: close it, so the error isn't behind an inert page.
+    if (failures.length || conflict) setSheet('')
     if (failures.length) return setError(failures.join(' · '))
     if (conflict) return setError(PUBLISHING_NOW)
     rememberChoices(mediaType, Object.fromEntries(active.map((a) => [a.id, targets[a.id]])))
