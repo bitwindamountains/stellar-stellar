@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { startPostAgain } from '../actions'
 import { postLinks } from '../groups'
+import { NewTab } from '../icons'
 import { ago, compact, errorNotes } from '../postView'
 import { lastTab } from '../route'
 import { supabase } from '../supabase'
@@ -135,7 +136,7 @@ export default function PostDetail({ num }: { num: number }) {
           <div className="d-actions">
             {links.map((l) => (
               <a key={l.platform} className="btn light small" href={l.url} target="_blank" rel="noopener">
-                Open on {NAMED[l.platform]}<span aria-hidden="true">↗</span><span className="sr-only"> (opens in a new tab)</span>
+                Open on {NAMED[l.platform]}<NewTab /><span className="sr-only"> (opens in a new tab)</span>
               </a>
             ))}
             <button type="button" className="btn dark small" onClick={() => startPostAgain(rows)}>Post again</button>

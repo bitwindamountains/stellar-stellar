@@ -165,6 +165,13 @@ export const Arrow = () => (
     <path d="M5 12h14M13 6l6 6-6 6" />
   </svg>
 )
+// "Opens in a new tab" mark for outbound links (the ↗ character renders as an emoji on some phones).
+export const NewTab = () => (
+  <svg width="14" height="14" viewBox="0 0 24 24" strokeWidth={1.8} {...base} aria-hidden="true" style={{ flex: 'none' }}>
+    <path d="M9 6h9v9M18 6 6 18" />
+  </svg>
+)
+
 export const Check = ({ label }: { label?: string }) => (
   <svg width="18" height="18" viewBox="0 0 24 24" strokeWidth={1.6} {...base}
     {...(label ? { role: 'img', 'aria-label': label } : { 'aria-hidden': true })} style={{ flex: 'none' }}>

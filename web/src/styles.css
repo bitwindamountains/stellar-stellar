@@ -908,3 +908,14 @@ dialog.sheet::backdrop { background: rgba(10, 13, 30, 0.44); animation: fade 200
   dialog.sheet[open], dialog.sheet::backdrop { animation: none; }
   .c-round:active, .c-pill:active { transform: none; }
 }
+
+/* Small screens: the drifting planets crowd the header controls (week arrows, ✕, Preview) and muddy what's
+   tappable, so phones keep only the quieter sky (aurora, stars, meteors, flight path). */
+@media (max-width: 599px), (max-height: 500px) {
+  .starfield .belt { display: none; }
+}
+/* Phone in landscape: a shorter header leaves room for the posts above the tab bar. */
+@media (max-height: 500px) and (orientation: landscape) {
+  .today-head h1 { font-size: 32px; }
+  .today-head { gap: 2px; padding-top: 0; }
+}
