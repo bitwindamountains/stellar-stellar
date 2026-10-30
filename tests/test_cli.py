@@ -1,4 +1,4 @@
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime
 
 import pytest
 from fakes import FakeRepository
@@ -117,9 +117,9 @@ def test_supabase_backend_records_real_runs_only(monkeypatch):
 class NudgeRepo(FakeRepository):
     """Supabase-like fake: records runs and answers 'how many live posts today'."""
 
-    def __init__(self, live_today):
+    def __init__(self, live_today, nudged=frozenset()):
         super().__init__([], ACCOUNTS)
-        self.live_today = live_today
+        self.live_today, self.nudged = live_today, set(nudged)
         self.timezone = "Asia/Manila"
 
     def record_run(self, **counts):
@@ -128,16 +128,24 @@ class NudgeRepo(FakeRepository):
     def count_live_between(self, start, end):
         return self.live_today
 
+    def claim_nudge(self, day):
+        if day in self.nudged:
+            return False
+        self.nudged.add(day)
+        return True
+
 
 @pytest.mark.parametrize(
-    ("live", "at", "expected"),
+    ("live", "at", "nudged", "expected"),
     [
-        (0, datetime(2026, 10, 5, 8, 7, tzinfo=UTC), 1),  # 16:07 Manila, nothing today: nudge
-        (2, datetime(2026, 10, 5, 8, 7, tzinfo=UTC), 0),  # something planned: quiet
-        (0, datetime(2026, 10, 5, 8, 37, tzinfo=UTC), 0),  # 16:37: outside the window
+        (0, datetime(2026, 10, 5, 8, 7, tzinfo=UTC), set(), 1),  # 16:07 Manila, nothing today: nudge
+        (2, datetime(2026, 10, 5, 8, 7, tzinfo=UTC), set(), 0),  # something planned: quiet
+        (0, datetime(2026, 10, 5, 12, 37, tzinfo=UTC), set(), 1),  # 20:37: a late run still nudges
+        (0, datetime(2026, 10, 5, 12, 37, tzinfo=UTC), {date(2026, 10, 5)}, 0),  # already sent today
+        (0, datetime(2026, 10, 5, 7, 37, tzinfo=UTC), set(), 0),  # 15:37: too early
     ],
 )
-def test_publish_nudges_on_empty_days(monkeypatch, live, at, expected):
+def test_publish_nudges_on_empty_days(monkeypatch, live, at, nudged, expected):
     sent = []
     monkeypatch.setattr(cli, "_now", lambda: at)
     monkeypatch.setattr(cli.telegram, "send_text", lambda http, token, chat, text: sent.append(text))
@@ -150,7 +158,7 @@ def test_publish_nudges_on_empty_days(monkeypatch, live, at, expected):
         "TELEGRAM_CHAT_ID": "c",
         "WEB_APP_URL": "https://pp.example",
     }
-    assert invoke(monkeypatch, ["publish"], NudgeRepo(live), env=env).exit_code == 0
+    assert invoke(monkeypatch, ["publish"], NudgeRepo(live, nudged), env=env).exit_code == 0
     assert len(sent) == expected
     if sent:
         assert "https://pp.example/#/new" in sent[0]
