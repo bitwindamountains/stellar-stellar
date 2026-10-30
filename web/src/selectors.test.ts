@@ -44,6 +44,21 @@ describe('todayView', () => {
     expect(nums(t.needsYou)).toEqual([7])
     expect(t.goingOut).toEqual([])
   })
+  it('keeps an overdue scheduled or posting post in goingOut, before today', () => {
+    const t = todayView([
+      post({ num: 9, status: 'scheduled', publish_at: '2026-10-30T01:00:00Z' }),
+      post({ num: 10, status: 'scheduled', publish_at: '2026-10-28T01:00:00Z' }),
+      post({ num: 11, status: 'posting', publish_at: '2026-10-29T01:00:00Z', claimed_at: '2026-10-30T05:55:00Z' }),
+    ], now, TZ)
+    expect(nums(t.goingOut)).toEqual([10, 11, 9])
+  })
+  it('shows a group in outToday when a sibling (not the lead) posted today', () => {
+    const t = todayView([
+      post({ num: 12, group_id: 'm', status: 'failed', publish_at: '2026-10-30T01:00:00Z' }),
+      post({ num: 13, group_id: 'm', status: 'posted', publish_at: '2026-10-30T01:00:00Z', posted_at: '2026-10-30T01:02:00Z' }),
+    ], now, TZ)
+    expect(nums(t.outToday)).toEqual([12])
+  })
   it('leaves tomorrow out and a fresh claim out of needsYou', () => {
     expect([...v.needsYou, ...v.goingOut, ...v.outToday].map((g) => g.lead.num)).not.toContain(4)
     expect(nums(v.needsYou)).not.toContain(6)
