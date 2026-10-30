@@ -81,3 +81,12 @@ def fetch_permalink(graph: GraphClient, object_id: str, field: str) -> str:
         return graph.get(object_id, fields=field).get(field, "")
     except PlatformError:
         return ""
+
+
+def insight(graph, path: str, metric: str) -> int | None:
+    """One insights call per metric, so a retired metric only loses itself (key absent)."""
+    try:
+        item = graph.get(f"{path}/insights", metric=metric)["data"][0]
+        return int(item["total_value"]["value"] if "total_value" in item else item["values"][0]["value"])
+    except (PlatformError, KeyError, IndexError, TypeError, ValueError):
+        return None
