@@ -140,6 +140,7 @@ class SupabaseRepository:
 def _to_cells(row: dict, accounts: dict[str, Account]) -> dict[str, str]:
     cells = {k: "" if v is None else str(v) for k, v in row.items() if not isinstance(v, (list, dict))}
     cells["variants"] = json.dumps(row.get("variants") or {})
+    cells["stats"] = json.dumps(row.get("stats") or {})
     cells["account"] = str(row["account_id"])
     cells["platforms"] = ",".join(row["platforms"])
     cells["media_urls"] = "\n".join(row["media_urls"])
