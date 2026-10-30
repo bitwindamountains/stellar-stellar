@@ -91,4 +91,19 @@ describe('X and connected logins (mirrors validation.py)', () => {
     expectError({ account: linked, platforms: ['tiktok'], mediaType: 'video', mediaUrls: ['https://x/a.mp4'], caption: 'x'.repeat(2201) }, '2,200')
     expect(validate(draft({ platforms: ['shopee'] }), true)).toEqual([])
   })
+  it('checks the first comment', () => {
+    const ig = { platforms: ['instagram' as const], mediaType: 'image' as const, mediaUrls: ['https://x/a.jpg'] }
+    expectError({ ...ig, firstComment: 'x'.repeat(301) }, 'First comment: Instagram allows at most 300 characters')
+    expectError({ ...ig, firstComment: '#a #b #c #d #e' }, 'First comment: Instagram allows at most 4 hashtags')
+    expectError({ ...ig, firstComment: 'https://a.co https://b.co' }, 'First comment: Instagram allows at most 1 link')
+    expectError({ ...ig, firstComment: 'BUY NOW' }, 'First comment: Instagram rejects all-caps comments')
+    expect(validate(draft({ ...ig, firstComment: 'x'.repeat(300) }), true)).toEqual([])
+    expect(validate(draft({ ...ig, firstComment: '#a #b #c #d https://a.co 123' }), true)).toEqual([])
+    expect(validate(draft({ ...ig, firstComment: '' }), true)).toEqual([])
+    expect(validate(draft({ firstComment: 'BUY ' + 'x'.repeat(400) }), true)).toEqual([])
+    const video = { platforms: ['youtube' as const], mediaType: 'video' as const, mediaUrls: ['https://x/a.mp4'] }
+    expectError({ ...video, firstComment: 'x'.repeat(4037) }, 'First comment too long for the phone handoff')
+    expect(validate(draft({ ...video, firstComment: 'x'.repeat(4036) }), true)).toEqual([])
+    expect(validate(draft({ firstComment: 'x'.repeat(5000) }), true)).toEqual([])
+  })
 })

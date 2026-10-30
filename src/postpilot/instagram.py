@@ -5,6 +5,11 @@ from postpilot.graph import fetch_permalink
 from postpilot.models import Account, PlatformError, Post, PublishResult
 
 
+def comment(graph, media_id: str, text: str) -> str:
+    # Not safe: a timeout may still have posted the comment, so it is never retried.
+    return graph.post(f"{media_id}/comments", safe=False, message=text)["id"]
+
+
 def publish(
     graph, account: Account, post: Post, sleep: Callable[[float], None] = time.sleep, checks: int = 12
 ) -> PublishResult:
