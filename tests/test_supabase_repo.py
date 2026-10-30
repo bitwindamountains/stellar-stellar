@@ -220,3 +220,16 @@ def test_claim_is_conditional_and_returns_stored_row():
     assert claimed[12].get("caption") == "stored now"
     patch = next(c for c in calls if c.method == "PATCH")
     assert json.loads(patch.content) == {"status": "posting", "attempts": 2}
+
+
+def test_stats_object_loads():
+    rows = [{**POSTS[0], "stats": {"instagram": {"likes": 2}}}]
+
+    def handler(request):
+        if request.url.path.endswith("/posts"):
+            return httpx.Response(200, json=rows)
+        return serve(request)
+
+    r, _ = repo(handler)
+    posts, _ = r.load()
+    assert posts[0].stats == {"instagram": {"likes": 2}}
