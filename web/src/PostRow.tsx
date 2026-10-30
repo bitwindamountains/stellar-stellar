@@ -23,7 +23,8 @@ export default function PostRow({ group: g, accountOf, tz, href }: {
   // In flight: being posted now, or due and waiting for the run that picks it up.
   const due = g.rows.some((r) => r.status === 'posting'
     || (['scheduled', 'partial'].includes(r.status) && !!r.publish_at && Date.parse(r.publish_at) <= Date.now()))
-  const step = due ? flightStep(g) : null
+  // The step adds words only when the pill doesn't already say them (a posting row's pill reads "Posting…").
+  const step = due && flightStep(g) !== status.text ? flightStep(g) : null
 
   return (
     <li>
@@ -55,12 +56,12 @@ export default function PostRow({ group: g, accountOf, tz, href }: {
             ))}
           </span>
           {step && (
-            <span className="r-step" aria-live="polite">
+            <span className="r-step">
               {step === 'Posted' ? <><Check />Posted</> : step === 'Posting…' ? <><span className="pulse" aria-hidden="true" />{step}</> : `${step} · usually within an hour`}
             </span>
           )}
         </span>
-        <span className={`pill r-pill ${status.tone}`}>{status.text}</span>
+        <span className={`pill r-pill ${status.tone}`} aria-live="polite">{status.text}</span>
       </a>
       {links.length > 0 && (
         <div className="r-links">
