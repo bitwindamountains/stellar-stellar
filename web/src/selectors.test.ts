@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { draftGroups, historyGroups, localDay, parseRoute, plannedDay, todayView, weekDays } from './selectors'
+import { draftGroups, historyGroups, localDay, parseRoute, plannedDay, todayView, weekDays, weekStartFor } from './selectors'
 import type { Post } from './types'
 
 function post(over: Partial<Post>): Post {
@@ -99,5 +99,15 @@ describe('parseRoute', () => {
     expect(parseRoute(['new'], q('day=nope'))).toEqual({ screen: 'new', day: undefined })
     expect(parseRoute(['edit', 'x'], q())).toEqual({ screen: 'today' })
     expect(parseRoute(['accounts'], q())).toEqual({ screen: 'accounts' })
+  })
+})
+
+describe('weekStartFor', () => {
+  it('real future day: the week containing it', () => {
+    expect(weekStartFor('2026-11-09', '2026-10-31')).toEqual({ start: '2026-11-07', selected: '2026-11-09' })
+    expect(weekStartFor('2026-10-31', '2026-10-31')).toEqual({ start: '2026-10-31', selected: '2026-10-31' })
+  })
+  it('past, malformed, impossible or missing day: tomorrow, nothing selected', () => {
+    for (const d of ['2026-10-01', '2026-13-45', '2026-02-30', 'nope', undefined]) expect(weekStartFor(d, '2026-10-31')).toEqual({ start: '2026-10-31' })
   })
 })
