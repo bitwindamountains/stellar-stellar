@@ -694,3 +694,57 @@ html { scroll-padding-top: 24px; }
 .field-error svg { flex: none; width: 16px; height: 16px; margin-top: 2px; }
 .input[aria-invalid='true'], .dropzone:has(input[aria-invalid='true']) { box-shadow: inset 0 0 0 1.5px var(--warn-ink); }
 .dropzone:has(input[aria-invalid='true']) { outline-color: var(--warn-ink); }
+
+/* Today: a small title on the night sky, then what needs you, then today's posts. */
+.today { display: flex; flex-direction: column; gap: 24px; width: 100%; max-width: 960px; }
+.today-head { display: flex; flex-direction: column; gap: 6px; padding: 8px 64px 4px 4px; color: #f4f5fa; }
+.today-head h1 { margin: 0; font-size: clamp(40px, 6vw, 56px); line-height: 1; font-weight: 600; letter-spacing: -0.04em; color: #fff; }
+.today-head p { margin: 0; font-size: 16px; color: rgba(232, 235, 248, 0.8); }
+/* Needs you: night glass with a dusk tint (the old alert sky), light text, so it reads over the sky and the ground. */
+.needs {
+  --glass-fill:
+    radial-gradient(70% 90% at 0% 0%, rgba(232, 146, 96, 0.3), transparent 70%),
+    linear-gradient(180deg, rgba(44, 32, 56, 0.78), rgba(22, 16, 32, 0.86));
+  --glass-rim: rgba(255, 255, 255, 0.24);
+  --glass-blur: 18px;
+  --glass-solid: #221a2e;
+  display: flex; flex-direction: column; gap: 6px; padding: 20px; border-radius: 28px; color: #f4f5fa;
+  box-shadow: 0 0 0 1px rgba(10, 8, 20, 0.45), 0 24px 48px -24px rgba(16, 10, 30, 0.7);
+}
+.needs :focus-visible { outline-color: #ffd2b5; }
+.needs h2 { display: flex; align-items: center; gap: 10px; padding: 0 4px 6px; font-size: 20px; color: #fff; }
+.needs-count {
+  min-width: 26px; height: 26px; padding: 0 8px; border-radius: 999px; display: inline-grid; place-items: center;
+  background: #f5b583; color: #2a1607; font: 600 13px/1 var(--mono);
+}
+.needs-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+.need {
+  display: flex; flex-direction: column; gap: 6px; padding: 16px; border-radius: 20px;
+  background: rgba(255, 255, 255, 0.06); box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.08);
+}
+.need .mono { color: #f5c09a; }
+.need-caption {
+  display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
+  padding: 4px 0; font-size: 16px; font-weight: 500; line-height: 1.4; color: #fff; text-decoration: none;
+}
+.need-why { margin: 0; font-size: 14px; line-height: 1.5; color: rgba(236, 232, 244, 0.86); overflow-wrap: anywhere; }
+.need-actions { display: flex; flex-wrap: wrap; gap: 8px; padding-top: 6px; }
+.need-actions:empty { display: none; }
+.btn.small { min-height: 44px; padding: 0 18px; font-size: 14px; }
+/* Post rows: caption, chips and the live step for a post in flight. */
+.r-caption { font-size: 15px; line-height: 1.45; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.r-chips { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.r-step { display: inline-flex; align-items: center; gap: 8px; font: 500 13px/1.3 var(--mono); color: var(--accent-ink); }
+.r-step svg { width: 14px; height: 14px; }
+.pulse { width: 8px; height: 8px; border-radius: 50%; background: var(--accent); animation: twinkle 0.9s ease-in-out infinite alternate; }
+@media (hover: hover) and (pointer: fine) {
+  .need-caption:hover { text-decoration: underline; text-underline-offset: 3px; }
+  .needs .btn.light:not(:disabled):hover { background: #f1f1ec; }
+}
+@media (prefers-reduced-motion: reduce) { .pulse { animation: none; } }
+@media (max-width: 767px) {
+  .today { gap: 20px; }
+  .today-head { padding: 4px 64px 0 4px; }
+  .needs { padding: 14px; border-radius: 24px; }
+  .need { padding: 14px; }
+}
