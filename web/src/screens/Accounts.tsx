@@ -1,8 +1,10 @@
-import { useEffect, useState, type FormEvent } from 'react'
-import { Arrow, Asteroids, FlightPath } from '../icons'
+import { useEffect, useRef, useState, type FormEvent } from 'react'
+import { Arrow, Exit } from '../icons'
+import { runLine } from '../postView'
 import { takeQuery } from '../route'
 import { supabase } from '../supabase'
 import { ACCOUNT_SELECT, isConnected, type Account, type Connection } from '../types'
+import { usePosts } from '../usePosts'
 
 const EMPTY = { name: '', fb_page_id: '', ig_user_id: '', token_env: '', timezone: 'Asia/Manila' }
 const TOKEN_ENV = /^[A-Z][A-Z0-9_]{0,63}$/ // same rule as the database check
@@ -21,6 +23,8 @@ export default function Accounts() {
   const [error, setError] = useState('')
   const [saved, setSaved] = useState('')
   const [busy, setBusy] = useState<Connection | null>(null)
+  const { run } = usePosts()
+  const tz = accounts?.[0]?.timezone ?? Intl.DateTimeFormat().resolvedOptions().timeZone
 
   async function load() {
     const { data, error } = await supabase.from('accounts').select(ACCOUNT_SELECT).order('name')
@@ -91,11 +95,12 @@ export default function Accounts() {
 
   return (
     <>
-      <header className="hero sky rise">
-        <h1>Accounts</h1>
-        <p>One account per brand. Connect its logins once; tokens stay on the server and never reach this app.</p>
-        <FlightPath />
-        <Asteroids />
+      <header className="acct-head rise">
+        <div className="today-head">
+          <h1>Accounts</h1>
+          <p>{runLine(run, tz)}</p>
+        </div>
+        <SignOut />
       </header>
 
       <div className="split">
@@ -105,6 +110,9 @@ export default function Accounts() {
               <h2>Your accounts</h2>
               <button type="button" className="btn" aria-pressed={editing === null} onClick={() => edit(null)} style={{ minHeight: 44 }}>+ Add account</button>
             </div>
+            <p style={{ margin: 0, padding: '0 24px', fontSize: 14, lineHeight: 1.5, color: 'var(--muted)' }}>
+              One account per brand. Connect its logins once; tokens stay on the server and never reach this app.
+            </p>
             {accounts === null ? (
               [0, 1].map((i) => <div key={i} className="skeleton" aria-hidden="true" />)
             ) : accounts.length === 0 ? (
@@ -188,5 +196,29 @@ export default function Accounts() {
         </aside>
       </div>
     </>
+  )
+}
+
+// Visible but hard to hit by accident: set apart in the Accounts header, and it takes two taps. The first
+// arms it for 3 s; a second tap within 0.4 s (a double-tap slip) is ignored.
+function SignOut() {
+  const [armedAt, setArmedAt] = useState(0)
+  const timer = useRef(0)
+  useEffect(() => () => clearTimeout(timer.current), [])
+  function click() {
+    if (!armedAt) {
+      setArmedAt(Date.now())
+      timer.current = window.setTimeout(() => setArmedAt(0), 3000)
+    } else if (Date.now() - armedAt > 400) {
+      clearTimeout(timer.current)
+      supabase.auth.signOut()
+    }
+  }
+  return (
+    <button type="button" className={armedAt ? 'signout armed' : 'signout'} onClick={click}
+      aria-label={armedAt ? 'Tap again to sign out' : 'Sign out'}>
+      <Exit />
+      <span className="signout-text" aria-live="polite">{armedAt ? <><span className="signout-long">Tap again to sign out</span><span className="signout-short">Sure?</span></> : 'Sign out'}</span>
+    </button>
   )
 }

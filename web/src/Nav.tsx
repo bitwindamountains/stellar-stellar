@@ -5,8 +5,8 @@ import type { Route } from './selectors'
 type Screen = Route['screen']
 
 // One nav for both layouts: a floating glass capsule at the bottom on a phone, a glass sidebar from 900px.
-// The layout switch is CSS only. `children` (sign out) sits at the end of the sidebar.
-export default function Nav({ current, children }: { current: Screen; children?: ReactNode }) {
+// The layout switch is CSS only. Sign out lives on Accounts.
+export default function Nav({ current }: { current: Screen }) {
   const link = (href: string, screen: Screen, label: string, icon: ReactNode) => (
     <a href={href} aria-current={current === screen ? 'page' : undefined}>
       {icon}<span className="nav-label">{label}</span>
@@ -22,7 +22,6 @@ export default function Nav({ current, children }: { current: Screen; children?:
       </a>
       {link('#/history', 'history', 'History', <HistoryIcon />)}
       {link('#/accounts', 'accounts', 'Accounts', <AccountsIcon />)}
-      {children}
     </nav>
   )
 }

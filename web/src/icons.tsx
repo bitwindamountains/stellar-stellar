@@ -13,7 +13,7 @@ export const Logo = () => (
 // Decorative flight path for the night-sky headers (.sky in styles.css): a dashed route, a contrail that
 // travels along it, and the logo plane landing at the end.
 const ROUTE = 'M8 212C120 200 196 120 300 112S470 40 552 22'
-// The composer calls launchNext() after a successful "Post now"; the next flight path to mount (the queue's,
+// The composer calls launchNext() after a successful "Post now"; the next flight path to mount (the starfield's,
 // a moment later) plays the take-off once: the route draws in full, then the plane climbs away and returns.
 let launchPending = false
 export const launchNext = () => { launchPending = true }
