@@ -6,6 +6,7 @@ from typer.testing import CliRunner
 
 from postpilot import cli
 from postpilot.cli import app
+from postpilot.runner import Report
 
 ENV = {"GOOGLE_SHEET_ID": "s", "GOOGLE_SERVICE_ACCOUNT_FILE": "f", "META_GRAPH_VERSION": "v23.0"}
 ACCOUNTS = [{"account": "main", "fb_page_id": "PAGE", "ig_user_id": "IG", "token_env": "T"}]
@@ -248,3 +249,15 @@ def test_failed_refresh_is_not_repeated_in_the_same_run(monkeypatch):
         with pytest.raises(cli.PlatformError):
             token(account(connected={"x"}), "x")
     assert calls == ["R1"]
+
+
+def test_publish_passes_meta_commenters(monkeypatch):
+    seen = {}
+
+    def fake_run(*args, **kwargs):
+        seen.update(kwargs)
+        return Report()
+
+    monkeypatch.setattr(cli, "run", fake_run)
+    assert invoke(monkeypatch, ["publish", "--dry-run"], FakeRepository([], ACCOUNTS)).exit_code == 0
+    assert set(seen["commenters"]) == {"facebook", "instagram"}
