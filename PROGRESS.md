@@ -94,7 +94,7 @@ Design: `docs/superpowers/specs/2026-10-30-first-comment-and-stats-design.md`; p
   comments for 7 days after posting (max 20 posts, 60 s budget; a stats problem never fails the run). Shown in
   the Posted tab.
 - Migration `20261031000000_first_comment_stats.sql` is applied.
-- To switch it on: deploy `connect` (new Meta permissions: `pages_manage_engagement`, `instagram_manage_comments`,
+- To switch it on: deploy `connect` (new Meta permissions: `pages_read_user_content`, `pages_manage_engagement`, `instagram_manage_comments`,
   `instagram_manage_insights`, `read_insights`; admins/testers only until App Review, fine in Development mode),
   then Accounts → reconnect Meta once. Until then comments end "reconnect Meta" and stats are skipped.
 - Unverified until a real run: the FB metric names `post_media_view` / `post_total_media_view_unique` (Meta's
