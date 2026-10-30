@@ -48,6 +48,18 @@ export function todayView(posts: Post[], now: Date, tz: string) {
 
 export const plannedDay = plannedOn
 
+export function addDays(day: string, n: number): string {
+  const [y, m, d] = day.split('-').map(Number)
+  return new Date(Date.UTC(y, m - 1, d + n)).toISOString().slice(0, 10)
+}
+
+/** The week strip starts at tomorrow or a later week; a missing, invalid or past `day` falls back to tomorrow. */
+export function weekStartFor(day: string | undefined, tomorrow: string): { start: string; selected?: string } {
+  const real = day && DAY_RE.test(day) && !isNaN(Date.parse(day)) && addDays(day, 0) === day
+  const diff = real ? Math.round((Date.parse(day) - Date.parse(tomorrow)) / 86_400_000) : -1
+  return Number.isFinite(diff) && diff >= 0 ? { start: addDays(tomorrow, Math.floor(diff / 7) * 7), selected: day } : { start: tomorrow }
+}
+
 export function weekDays(posts: Post[], start: string, tz: string) {
   const [y, m, d] = start.split('-').map(Number)
   return Array.from({ length: 7 }, (_, i) => {

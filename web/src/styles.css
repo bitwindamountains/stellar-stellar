@@ -753,8 +753,11 @@ html { scroll-padding-top: 24px; }
 /* Planned: a week strip of seven equal days on glass, then the selected day and the drafts. */
 .planned > * { flex: none; }
 .planned { display: flex; flex-direction: column; gap: 24px; width: 100%; max-width: 960px; }
-.wk { display: flex; align-items: center; gap: 2px; padding: 8px; border-radius: 28px; }
-.wk-days { flex: 1; min-width: 0; display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 2px; }
+.planned-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
+.planned-head .today-head { padding-right: 0; }
+.wk-navs { display: flex; gap: 8px; padding-top: 8px; margin-right: 56px; }
+.wk { padding: 6px; border-radius: 28px; }
+.wk-days { min-width: 0; display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 2px; }
 .wk-day {
   display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; min-height: 64px; padding: 6px 0;
   border: 0; border-radius: 18px; background: transparent; color: var(--ink); font: inherit; cursor: pointer;
@@ -767,8 +770,8 @@ html { scroll-padding-top: 24px; }
 .wk-dot.on { background: var(--accent); }
 .wk-day[aria-pressed='true'] .wk-dot.on { background: #fff; }
 .wk-nav {
-  flex: none; width: 36px; min-height: 44px; border: 0; border-radius: 14px; background: transparent; color: var(--ink-2);
-  font-size: 24px; line-height: 1; cursor: pointer;
+  flex: none; width: 44px; height: 44px; padding: 0; border: 0; border-radius: 50%; color: var(--ink);
+  font-size: 26px; line-height: 1; cursor: pointer;
 }
 .wk-nav:disabled { opacity: 0.3; cursor: not-allowed; }
 .add-day {
@@ -778,7 +781,8 @@ html { scroll-padding-top: 24px; }
 @media (hover: hover) and (pointer: fine) { .wk-day:not([aria-pressed='true']):hover, .wk-nav:not(:disabled):hover { background: rgba(21, 23, 27, 0.06); } .add-day:hover { text-decoration: underline; } }
 @media (max-width: 767px) {
   .planned { gap: 20px; }
-  .wk { padding: 6px 2px; border-radius: 24px; }
-  .wk-nav { width: 28px; }
+  .wk { padding: 4px; border-radius: 24px; }
+  .wk-navs { margin-right: 0; }
+  .planned-head { padding-right: 56px; }
   .wk-day b { font-size: 16px; }
 }
