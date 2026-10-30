@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { flushSync } from 'react-dom'
 import { cleanVariants, isCustomized, textFor, type Variant, type Variants } from '../content'
-import { Arrow, Asteroids, Check, Close, Eye, FlightPath, launchNext, LinkIcon, MediaIcon, More, WhenIcon, WhereIcon } from '../icons'
+import { Arrow, Asteroids, Check, Close, Eye, FlightPath, LinkIcon, MediaIcon, More, WhenIcon, WhereIcon } from '../icons'
 import { publishSoon } from '../actions'
 import { postLinks } from '../groups'
 import { toJpeg } from '../media'
@@ -9,7 +9,7 @@ import { mediaWasRemoved } from '../postView'
 import PostPreview from '../PostPreview'
 import Sheet from '../Sheet'
 import SettingRow, { FieldError } from '../composer/SettingRow'
-import { linkSummary, whenSummary, whereSummary } from '../composer/summary'
+import { initialWhen, linkSummary, whenSummary, whereSummary } from '../composer/summary'
 import { takeShared } from '../share'
 import { draftTargets, loadDraft, rememberChoices, rememberedTargets, saveDraft, type Targets } from '../prefs'
 import { go, lastTab, takeQuery } from '../route'
@@ -66,14 +66,16 @@ function useWide(): boolean {
 export default function Composer({ num, day }: { num?: number; day?: string }) {
   const [restored] = useState(() => (num ? null : loadDraft()))
   const hasDraft = !!restored && !!(restored.caption || restored.mediaUrl)
-  // Opened from a day on Planned: a fresh post is scheduled for 9 am that day (a real draft keeps its own time).
-  const [preset] = useState(() => (!num && !hasDraft && day ? `${day}T09:00` : ''))
+  // Opened from a day on Planned ("Add a post on …"): 9 am that day, even over a restored draft.
+  // Kept from the first render: the ?day= is stripped below, so a later App render passes no day.
+  const [fromDay] = useState(num ? undefined : day)
+  const [start] = useState(() => initialWhen(fromDay, restored))
   const [accounts, setAccounts] = useState<Account[] | null>(null) // null = still loading
   const [rows, setRows] = useState<Post[]>([]) // the stored rows when editing (several for a multi-account post)
   const [targets, setTargets] = useState<Targets>({})
-  const [publishAt, setPublishAt] = useState(preset || (restored?.publishAt ?? ''))
+  const [publishAt, setPublishAt] = useState(start.publishAt)
   // Daily posting is the common case, so new posts default to going out now.
-  const [mode, setMode] = useState<'now' | 'later'>(preset ? 'later' : (restored?.mode ?? 'now'))
+  const [mode, setMode] = useState<'now' | 'later'>(start.mode)
   const [sheet, setSheet] = useState<SheetName>('')
   const [commentOpen, setCommentOpen] = useState(false)
   const wide = useWide()
@@ -140,9 +142,8 @@ export default function Composer({ num, day }: { num?: number; day?: string }) {
 
   useEffect(() => {
     if (num) return
-    // Opened from a day on Planned ("Add a post on …"): schedule for that day.
-    const date = takeQuery().get('date')
-    if (date && /^\d{4}-\d{2}-\d{2}$/.test(date)) { setMode('later'); setPublishAt(`${date}T09:00`) }
+    // The ?day= is already applied: drop it so a reload restores the draft as you left it.
+    takeQuery()
     // Opened from the Android share sheet: attach the shared file and text once.
     if (!window.location.hash.endsWith('/shared')) return
     takeShared().then((shared) => {
@@ -285,8 +286,8 @@ export default function Composer({ num, day }: { num?: number; day?: string }) {
     if (conflict) return setError(PUBLISHING_NOW)
     rememberChoices(mediaType, Object.fromEntries(active.map((a) => [a.id, targets[a.id]])))
     if (!num) saveDraft(null)
-    if (status === 'scheduled' && mode === 'now') launchNext()
-    go(lastTab())
+    // Replace, not push: Back from the tab must not reopen the editor (the installed app has no browser chrome).
+    location.replace(`#${lastTab()}`)
   }
 
   // Copies the content into a fresh draft; the new rows get their own IDs, so it really posts again.
@@ -308,7 +309,7 @@ export default function Composer({ num, day }: { num?: number; day?: string }) {
     const { data, error } = await supabase.from('posts').delete().in('num', rows.map((r) => r.num)).neq('status', 'posting').select('num')
     if (error) return setError(error.message)
     if (data.length < rows.length) return setError(PUBLISHING_NOW)
-    go(lastTab())
+    location.replace(`#${lastTab()}`)
   }
 
   // Wait for accounts (and, when editing, the post) before choosing a screen, so nothing flashes on load.
@@ -383,7 +384,8 @@ export default function Composer({ num, day }: { num?: number; day?: string }) {
       }}>
       <div className="c-main">
         <div className="c-top rise">
-          <a className="c-round glass" href={`#${lastTab()}`} aria-label="Close"><Close /></a>
+          <a className="c-round glass" href={`#${lastTab()}`} aria-label="Close"
+            onClick={(e) => { e.preventDefault(); location.replace(`#${lastTab()}`) }}><Close /></a>
           <h1>{num ? 'Edit post' : 'New post'}</h1>
           {!wide && <button type="button" className="c-pill glass" onClick={() => setSheet('preview')} aria-haspopup="dialog"><Eye />Preview</button>}
         </div>
@@ -394,7 +396,11 @@ export default function Composer({ num, day }: { num?: number; day?: string }) {
             {hasDraft && (
               <p className="c-restored">
                 Draft restored from last time.{' '}
-                <button type="button" className="link-btn" onClick={() => { saveDraft(null); window.location.reload() }}>Start fresh</button>
+                <button type="button" className="link-btn" onClick={() => {
+                  saveDraft(null)
+                  location.replace(`#/new${fromDay ? `?day=${fromDay}` : ''}`) // keep the Planned day across the reload
+                  location.reload()
+                }}>Start fresh</button>
               </p>
             )}
             {locked && <p className="notice" role="status">This post is being published right now. Edit it after the run finishes.</p>}

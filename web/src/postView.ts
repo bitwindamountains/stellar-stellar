@@ -99,3 +99,14 @@ export function flightStep(g: PostGroup): string {
   if (g.rows.some((r) => ['scheduled', 'partial'].includes(r.status))) return 'Waiting for the next run'
   return 'Posted'
 }
+
+/** Splits a row's last_error (parts joined by '; ', see runner.py): comment notes ("Comment … on Facebook") go to
+ *  their platform, everything else is shown once. */
+export function errorNotes(lastError: string, platform: 'facebook' | 'instagram' | undefined): { general: string; comment: string[] } {
+  const parts = lastError ? lastError.split('; ') : []
+  const about = (s: string) => /^Comment.*? on (Facebook|Instagram)/.exec(s)?.[1].toLowerCase()
+  return {
+    general: parts.filter((s) => !about(s)).join('; '),
+    comment: parts.filter((s) => !!platform && about(s) === platform),
+  }
+}

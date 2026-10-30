@@ -1,4 +1,4 @@
-import { useEffect, useState, type CSSProperties } from 'react'
+import type { CSSProperties } from 'react'
 import type { Platform } from './types'
 
 // Thin-stroke inline icons; decorative unless a label is given.
@@ -13,18 +13,10 @@ export const Logo = () => (
 // Decorative flight path for the night-sky headers (.sky in styles.css): a dashed route, a contrail that
 // travels along it, and the logo plane landing at the end.
 const ROUTE = 'M8 212C120 200 196 120 300 112S470 40 552 22'
-// The composer calls launchNext() after a successful "Post now"; the next flight path to mount (the starfield's,
-// a moment later) plays the take-off once: the route draws in full, then the plane climbs away and returns.
-let launchPending = false
-export const launchNext = () => { launchPending = true }
-export const FlightPath = () => {
-  const [launch] = useState(() => launchPending)
-  useEffect(() => { launchPending = false }, [])
-  return (
-  <svg className={launch ? 'flight launch' : 'flight'} viewBox="0 0 560 230" fill="none" aria-hidden="true" focusable="false">
+export const FlightPath = () => (
+  <svg className="flight" viewBox="0 0 560 230" fill="none" aria-hidden="true" focusable="false">
     <path d={ROUTE} stroke="rgba(255,255,255,0.28)" strokeWidth="1.2" strokeDasharray="2 7" strokeLinecap="round" />
     <path className="contrail" d={ROUTE} pathLength={100} stroke="url(#contrail)" strokeWidth="2" strokeLinecap="round" />
-    {launch && <path className="trail" d={ROUTE} pathLength={100} stroke="#ffd9c2" strokeWidth="1.6" strokeLinecap="round" />}
     <circle cx="8" cy="212" r="4" fill="#0f1326" stroke="rgba(255,255,255,0.6)" strokeWidth="1.2" />
     <g transform="translate(540 8) rotate(8)" stroke="#fff" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round">
       <g className="plane">
@@ -39,8 +31,7 @@ export const FlightPath = () => {
       </linearGradient>
     </defs>
   </svg>
-  )
-}
+)
 // Platform marks etched into the asteroids, drawn in the same thin stroke as the other icons.
 const MARKS = {
   fb: <path d="M14.5 6.5H13a2.5 2.5 0 0 0-2.5 2.5v11M7.5 12.5h6" />,
