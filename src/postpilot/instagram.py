@@ -39,7 +39,10 @@ def publish(
 
 def stats(graph, media_id: str) -> dict:
     data = graph.get(media_id, fields="like_count,comments_count")
-    out = {"likes": data["like_count"], "comments": data["comments_count"]}
+    # Instagram omits like_count when the owner hides likes.
+    out = {
+        k: data[src] for k, src in (("likes", "like_count"), ("comments", "comments_count")) if src in data
+    }
     for key in ("reach", "views"):
         value = insight(graph, media_id, key)
         if value is not None:
