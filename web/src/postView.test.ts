@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { ago, canRetry, chipState, chips, groupByDay, mediaWasRemoved, mergePosts, needsYou, statsLine, statusLabel, weekStrip } from './postView'
+import { ago, awaitingHandoff, canRetry, chipState, chips, errorNotes, flightStep, mediaWasRemoved, mergePosts, runLine, statsLine, statusLabel } from './postView'
 import { isDraft, needsFinishing, postedByApi, sentByHand, type Post } from './types'
 
 function post(over: Partial<Post>): Post {
@@ -19,35 +19,17 @@ describe('chips', () => {
   it('assisted platforms become done once marked posted', () => {
     const p = post({ platforms: ['tiktok'], tg_message_id: '9', tiktok_id: 'telegram', assist_done_at: '2026-10-05T10:00:00Z' })
     expect(chips(p)[0].state).toBe('done')
-    expect(needsYou(p)).toBe(false)
+    expect(awaitingHandoff(p)).toBe(false)
   })
 })
 
 describe('status', () => {
   it('awaiting handoff outranks posted', () => {
     expect(statusLabel(post({ status: 'posted', tg_message_id: '9' })).text).toBe('By hand')
-    expect(needsYou(post({ status: 'posted', tg_message_id: '9' }))).toBe(true)
+    expect(awaitingHandoff(post({ status: 'posted', tg_message_id: '9' }))).toBe(true)
   })
   it('partial shows attempts', () => {
     expect(statusLabel(post({ status: 'partial', attempts: 2 })).text).toBe('Retrying 2/3')
-  })
-  it('failed and missed need you', () => {
-    expect(needsYou(post({ status: 'failed' }))).toBe(true)
-    expect(needsYou(post({ status: 'missed' }))).toBe(true)
-    expect(needsYou(post({ status: 'scheduled' }))).toBe(false)
-  })
-})
-
-describe('groupByDay', () => {
-  it('labels relative days and puts undated last', () => {
-    const now = new Date(2026, 9, 5, 12, 0)
-    const groups = groupByDay([
-      post({ num: 3 }),
-      post({ num: 2, publish_at: new Date(2026, 9, 6, 9, 0).toISOString() }),
-      post({ num: 1, publish_at: new Date(2026, 9, 5, 18, 0).toISOString() }),
-    ], now)
-    expect(groups.map((g) => g.label)).toEqual(['Today', 'Tomorrow', 'No date yet'])
-    expect(groups[0].posts[0].num).toBe(1)
   })
 })
 
@@ -61,20 +43,11 @@ describe('canRetry', () => {
   })
 })
 
-describe('weekStrip', () => {
-  it('counts live posts per day for 7 days and flags empty days', () => {
-    const now = new Date(2026, 9, 5, 12, 0)
-    const at = (d: number, h: number) => new Date(2026, 9, d, h, 0).toISOString()
-    const strip = weekStrip([
-      post({ num: 1, publish_at: at(5, 9), status: 'posted' }),
-      post({ num: 2, publish_at: at(5, 18) }),
-      post({ num: 3, publish_at: at(6, 9), status: 'failed' }),
-      post({ num: 4, publish_at: at(11, 23) }),
-      post({ num: 5, publish_at: at(12, 9) }), // day 8: outside the strip
-    ], now)
-    expect(strip.map((d) => d.count)).toEqual([2, 0, 0, 0, 0, 0, 1])
-    expect(strip[0].label).toBe('Today')
-    expect(strip.map((d) => d.date)).toEqual([5, 6, 7, 8, 9, 10, 11])
+describe('runLine', () => {
+  it('shows the last run in the account time zone, failed counting missed', () => {
+    const run = { id: 1, ran_at: '2026-10-30T08:06:00Z', duration_ms: 9000, posted: 1, partial: 0, failed: 1, missed: 2 }
+    expect(runLine(run, 'Asia/Manila')).toBe('Last run 16:06 · 1 posted · 3 failed')
+    expect(runLine(null, 'Asia/Manila')).toBe('No runs yet')
   })
 })
 
@@ -137,5 +110,24 @@ describe('ago', () => {
     expect(ago('2026-10-30T11:55:00Z', now)).toBe('5 min ago')
     expect(ago('2026-10-30T09:00:00Z', now)).toBe('3 h ago')
     expect(ago('2026-10-28T12:00:00Z', now)).toBe('2 d ago')
+  })
+})
+
+describe('flightStep', () => {
+  const g = (...rows: Partial<Post>[]) => ({ key: 'k', lead: post(rows[0]), rows: rows.map((r, i) => post({ num: i + 1, ...r })) })
+  it('says where a post in flight is', () => {
+    expect(flightStep(g({ status: 'posted' }, { status: 'posting' }))).toBe('Posting…')
+    expect(flightStep(g({ status: 'scheduled' }))).toBe('Waiting for the next run')
+    expect(flightStep(g({ status: 'posted' }, { status: 'partial' }))).toBe('Waiting for the next run')
+    expect(flightStep(g({ status: 'posted' }))).toBe('Posted')
+  })
+})
+
+describe('errorNotes', () => {
+  const err = 'Gave up after 3 attempt(s). Token expired; Comment not added on Facebook: add it by hand; Comment on Instagram may not have been added: check, and add it by hand if missing'
+  it('keeps each comment note on its own platform and the rest once', () => {
+    expect(errorNotes(err, 'facebook')).toEqual({ general: 'Gave up after 3 attempt(s). Token expired', comment: ['Comment not added on Facebook: add it by hand'] })
+    expect(errorNotes(err, 'instagram').comment).toEqual(['Comment on Instagram may not have been added: check, and add it by hand if missing'])
+    expect(errorNotes('', 'facebook')).toEqual({ general: '', comment: [] })
   })
 })

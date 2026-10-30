@@ -22,3 +22,9 @@ dist/
 .pytest_cache/
 .ruff_cache/
 .playwright-mcp/
+
+# local tool state
+.superpowers/
+.impeccable/
+.playwright-mcp/
+supabase/.temp/

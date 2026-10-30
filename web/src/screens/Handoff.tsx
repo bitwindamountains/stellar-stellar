@@ -134,7 +134,7 @@ export default function Handoff({ num }: { num: number }) {
           style={{ justifyContent: 'space-between', minHeight: 60, paddingLeft: 24, paddingRight: 8, fontSize: 16 }}>
           {post.assist_done_at ? 'Marked as posted' : 'I posted it'}<span className="knob" style={{ width: 44, height: 44 }}><Check /></span>
         </button>
-        <a href="#/" className="btn" style={{ background: 'transparent' }}>Back to queue</a>
+        <a href="#/" className="btn" style={{ background: 'transparent' }}>Back to Today</a>
       </div>
     </Frame>
   )
@@ -144,7 +144,7 @@ function Frame({ children }: { children?: React.ReactNode }) {
   return (
     <main className="page" style={{ display: 'flex', justifyContent: 'center' }}>
       <div style={{ width: 'min(480px, 100%)', minHeight: 'calc(100dvh - 48px)', display: 'flex', flexDirection: 'column', gap: 20 }}>
-        <span style={{ display: 'flex', alignItems: 'center', gap: 8, fontWeight: 600, fontSize: 15 }}><Logo />PostPilot</span>
+        <span style={{ display: 'flex', alignItems: 'center', gap: 8, fontWeight: 600, fontSize: 15, color: '#f4f5fa' }}><Logo />PostPilot</span>
         {children}
       </div>
     </main>

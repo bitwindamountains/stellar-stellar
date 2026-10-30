@@ -25,6 +25,8 @@ describe('groups', () => {
   it('opens the row waiting on your phone first', () => {
     expect(groupHref([post({ num: 1 }), post({ num: 2, tg_message_id: '9' })])).toBe('#/handoff/2')
     expect(groupHref([post({ num: 1 }), post({ num: 2 })])).toBe('#/edit/1')
+    expect(groupHref([post({ num: 1, status: 'posted' }), post({ num: 2, status: 'posted' })])).toBe('#/history/1')
+    expect(groupHref([post({ num: 1, status: 'posted' }), post({ num: 2, status: 'failed' })])).toBe('#/edit/1')
   })
 
   it('lists only real links', () => {
