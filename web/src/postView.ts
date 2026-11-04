@@ -45,13 +45,23 @@ export function statusLabel(post: Post, maxAttempts = 3): { text: string; tone: 
  * "run stopped" failures may already be live, so those need a look first.
  */
 export function canRetry(post: Post): boolean {
-  return ['failed', 'missed'].includes(post.status) && !/check|stopped/i.test(post.last_error)
+  // A failed platform that still has its ID (a Reel that failed processing) is skipped by a plain retry: needs Repost.
+  const keepsId = failedPlatforms(post).some((p) => post[PLATFORM_COLUMNS[p]![0] as keyof Post] !== '')
+  return ['failed', 'missed'].includes(post.status) && !/check|stopped/i.test(post.last_error) && !keepsId
+}
+
+// ID column first, then link and comment columns; clearing them is what lets the publisher post there again.
+export const PLATFORM_COLUMNS: Partial<Record<Platform, string[]>> = {
+  facebook: ['fb_post_id', 'fb_permalink', 'fb_comment_id'],
+  instagram: ['ig_media_id', 'ig_permalink', 'ig_comment_id'],
+  x: ['x_post_id', 'x_permalink'],
+  tiktok: ['tiktok_id', 'tiktok_permalink'],
 }
 
 /** Automatic platforms a failed post names as "<platform>: …" in last_error (not "<platform> comment: …"). */
 export function failedPlatforms(post: Post): Platform[] {
   if (post.status !== 'failed') return []
-  const parts = post.last_error.split('; ')
+  const parts = post.last_error.replace(/^Gave up after \d+ attempt\(s\)\. /, '').split('; ')
   return post.platforms.filter((p) => parts.some((s) => s.startsWith(`${p}: `)))
 }
 

@@ -132,7 +132,21 @@ describe('errorNotes', () => {
   })
 })
 
+describe('canRetry with a kept ID', () => {
+  const err = "facebook: Facebook couldn't publish the Reel: ERROR"
+  it('needs Repost only while the failed platform still has its ID', () => {
+    expect(canRetry(post({ status: 'failed', platforms: ['facebook'], last_error: err, fb_post_id: 'V1' }))).toBe(false)
+    expect(canRetry(post({ status: 'failed', platforms: ['facebook'], last_error: err, fb_post_id: '' }))).toBe(true)
+  })
+})
+
 describe('failedPlatforms', () => {
+  it('handles inner "; " and the gave-up prefix', () => {
+    const base = { status: 'failed' as const, platforms: ['facebook', 'instagram'] as Post['platforms'] }
+    expect(failedPlatforms(post({ ...base, last_error: "facebook: Facebook accepted the Reel but was still processing; check it's on your Page" }))).toEqual(['facebook'])
+    expect(failedPlatforms(post({ ...base, last_error: 'Gave up after 3 attempt(s). facebook: a; instagram: b' }))).toEqual(['facebook', 'instagram'])
+  })
+
   it('names platforms from "<platform>: " parts, not comment notes', () => {
     const p = post({ status: 'failed', platforms: ['facebook', 'instagram', 'x'], last_error: 'facebook: Facebook accepted the Reel, check; instagram comment: x' })
     expect(failedPlatforms(p)).toEqual(['facebook'])
