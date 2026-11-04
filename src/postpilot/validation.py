@@ -75,17 +75,20 @@ def validate(post: Post, accounts: dict[str, Account]) -> list[str]:
     if any("drive.google.com" in u.lower() for u in urls):
         errors.append("Google Drive links open a web page, not the file: use a direct link (e.g. Cloudinary)")
     if len(urls) > 1:
-        errors.append("Only one image per post for now (carousels come later)")
+        errors.append("Only one media file per post for now")
 
-    api_platforms = {FACEBOOK, INSTAGRAM} & set(platforms)
-    if media_type == "video" and api_platforms:
-        errors.append(
-            "Video to Facebook/Instagram isn't supported yet; use tiktok/youtube/fb_profile for now"
-        )
+    cover = post.get("cover_url")
+    if cover:
+        if media_type != "video":
+            errors.append("A cover is only for videos")
+        if not cover.lower().startswith("https://"):
+            errors.append(f"Cover link must start with https:// ({cover})")
+        if re.split(r"[?#]", cover.lower())[0].endswith(NON_JPEG):
+            errors.append("The cover must be a JPEG")
     if INSTAGRAM in platforms:
-        if media_type != "image":
-            errors.append("Instagram needs an image (media_type image + media_urls)")
-        elif urls and re.split(r"[?#]", urls[0].lower())[0].endswith(NON_JPEG):
+        if media_type not in ("image", "video"):
+            errors.append("Instagram needs an image or a video (media_type + media_urls)")
+        elif media_type == "image" and urls and re.split(r"[?#]", urls[0].lower())[0].endswith(NON_JPEG):
             errors.append("Instagram needs a JPEG image (PNG, WebP and GIF are rejected at post time)")
         caption = post.text_for(INSTAGRAM)
         if len(caption) > IG_CAPTION_MAX:
@@ -99,8 +102,6 @@ def validate(post: Post, accounts: dict[str, Account]) -> list[str]:
     if {"tiktok", "youtube"} & set(platforms) and media_type != "video":
         errors.append("TikTok/YouTube need a video (media_type video + media_urls)")
     if X in platforms:
-        if media_type == "video":
-            errors.append("Video to X isn't supported yet; use an image or text")
         size = x_length("\n\n".join(t for t in (post.text_for(X), post.get("link")) if t))
         if size > X_TEXT_MAX:
             errors.append(f"X posts max {X_TEXT_MAX} characters (this one counts {size:,})")

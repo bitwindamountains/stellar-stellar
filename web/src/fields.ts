@@ -5,7 +5,7 @@ export type Section = (typeof SECTIONS)[number]
 const RULES: [Section, RegExp][] = [
   ['where', /Pick an account|Pick at least one platform|has no (Facebook Page|Instagram user) ID|isn't linked/],
   ['when', /Set when to post/],
-  ['media', /^(.*: )?Add the |Media link|Google Drive|Only one image|isn't supported yet|needs an image|needs a JPEG|need a video/],
+  ['media', /^(.*: )?Add the |Media link|Google Drive|Only one media|takes videos|cover|needs an image|needs a JPEG|need a video/],
   ['caption', /caption|hashtags|post is empty|X posts max|titles max/i],
 ]
 

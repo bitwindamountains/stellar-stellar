@@ -9,6 +9,10 @@ export const TELEGRAM_MESSAGE_MAX = 4096
 const TELEGRAM_OVERHEAD = 60 // platform label line and title label (Telegram counts text after parsing tags)
 const NON_JPEG = /\.(png|webp|gif|heic|heif|avif|bmp|tiff?|svg)$/i // links with no extension get the benefit of the doubt
 
+// Reel/video length limits in seconds [min, max] (Meta Reel specs, X media docs).
+const VIDEO_SECONDS: Partial<Record<Platform, [number, number]>> = { facebook: [3, 90], instagram: [3, 900], x: [0, 140] }
+const fmtSeconds = (s: number) => (s >= 60 && s % 60 === 0 ? `${s / 60} min` : `${s} s`)
+
 export const YOUTUBE_TITLE_MAX = 100
 export const X_TEXT_MAX = 280
 export const TIKTOK_CAPTION_MAX = 2200
@@ -52,6 +56,8 @@ export interface Draft {
   mediaUrls: string[]
   link: string
   firstComment?: string // undefined = none
+  coverUrl?: string
+  videoSeconds?: number | null // null/undefined = not measured yet: no duration check
 }
 
 export function hashtagCount(text: string): number {
@@ -78,13 +84,24 @@ export function validate(d: Draft, requireTime: boolean): string[] {
   if (urls.some((u) => !u.toLowerCase().startsWith('https://'))) errors.push('Media link must start with https://')
   if (urls.some((u) => u.toLowerCase().includes('drive.google.com')))
     errors.push("Google Drive links open a web page, not the file: use a direct link or upload the file")
-  if (urls.length > 1) errors.push('Only one image per post for now (carousels come later)')
+  if (urls.length > 1) errors.push('Only one media file per post for now')
 
-  if (d.mediaType === 'video' && api)
-    errors.push("Video to Facebook/Instagram isn't supported yet; use TikTok, YouTube or your profile for now")
+  const cover = d.coverUrl ?? ''
+  if (cover) {
+    if (d.mediaType !== 'video') errors.push('A cover is only for videos')
+    if (!cover.toLowerCase().startsWith('https://')) errors.push('Cover link must start with https://')
+    if (NON_JPEG.test(cover.split(/[?#]/)[0])) errors.push('The cover must be a JPEG')
+  }
+  if (d.mediaType === 'video' && d.videoSeconds != null) {
+    for (const p of ['facebook', 'instagram', 'x'] as const) {
+      const [min, max] = VIDEO_SECONDS[p]!
+      if (has(p) && (d.videoSeconds > max || d.videoSeconds < min))
+        errors.push(`${PLATFORM_NAMES[p]} takes videos of ${min ? `${fmtSeconds(min)} to ` : 'up to '}${fmtSeconds(max)}: this one is ${d.videoSeconds} s`)
+    }
+  }
   if (has('instagram')) {
-    if (d.mediaType !== 'image') errors.push('Instagram needs an image')
-    else if (urls[0] && NON_JPEG.test(urls[0].split(/[?#]/)[0])) errors.push('Instagram needs a JPEG image (PNG, WebP and GIF are rejected at post time)')
+    if (d.mediaType !== 'image' && d.mediaType !== 'video') errors.push('Instagram needs an image or a video')
+    else if (d.mediaType === 'image' && urls[0] && NON_JPEG.test(urls[0].split(/[?#]/)[0])) errors.push('Instagram needs a JPEG image (PNG, WebP and GIF are rejected at post time)')
     if (text('instagram').length > IG_CAPTION_MAX)
       errors.push(`Instagram captions max ${IG_CAPTION_MAX.toLocaleString('en')} characters`)
     if (hashtagCount(text('instagram')) > IG_HASHTAGS_MAX) errors.push(`Instagram allows at most ${IG_HASHTAGS_MAX} hashtags`)
@@ -92,7 +109,6 @@ export function validate(d: Draft, requireTime: boolean): string[] {
   if (has('facebook') && !(text('facebook') || d.link || urls.length)) errors.push('Facebook post is empty: add a caption, link or image')
   if ((has('tiktok') || has('youtube')) && d.mediaType !== 'video') errors.push('TikTok/YouTube need a video')
   if (has('x')) {
-    if (d.mediaType === 'video') errors.push("Video to X isn't supported yet; use an image or text")
     const size = xLength(xText(d))
     if (size > X_TEXT_MAX) errors.push(`X posts max ${X_TEXT_MAX} characters (this one counts ${size.toLocaleString('en')})`)
   }
