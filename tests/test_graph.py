@@ -99,3 +99,28 @@ def test_auth_message_is_plain_language():
     g, _ = client(lambda r, n: err(400, 190, "Error validating access token"))
     with pytest.raises(PlatformError, match="token"):
         g.get("x")
+
+
+def test_rupload_sends_file_url_header_to_rupload_host():
+    g, calls = client(lambda r, n: httpx.Response(200, json={"success": True}))
+    assert g.rupload("V1", "https://cdn.example/clip.mp4") == {"success": True}
+    r = calls[0]
+    assert r.url.host == "rupload.facebook.com" and r.url.path == "/video-upload/v23.0/V1"
+    assert r.headers["file_url"] == "https://cdn.example/clip.mp4"
+    assert r.headers["Authorization"] == "OAuth TOKEN"
+    assert "TOKEN" not in str(r.url)
+
+
+def test_rupload_500_is_retried_then_transient():
+    g, calls = client(lambda r, n: httpx.Response(500, text="down"))
+    with pytest.raises(PlatformError) as e:
+        g.rupload("V1", "https://cdn.example/clip.mp4")
+    assert e.value.kind == "transient" and len(calls) == 3
+
+
+def test_post_with_files_sends_multipart():
+    g, calls = client(lambda r, n: httpx.Response(200, json={"id": "9"}))
+    g.post("V1", safe=False, files={"thumb": ("c.jpg", b"JPEGDATA", "image/jpeg")}, title="t")
+    r = calls[0]
+    assert r.headers["content-type"].startswith("multipart/form-data")
+    assert b"JPEGDATA" in r.content and b'name="title"' in r.content
