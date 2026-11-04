@@ -64,6 +64,7 @@ export interface Post {
   publish_at: string | null
   caption: string
   first_comment: string
+  cover_url: string
   media_type: MediaType
   media_urls: string[]
   link: string

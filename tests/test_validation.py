@@ -56,11 +56,7 @@ def test_valid_assisted_video_post():
                 "media_type": "image",
                 "media_urls": "https://x/a.jpg\nhttps://x/b.jpg",
             },
-            "one image per post",
-        ),
-        (
-            {"platforms": "facebook", "media_type": "video", "media_urls": "https://x/a.mp4"},
-            "Video to Facebook/Instagram isn't supported yet",
+            "one media file per post",
         ),
         ({"platforms": "tiktok"}, "TikTok/YouTube need a video"),
         (
@@ -149,8 +145,6 @@ def test_x_limits():
     assert any("280" in e for e in linked_errors(platforms="x", caption="a" * 281))
     assert linked_errors(platforms="x", caption="a" * 280) == []
     assert any("280" in e for e in linked_errors(platforms="x", caption="字" * 141))
-    video = linked_errors(platforms="x", media_type="video", media_urls="https://x/a.mp4")
-    assert any("Video to X" in e for e in video)
 
 
 def test_x_counts_the_link():
@@ -197,3 +191,28 @@ def test_first_comment_too_long_for_phone_handoff():
     assert msg in linked_errors(**tiktok, first_comment="x" * 4037)
     assert msg not in linked_errors(**tiktok, first_comment="x" * 4036)
     assert msg in errors(account="nobody", **tiktok, first_comment="x" * 4037)
+
+
+VIDEO = {"media_type": "video", "media_urls": "https://x/a.mp4"}
+
+
+def test_video_allowed_to_facebook_instagram_x():
+    got = linked_errors(platforms="facebook,instagram,x", **VIDEO)
+    assert got == []
+
+
+def test_instagram_jpeg_rule_only_for_images():
+    assert not any("JPEG" in e for e in errors(platforms="instagram", **VIDEO))
+    png = errors(platforms="instagram", media_type="image", media_urls="https://x/a.png")
+    assert any("JPEG" in e for e in png)
+
+
+def test_cover_needs_video_https_and_jpeg():
+    video = {"platforms": "instagram", **VIDEO}
+    img = errors(
+        platforms="instagram", media_type="image", media_urls="https://x/a.jpg", cover_url="https://x/c.jpg"
+    )
+    assert "A cover is only for videos" in img
+    assert any("https://" in e for e in errors(**video, cover_url="http://x/c.jpg"))
+    assert "The cover must be a JPEG" in errors(**video, cover_url="https://x/c.png")
+    assert errors(**video, cover_url="https://x/c.jpg") == []

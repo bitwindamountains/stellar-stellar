@@ -8,7 +8,7 @@ describe('sectionOf', () => {
     expect(sectionOf('Set when to post')).toBe('when')
     expect(sectionOf('Add the video')).toBe('media')
     expect(sectionOf('Instagram needs an image')).toBe('media')
-    expect(sectionOf("fb: Video to X isn't supported yet; use an image or text")).toBe('media')
+    expect(sectionOf('fb: Only one media file per post for now')).toBe('media')
     expect(sectionOf('TikTok/YouTube need a video')).toBe('media')
     expect(sectionOf('Facebook post is empty: add a caption, link or image')).toBe('caption')
     expect(sectionOf('X posts max 280 characters (this one counts 300)')).toBe('caption')
