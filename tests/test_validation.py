@@ -216,3 +216,17 @@ def test_cover_needs_video_https_and_jpeg():
     assert any("https://" in e for e in errors(**video, cover_url="http://x/c.jpg"))
     assert "The cover must be a JPEG" in errors(**video, cover_url="https://x/c.png")
     assert errors(**video, cover_url="https://x/c.jpg") == []
+
+
+def test_video_length_and_reel_shape_mirror_the_web():
+    video = {"media_type": "video", "media_urls": "https://x/a.mp4"}
+    long = errors(platforms="facebook,instagram,x", **video, video_seconds="90.1")
+    assert "Facebook Page takes videos of 3 s to 90 s: this one is 90.1 s" in long
+    assert "X takes videos of up to 140 s: this one is 90.1 s" not in long
+    assert "Instagram takes videos of 3 s to 15 min: this one is 2 s" in errors(
+        platforms="instagram", **video, video_seconds="2"
+    )
+    wide = errors(platforms="facebook", **video, video_width="1920", video_height="1080")
+    assert "Facebook Reels need a vertical video at least 540 px wide: this one is 1920×1080" in wide
+    # Not measured (Sheet rows, pasted links): no length or shape check.
+    assert errors(platforms="facebook,instagram", **video) == []

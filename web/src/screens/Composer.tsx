@@ -139,6 +139,7 @@ export default function Composer({ num, day }: { num?: number; day?: string }) {
       setMediaType(lead.media_type)
       setMediaUrl(lead.media_urls[0] ?? '')
       setCoverUrl(lead.cover_url ?? '')
+      setMeta({ videoSeconds: lead.video_seconds ?? null, videoWidth: lead.video_width ?? null, videoHeight: lead.video_height ?? null })
       setLink(lead.link)
     })()
   }, [num, accounts])
@@ -283,6 +284,9 @@ export default function Composer({ num, day }: { num?: number; day?: string }) {
       media_type: mediaType,
       media_urls: mediaUrl ? [mediaUrl] : [],
       cover_url: coverUrl,
+      // Stored so the publisher re-checks the video limits (validation.py).
+      ...(mediaType === 'video' ? { video_seconds: meta.videoSeconds, video_width: meta.videoWidth, video_height: meta.videoHeight }
+        : { video_seconds: null, video_width: null, video_height: null }),
       link,
       status,
       // Rescheduling starts a fresh retry budget; filled platform IDs still stop any repost.

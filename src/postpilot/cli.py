@@ -79,8 +79,10 @@ def validate_command() -> None:
         raise typer.Exit(1)
 
 
-# Past this no new post starts: the workflow kills the job at 30 minutes, and a post can take a few.
+# The workflow kills the job at 30 minutes. Past RUN_SECONDS no new post starts; every wait for a video
+# ends by WAIT_END_SECONDS, which leaves time for setup, cleanup and stats.
 RUN_SECONDS = 20 * 60
+WAIT_END_SECONDS = 25 * 60
 
 
 @app.command()
@@ -102,15 +104,13 @@ def publish(
     token = _tokens(repo, cfg, http, now)
 
     def wait_seconds() -> float:
-        # Video takes minutes to process: wait up to 5 minutes, less near the deadline (at least a minute).
-        return min(300, max(60, deadline - time.monotonic()))
+        # Video takes minutes to process: wait up to 5 minutes, less near the end of the job.
+        return min(300, max(0, started + WAIT_END_SECONDS - time.monotonic()))
 
     def meta(module):
         def publish_one(post, account, save_id=None):
             graph = GraphClient(cfg.meta_graph_version, token(account, "meta"), http=http)
-            # checks are 5s apart
-            video = post.get("media_type") == "video"
-            extra = {"checks": 60, "seconds": wait_seconds()} if video else {}
+            extra = {"seconds": wait_seconds()} if post.video else {}
             if module is facebook:
                 extra["download"] = lambda u: rest.download(http, u, "Facebook")
                 extra["save_id"] = save_id
@@ -130,7 +130,7 @@ def publish(
     def meta_stats(module):
         def stats_one(post, account, object_id):
             graph = GraphClient(cfg.meta_graph_version, token(account, "meta"), http=stats_http, attempts=1)
-            extra = {"video": post.get("media_type") == "video"} if module is facebook else {}
+            extra = {"video": post.video} if module is facebook else {}
             return module.stats(graph, object_id, **extra)
 
         return stats_one
@@ -168,8 +168,8 @@ def publish(
         )
     except StoreError as e:
         raise _fail(f"Store error: {e}") from None
-    if not dry_run and report.posted and hasattr(repo, "cleanup_media"):
-        repo.cleanup_media(report.posted)
+    if not dry_run and hasattr(repo, "cleanup_media"):
+        repo.cleanup_media()
     if hasattr(repo, "record_run") and not dry_run:
         counts = {k: len(getattr(report, k)) for k in ("posted", "partial", "failed", "missed")}
         repo.record_run(**counts, duration_ms=int((time.monotonic() - started) * 1000), dry_run=False)

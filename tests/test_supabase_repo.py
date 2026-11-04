@@ -287,12 +287,14 @@ def test_claim_nudge_error_is_a_store_error():
 MEDIA = "https://abc.supabase.co/storage/v1/object/public/media/"
 
 
-def cleanup_repo(delete_status=200, siblings=()):
+def cleanup_repo(delete_status=200, users=()):
     rows = [
         {
             "num": 1,
             "media_urls": [MEDIA + "u/a.mp4", "https://elsewhere/b.mp4"],
             "cover_url": MEDIA + "u/c.jpg",
+            "status": "posted",
+            "assist_done_at": "2026-11-04T00:00:00Z",
         },
     ]
 
@@ -300,8 +302,8 @@ def cleanup_repo(delete_status=200, siblings=()):
         if request.url.path.endswith("/storage/v1/object/media"):
             return httpx.Response(delete_status, json=[])
         if request.method == "GET":
-            if "or" in request.url.params:
-                return httpx.Response(200, json=list(siblings))
+            if "ov." in request.url.params.get("or", ""):
+                return httpx.Response(200, json=[*rows, *users])  # the swept row uses its own files too
             return httpx.Response(200, json=rows)
         return httpx.Response(204)
 
@@ -310,46 +312,48 @@ def cleanup_repo(delete_status=200, siblings=()):
 
 def test_cleanup_deletes_only_own_uploads_of_finished_handed_off_rows():
     r, calls = cleanup_repo()
-    r.cleanup_media([1])
-    get = next(c for c in calls if c.method == "GET")
-    assert "assist_done_at" in str(get.url) and "eq.posted" in str(get.url)
+    r.cleanup_media()
+    sweep = calls[0]
+    assert sweep.url.params["status"] == "eq.posted" and sweep.url.params["assist_done_at"] == "not.is.null"
     delete = next(c for c in calls if c.method == "DELETE")
     assert json.loads(delete.content) == {"prefixes": ["u/a.mp4", "u/c.jpg"]}
     patch = next(c for c in calls if c.method == "PATCH")
+    assert patch.url.params["status"] == "eq.posted"
     assert json.loads(patch.content) == {"media_urls": ["https://elsewhere/b.mp4"], "cover_url": ""}
 
 
 def test_cleanup_failed_delete_keeps_links():
     r, calls = cleanup_repo(delete_status=500)
-    r.cleanup_media([1])
+    r.cleanup_media()
     assert not [c for c in calls if c.method == "PATCH"]
 
 
-def test_cleanup_keeps_a_clip_a_sibling_row_still_references():
-    sibling = [{"media_urls": [MEDIA + "u/a.mp4"], "cover_url": ""}]
-    r, calls = cleanup_repo(siblings=sibling)
-    r.cleanup_media([1])
-    delete = next(c for c in calls if c.method == "DELETE")
-    assert json.loads(delete.content) == {"prefixes": ["u/c.jpg"]}
-    patch = next(c for c in calls if c.method == "PATCH")
-    assert json.loads(patch.content) == {
-        "media_urls": [MEDIA + "u/a.mp4", "https://elsewhere/b.mp4"],
-        "cover_url": "",
-    }
-
-
-def test_cleanup_ignores_a_finished_sibling_and_drops_its_dead_link():
-    sibling = [
-        {
-            "num": 7,
-            "media_urls": [MEDIA + "u/a.mp4"],
-            "cover_url": "",
-            "status": "posted",
-            "assist_done_at": "2026-11-04T00:00:00Z",
+def test_cleanup_keeps_a_file_an_unfinished_row_still_uses():
+    # A group row or Post again copy that hasn't posted yet, or posted but isn't handed off yet.
+    for user in (
+        {"num": 2, "media_urls": [MEDIA + "u/a.mp4"], "cover_url": None},
+        {"num": 2, "media_urls": [MEDIA + "u/a.mp4"], "cover_url": "", "status": "posted"},
+    ):
+        r, calls = cleanup_repo(users=[user])
+        r.cleanup_media()
+        delete = next(c for c in calls if c.method == "DELETE")
+        assert json.loads(delete.content) == {"prefixes": ["u/c.jpg"]}
+        patches = {c.url.params["num"]: json.loads(c.content) for c in calls if c.method == "PATCH"}
+        assert patches == {
+            "eq.1": {"media_urls": [MEDIA + "u/a.mp4", "https://elsewhere/b.mp4"], "cover_url": ""}
         }
-    ]
-    r, calls = cleanup_repo(siblings=sibling)
-    r.cleanup_media([1])
+
+
+def test_cleanup_ignores_a_finished_row_and_drops_its_dead_link():
+    finished = {
+        "num": 7,
+        "media_urls": [MEDIA + "u/a.mp4"],
+        "cover_url": "",
+        "status": "posted",
+        "assist_done_at": "2026-11-04T00:00:00Z",
+    }
+    r, calls = cleanup_repo(users=[finished])
+    r.cleanup_media()
     delete = next(c for c in calls if c.method == "DELETE")
     assert json.loads(delete.content) == {"prefixes": ["u/a.mp4", "u/c.jpg"]}
     patches = {c.url.params["num"]: json.loads(c.content) for c in calls if c.method == "PATCH"}
@@ -360,23 +364,29 @@ def test_cleanup_ignores_a_finished_sibling_and_drops_its_dead_link():
 
 
 def test_cleanup_nothing_deletable_makes_no_delete_or_patch():
-    sibling = [{"media_urls": [MEDIA + "u/a.mp4"], "cover_url": MEDIA + "u/c.jpg"}]
-    r, calls = cleanup_repo(siblings=sibling)
-    r.cleanup_media([1])
+    user = {"num": 2, "media_urls": [MEDIA + "u/a.mp4"], "cover_url": MEDIA + "u/c.jpg"}
+    r, calls = cleanup_repo(users=[user])
+    r.cleanup_media()
     assert not [c for c in calls if c.method in ("DELETE", "PATCH")]
 
 
-def test_cleanup_without_matching_rows_does_nothing():
-    r, calls = repo(lambda request: httpx.Response(200, json=[]))
-    r.cleanup_media([1])
+def test_cleanup_without_own_uploads_does_nothing():
+    outside = [
+        {
+            "num": 1,
+            "media_urls": ["https://elsewhere/b.mp4"],
+            "cover_url": "",
+            "status": "posted",
+            "assist_done_at": "2026-11-04T00:00:00Z",
+        }
+    ]
+    for rows in ([], outside):
+        r, calls = repo(lambda request, rows=rows: httpx.Response(200, json=rows))
+        r.cleanup_media()
+        assert [c.method for c in calls] == ["GET"]
+
+
+def test_cleanup_store_error_is_skipped_not_raised():
+    r, calls = repo(lambda request: httpx.Response(503, json={"message": "down"}))
+    r.cleanup_media()
     assert [c.method for c in calls] == ["GET"]
-
-
-def test_cleanup_keeps_a_clip_used_by_a_posted_row_not_yet_handed_off():
-    sibling = [{"media_urls": [MEDIA + "u/a.mp4"], "cover_url": None}]
-    r, calls = cleanup_repo(siblings=sibling)
-    r.cleanup_media([1, 2])
-    others = next(c for c in calls if "or" in c.url.params)
-    assert others.url.params["num"] == "not.in.(1)"
-    delete = next(c for c in calls if c.method == "DELETE")
-    assert json.loads(delete.content) == {"prefixes": ["u/c.jpg"]}

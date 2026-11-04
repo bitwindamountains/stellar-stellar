@@ -124,3 +124,23 @@ def test_post_with_files_sends_multipart():
     r = calls[0]
     assert r.headers["content-type"].startswith("multipart/form-data")
     assert b"JPEGDATA" in r.content and b'name="title"' in r.content
+
+
+def test_rupload_error_shows_its_reason():
+    body = {
+        "debug_info": {
+            "retriable": False,
+            "type": "ProcessingFailedError",
+            "message": "Request processing failed",
+        }
+    }
+    g, calls = client(lambda r, n: httpx.Response(400, json=body))
+    with pytest.raises(PlatformError) as e:
+        g.rupload("V1", "https://cdn.example/clip.mp4")
+    assert e.value.kind == "permanent" and len(calls) == 1
+    assert str(e.value) == "Meta rejected the post: Request processing failed"
+    body["debug_info"]["retriable"] = True
+    g, calls = client(lambda r, n: httpx.Response(400, json=body))
+    with pytest.raises(PlatformError) as e:
+        g.rupload("V1", "https://cdn.example/clip.mp4")
+    assert e.value.kind == "transient" and len(calls) == 3

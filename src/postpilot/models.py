@@ -101,6 +101,10 @@ class Post:
         return list(dict.fromkeys(n for n in names if n))
 
     @property
+    def video(self) -> bool:
+        return self.get("media_type").lower() == "video"
+
+    @property
     def media_urls(self) -> list[str]:
         return [u.strip() for u in self.get("media_urls").splitlines() if u.strip()]
 

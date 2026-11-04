@@ -18,6 +18,7 @@ from postpilot.models import (
     PlatformError,
     Post,
     PublishResult,
+    StoreError,
 )
 from postpilot.selector import select
 from postpilot.validation import validate
@@ -220,6 +221,8 @@ def _publish_row(post, account, publishers, assist, commenters, write, cfg, stam
                 save_marked(platform, e.object_id, str(e))
             errors.append((platform, e))
             continue
+        except StoreError:  # the ID save failed (save_id): stop the run, as any failed save does
+            raise
         except Exception as e:  # never surface raw text: it may contain URLs with tokens
             errors.append(
                 (platform, PlatformError("unknown", f"Unexpected {type(e).__name__}; check if it posted"))
