@@ -5,6 +5,7 @@ from postpilot.graph import fetch_permalink, insight
 from postpilot.models import Account, PlatformError, Post, PublishResult
 
 REEL_STILL_PROCESSING = "Facebook accepted the Reel but was still processing; check it's on your Page"
+_CHECK = "check the Reel is on your Page"
 
 
 def comment(graph, post_id: str, text: str) -> str:
@@ -19,9 +20,13 @@ def publish(
     sleep: Callable[[float], None] = time.sleep,
     checks: int = 60,
     download: Callable[[str], tuple[bytes, str]] | None = None,
+    save_id: Callable[[str], None] | None = None,
+    seconds: float = 300,
+    clock: Callable[[], float] = time.monotonic,
 ) -> PublishResult:
+    """A Reel waits up to `checks` status reads and `seconds` of wall-clock time for Facebook to finish."""
     if post.get("media_type") == "video":
-        return _publish_reel(graph, account, post, sleep, checks, download)
+        return _publish_reel(graph, account, post, sleep, checks, download, save_id, seconds, clock)
     caption, link, urls = post.text_for("facebook"), post.get("link"), post.media_urls
     if urls:
         # Photo posts have no link field, so the link goes in the caption.
@@ -34,7 +39,7 @@ def publish(
     return PublishResult(post_id, fetch_permalink(graph, post_id, "permalink_url"))
 
 
-def _publish_reel(graph, account, post, sleep, checks, download) -> PublishResult:
+def _publish_reel(graph, account, post, sleep, checks, download, save_id, seconds, clock) -> PublishResult:
     page = account.fb_page_id
     # Start and upload only stage an unpublished Reel, so they may retry; finish makes it public.
     video_id = graph.post(f"{page}/video_reels", safe=True, upload_phase="start")["video_id"]
@@ -52,10 +57,39 @@ def _publish_reel(graph, account, post, sleep, checks, download) -> PublishResul
         if e.kind == "unknown":  # it may have gone public: keep the ID so it is never sent again
             e.object_id = video_id
         raise
+    except Exception as e:  # e.g. a non-JSON success body: it may have gone public
+        raise PlatformError(
+            "unknown", f"Unexpected {type(e).__name__} from Facebook; {_CHECK}", object_id=video_id
+        ) from None
+    if save_id:
+        save_id(video_id)  # now, not after the wait: a run killed mid-wait must still never resend it
+    try:
+        return _await_reel(graph, post, video_id, sleep, checks, download, seconds, clock)
+    except PlatformError as e:  # after finish, every error keeps the video ID
+        e.object_id = e.object_id or video_id
+        raise
+    except Exception as e:  # never surface raw text: it may contain URLs with tokens
+        raise PlatformError(
+            "unknown",
+            f"Unexpected {type(e).__name__} after Facebook accepted the Reel; {_CHECK}",
+            object_id=video_id,
+        ) from None
+
+
+def _await_reel(graph, post, video_id, sleep, checks, download, seconds, clock) -> PublishResult:
+    started = clock()
     for check in range(checks):
         try:
             state = _reel_state(graph.get(video_id, fields="status"))
-        except Exception:  # after finish, a bad status read must never lose the video ID
+        except PlatformError as e:
+            if e.kind == "auth":  # waiting longer can't help: the token is gone
+                raise PlatformError(
+                    "unknown",
+                    f"{REEL_STILL_PROCESSING} (couldn't check its status, reconnect Meta in Accounts: {e})",
+                    object_id=video_id,
+                ) from None
+            state = None
+        except Exception:  # a bad status read must never lose the video ID
             state = None
         if state == "published":
             break
@@ -64,10 +98,9 @@ def _publish_reel(graph, account, post, sleep, checks, download) -> PublishResul
             raise PlatformError(
                 "permanent", f"Facebook couldn't publish the Reel: {state}", object_id=video_id
             )
-        if check < checks - 1:
-            sleep(5)
-    else:
-        raise PlatformError("unknown", REEL_STILL_PROCESSING, object_id=video_id)
+        if check == checks - 1 or clock() - started >= seconds:
+            raise PlatformError("unknown", REEL_STILL_PROCESSING, object_id=video_id)
+        sleep(5)
     permalink = fetch_permalink(graph, video_id, "permalink_url")
     if permalink.startswith("/"):
         permalink = "https://www.facebook.com" + permalink

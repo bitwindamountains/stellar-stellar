@@ -490,3 +490,49 @@ def test_fb_reel_stats_use_video_fields_and_reel_insights():
         "likes.summary(total_count).limit(0),comments.summary(total_count).limit(0)"
     )
     assert out == {"likes": 3, "comments": 2, "views": 40, "reach": 30, "top_comments": []}
+
+
+def test_fb_reel_saves_id_right_after_finish_before_polling():
+    g = FakeGraph(REEL_START + [PUBLISHED, {"permalink_url": ""}])
+    saved = []
+    facebook.publish(
+        g, ACCOUNT, reel(), sleep=lambda s: None, save_id=lambda i: saved.append((i, len(g.calls)))
+    )
+    assert saved == [("V1", 3)]  # after start, upload and finish; before the first status read
+
+
+def test_fb_reel_poll_stops_at_its_time_bound():
+    g = FakeGraph(REEL_START + [status()] * 10)
+    ticks = iter([0, 100, 400])
+    with pytest.raises(PlatformError) as e:
+        facebook.publish(g, ACCOUNT, reel(), sleep=lambda s: None, seconds=300, clock=lambda: next(ticks))
+    assert e.value.kind == "unknown" and e.value.object_id == "V1"
+    assert [c[0] for c in g.calls].count("GET") == 2
+
+
+def test_fb_reel_auth_error_while_polling_stops_at_once_and_keeps_id():
+    g = FakeGraph(REEL_START + [PlatformError("auth", "token expired")] + [PUBLISHED] * 5)
+    with pytest.raises(PlatformError) as e:
+        facebook.publish(g, ACCOUNT, reel(), sleep=lambda s: None)
+    assert e.value.kind == "unknown" and e.value.object_id == "V1"
+    assert "reconnect Meta" in str(e.value) and [c[0] for c in g.calls].count("GET") == 1
+
+
+def test_fb_reel_unexpected_error_after_finish_keeps_id():
+    # finish answered with a non-JSON body, or the permalink read broke in an unexpected way
+    for responses in (REEL_START[:2] + [ValueError("not json")], REEL_START + [PUBLISHED, KeyError("x")]):
+        g = FakeGraph(responses)
+        with pytest.raises(PlatformError) as e:
+            facebook.publish(g, ACCOUNT, reel(), sleep=lambda s: None)
+        assert e.value.kind == "unknown" and e.value.object_id == "V1"
+        assert "not json" not in str(e.value)
+
+
+def test_ig_poll_stops_at_its_time_bound():
+    g = FakeGraph([{"id": "C1"}] + [{"status_code": "IN_PROGRESS"}] * 10)
+    ticks = iter([0, 100, 400])
+    with pytest.raises(PlatformError) as e:
+        instagram.publish(
+            g, ACCOUNT, reel(), sleep=lambda s: None, checks=60, seconds=300, clock=lambda: next(ticks)
+        )
+    assert e.value.kind == "transient" and len(g.calls) == 3

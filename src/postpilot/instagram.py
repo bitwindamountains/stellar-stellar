@@ -11,8 +11,15 @@ def comment(graph, media_id: str, text: str) -> str:
 
 
 def publish(
-    graph, account: Account, post: Post, sleep: Callable[[float], None] = time.sleep, checks: int = 12
+    graph,
+    account: Account,
+    post: Post,
+    sleep: Callable[[float], None] = time.sleep,
+    checks: int = 12,
+    seconds: float = 300,
+    clock: Callable[[], float] = time.monotonic,
 ) -> PublishResult:
+    """Waits up to `checks` status reads and `seconds` of wall-clock time for the container."""
     # An unpublished container is harmless if duplicated, so this call may retry.
     video = post.get("media_type") == "video"
     if video:
@@ -29,16 +36,16 @@ def publish(
     container = graph.post(
         f"{account.ig_user_id}/media", safe=True, caption=post.text_for("instagram"), **fields
     )["id"]
+    started = clock()
     for check in range(checks):
         status = graph.get(container, fields="status_code").get("status_code")
         if status == "FINISHED":
             break
         if status in ("ERROR", "EXPIRED"):
             raise PlatformError("permanent", f"Instagram couldn't use the {what}: {hint}")
-        if check < checks - 1:
-            sleep(5)
-    else:
-        raise PlatformError("transient", f"Instagram is still processing the {what}; will retry next run")
+        if check == checks - 1 or clock() - started >= seconds:
+            raise PlatformError("transient", f"Instagram is still processing the {what}; will retry next run")
+        sleep(5)
     media_id = graph.post(f"{account.ig_user_id}/media_publish", safe=False, creation_id=container)["id"]
     return PublishResult(media_id, fetch_permalink(graph, media_id, "permalink"))
 
