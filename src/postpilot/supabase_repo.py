@@ -141,8 +141,9 @@ class SupabaseRepository:
         )
 
     def cleanup_media(self, nums: list[int]) -> None:
-        """Delete our own uploaded files of posted rows already handed off by hand, then clear the links.
-        Any failure leaves the row as it is (links intact) and never raises into the run."""
+        """Delete our own uploaded files of posted rows already handed off by hand, then drop those links.
+        A file another row (any status) still references is kept. Any failure leaves the row as it is and
+        never raises into the run."""
         prefix = f"{self.url}/storage/v1/object/public/media/"
         try:
             rows = self._request(
@@ -155,26 +156,45 @@ class SupabaseRepository:
                     "assist_done_at": "not.is.null",
                 },
             )
-            for row in rows:
-                urls = [*row["media_urls"], row["cover_url"]]
-                paths = [u[len(prefix) :] for u in urls if u.startswith(prefix)]
-                if paths:
-                    r = self.http.request(
-                        "DELETE",
-                        f"{self.url}/storage/v1/object/media",
-                        json={"prefixes": paths},
-                        headers=self.headers,
-                    )
-                    if not r.is_success:
-                        continue
-                self._request(
-                    "PATCH",
-                    "posts",
-                    params={"num": f"eq.{row['num']}"},
-                    json={"media_urls": [], "cover_url": ""},
-                )
-        except (StoreError, httpx.TransportError, KeyError, TypeError):
+        except (StoreError, httpx.HTTPError, ValueError):
+            print("Storage cleanup skipped")
             return
+        for row in rows:
+            try:
+                self._cleanup_row(row, nums, prefix)
+            except (StoreError, httpx.HTTPError, ValueError, KeyError, TypeError):
+                print(f"Storage cleanup skipped for post {row.get('num')}")
+
+    def _cleanup_row(self, row: dict, nums: list[int], prefix: str) -> None:
+        own = [u for u in [*row["media_urls"], row["cover_url"]] if u.startswith(prefix)]
+        if not own:
+            return
+        quoted = ",".join(f'"{u}"' for u in own)
+        others = self._request(
+            "GET",
+            "posts",
+            params={
+                "select": "media_urls,cover_url",
+                "num": f"not.in.({','.join(map(str, nums))})",
+                "or": f"(media_urls.ov.{{{quoted}}},cover_url.in.({quoted}))",
+            },
+        )
+        used = {u for o in others for u in [*o["media_urls"], o["cover_url"]]}
+        gone = [u for u in own if u not in used]
+        if not gone:
+            return
+        r = self.http.request(
+            "DELETE",
+            f"{self.url}/storage/v1/object/media",
+            json={"prefixes": [u[len(prefix) :] for u in gone]},
+            headers=self.headers,
+        )
+        if not r.is_success:
+            return
+        patch = {"media_urls": [u for u in row["media_urls"] if u not in gone]}
+        if row["cover_url"] in gone:
+            patch["cover_url"] = ""
+        self._request("PATCH", "posts", params={"num": f"eq.{row['num']}"}, json=patch)
 
     def record_run(self, **counts) -> None:
         self._request("POST", "runs", json=counts)
