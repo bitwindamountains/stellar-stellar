@@ -51,6 +51,7 @@ export function startPostAgain(rows: Post[]): void {
     mediaType: gone ? 'none' : lead.media_type,
     mediaUrl: gone ? '' : lead.media_urls[0] ?? '',
     coverUrl: gone ? '' : lead.cover_url ?? '',
+    ...(gone ? {} : { videoSeconds: lead.video_seconds ?? null, videoWidth: lead.video_width ?? null, videoHeight: lead.video_height ?? null }),
     note: gone ? 'The original file was removed after you posted it by hand. Add it again.' : undefined,
   })
   go('/new')

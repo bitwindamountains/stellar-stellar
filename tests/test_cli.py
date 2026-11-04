@@ -322,13 +322,13 @@ class CleanupRepo(FakeRepository):
         super().__init__(*a)
         self.cleaned = []
 
-    def cleanup_media(self, nums):
-        self.cleaned.append(nums)
+    def cleanup_media(self):
+        self.cleaned.append(True)
 
 
-@pytest.mark.parametrize("dry, expected", [(True, []), (False, [[3]])])
+@pytest.mark.parametrize("dry, expected", [(True, []), (False, [True])])
 def test_cleanup_runs_only_on_real_runs(monkeypatch, dry, expected):
-    monkeypatch.setattr(cli, "run", lambda *a, **k: Report(posted=[3]))
+    monkeypatch.setattr(cli, "run", lambda *a, **k: Report())  # a handoff done since the last run
     repo = CleanupRepo([], ACCOUNTS)
     args = ["publish", "--dry-run"] if dry else ["publish", "--local"]
     invoke(monkeypatch, args, repo)

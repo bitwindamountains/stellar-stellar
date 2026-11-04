@@ -10,6 +10,12 @@ from postpilot.models import PlatformError, Post
 NOW = datetime(2026, 10, 28, 10, 0, tzinfo=UTC)
 
 
+def fake_time():
+    """A sleep that moves the clock on: a wall-clock bound ends the wait without real time passing."""
+    now = [0.0]
+    return {"sleep": lambda s: now.__setitem__(0, now[0] + s), "clock": lambda: now[0]}
+
+
 def client(handler):
     calls = []
 
@@ -112,7 +118,7 @@ def test_x_video_processing_failed_is_permanent_and_never_posts():
 def test_x_video_still_processing_is_transient_and_never_posts():
     http, calls = client(x_video_handler([{"state": "in_progress"}] * 2, {"state": "pending"}))
     with pytest.raises(PlatformError) as e:
-        x.publish(http, "TOK", post(**VIDEO), sleep=lambda s: None, checks=2)
+        x.publish(http, "TOK", post(**VIDEO), seconds=2, **fake_time())
     assert e.value.kind == "transient"
     assert all(c.url.path != "/2/tweets" for c in calls)
 

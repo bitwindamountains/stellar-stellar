@@ -51,14 +51,3 @@ export function videoMeta(file: File): Promise<VideoMeta> {
     video.src = url
   })
 }
-
-export interface FileUser { num?: number; media_urls: string[]; cover_url: string | null; status?: string; assist_done_at?: string | null }
-
-/** A posted, handed-off row needs its files no more, so it must not keep them alive (mirrors cleanup_media). */
-export const isFinished = (o: FileUser) => o.status === 'posted' && !!o.assist_done_at
-
-/** Of a post's own files, the ones no unfinished row uses (group rows and Post again copies share the same files). */
-export function unsharedFiles(own: string[], others: FileUser[]): string[] {
-  const used = new Set(others.filter((o) => !isFinished(o)).flatMap((o) => [...o.media_urls, o.cover_url ?? '']))
-  return own.filter((u) => !used.has(u))
-}

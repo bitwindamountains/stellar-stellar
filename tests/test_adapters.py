@@ -6,6 +6,12 @@ from postpilot.models import Account, PlatformError, Post
 ACCOUNT = Account("main", "PAGE", "IGUSER", "T", "Asia/Manila")
 
 
+def fake_time():
+    """A sleep that moves the clock on: a wall-clock bound ends the wait without real time passing."""
+    now = [0.0]
+    return {"sleep": lambda s: now.__setitem__(0, now[0] + s), "clock": lambda: now[0]}
+
+
 class FakeGraph:
     def __init__(self, responses):
         self.responses = list(responses)  # each: dict or PlatformError
@@ -129,9 +135,9 @@ def test_fb_reel_null_permalink_keeps_id():
 
 
 def test_fb_reel_still_processing_is_unknown_with_id():
-    g = FakeGraph(REEL_START + [status()] * 3)
+    g = FakeGraph(REEL_START + [status()] * 25)  # 5 s apart, over 120 s
     with pytest.raises(PlatformError) as e:
-        facebook.publish(g, ACCOUNT, reel(), sleep=lambda s: None, checks=3)
+        facebook.publish(g, ACCOUNT, reel(), seconds=120, **fake_time())
     assert e.value.kind == "unknown" and e.value.object_id == "V1"
     assert "check it's on your Page" in str(e.value)
 
@@ -141,7 +147,7 @@ def test_fb_reel_status_read_failure_keeps_waiting_and_keeps_id():
     assert facebook.publish(g, ACCOUNT, reel(), sleep=lambda s: None).id == "V1"
     g = FakeGraph(REEL_START + [PlatformError("auth", "x")] * 2)
     with pytest.raises(PlatformError) as e:
-        facebook.publish(g, ACCOUNT, reel(), sleep=lambda s: None, checks=2)
+        facebook.publish(g, ACCOUNT, reel(), **fake_time())
     assert e.value.kind == "unknown" and e.value.object_id == "V1"
 
 
@@ -232,7 +238,7 @@ def test_ig_still_processing_is_transient():
     g = FakeGraph([{"id": "C1"}] + [{"status_code": "IN_PROGRESS"}] * 3)
     with pytest.raises(PlatformError) as e:
         instagram.publish(
-            g, ACCOUNT, post(media_type="image", media_urls="https://x/a.jpg"), sleep=lambda s: None, checks=3
+            g, ACCOUNT, post(media_type="image", media_urls="https://x/a.jpg"), seconds=10, **fake_time()
         )
     assert e.value.kind == "transient"
 
@@ -263,7 +269,7 @@ def test_ig_reel_error_message_mentions_the_video():
 def test_ig_reel_still_processing_is_transient():
     g = FakeGraph([{"id": "C1"}] + [{"status_code": "IN_PROGRESS"}] * 3)
     with pytest.raises(PlatformError) as e:
-        instagram.publish(g, ACCOUNT, reel(), sleep=lambda s: None, checks=3)
+        instagram.publish(g, ACCOUNT, reel(), seconds=10, **fake_time())
     assert e.value.kind == "transient"
     assert all(c[1] != "IGUSER/media_publish" for c in g.calls)
 
@@ -539,7 +545,20 @@ def test_ig_poll_stops_at_its_time_bound():
     g = FakeGraph([{"id": "C1"}] + [{"status_code": "IN_PROGRESS"}] * 10)
     ticks = iter([0, 100, 400])
     with pytest.raises(PlatformError) as e:
-        instagram.publish(
-            g, ACCOUNT, reel(), sleep=lambda s: None, checks=60, seconds=300, clock=lambda: next(ticks)
-        )
+        instagram.publish(g, ACCOUNT, reel(), sleep=lambda s: None, seconds=300, clock=lambda: next(ticks))
     assert e.value.kind == "transient" and len(g.calls) == 3
+
+
+def test_video_media_type_is_case_insensitive():
+    g = FakeGraph(REEL_START + [PUBLISHED, {"permalink_url": ""}])
+    facebook.publish(
+        g, ACCOUNT, post(media_type="Video", media_urls="https://x/clip.mp4"), sleep=lambda s: None
+    )
+    assert g.calls[0][1] == "PAGE/video_reels"
+
+
+def test_fb_reel_with_too_little_time_left_waits_for_the_next_run():
+    g = FakeGraph([])
+    with pytest.raises(PlatformError) as e:
+        facebook.publish(g, ACCOUNT, reel(), seconds=facebook.REEL_MIN_WAIT - 1, **fake_time())
+    assert e.value.kind == "transient" and e.value.object_id == "" and g.calls == []

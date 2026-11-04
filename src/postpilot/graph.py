@@ -15,17 +15,20 @@ UNKNOWN_OUTCOME = "No clear answer from Meta while publishing: check if it poste
 
 def classify(status: int, body: dict) -> PlatformError:
     error = body.get("error") or {}
+    debug = body.get("debug_info") or {}  # rupload's error shape
     code, subcode = error.get("code"), error.get("error_subcode")
-    message = error.get("message") or f"HTTP {status}"
+    message = error.get("message") or debug.get("message") or f"HTTP {status}"
     if code == 190 or code == 10 or (isinstance(code, int) and 200 <= code <= 299):
         return PlatformError("auth", f"Meta token/permission problem, operator must fix it: {message}")
     if code in RATE_CODES or subcode == IG_PUBLISH_LIMIT_SUBCODE:
         return PlatformError("rate", f"Meta rate limit reached, will retry next run: {message}")
-    if code in TRANSIENT_CODES or status >= 500:
+    if code in TRANSIENT_CODES or status >= 500 or debug.get("retriable") is True:
         return PlatformError("transient", f"Meta had a temporary problem: {message}")
     if code == 368:
         return PlatformError("permanent", f"Meta temporarily blocked posting from this account: {message}")
-    return PlatformError("permanent", f"Meta rejected the post: {message} (code {code})")
+    return PlatformError(
+        "permanent", f"Meta rejected the post: {message}" + (f" (code {code})" if code else "")
+    )
 
 
 class GraphClient:

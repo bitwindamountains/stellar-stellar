@@ -31,13 +31,15 @@ describe('startPostAgain', () => {
     const variants = { instagram: { hashtags: '#coffee' } }
     startPostAgain([
       post({ num: 3, account_id: 1, platforms: ['facebook', 'instagram'], caption: 'Hi', first_comment: 'Link: x', variants,
-        link: 'https://a.b', media_type: 'video', media_urls: ['https://cdn/x.mp4'], cover_url: 'https://cdn/c.jpg' }),
+        link: 'https://a.b', media_type: 'video', media_urls: ['https://cdn/x.mp4'], cover_url: 'https://cdn/c.jpg',
+        video_seconds: 12.5, video_width: 1080, video_height: 1920 }),
       post({ num: 4, account_id: 2, platforms: ['fb_profile'], caption: 'Hi' }),
     ])
     expect(saveDraft).toHaveBeenCalledWith({
       targets: { 1: ['facebook', 'instagram'], 2: ['fb_profile'] },
       caption: 'Hi', firstComment: 'Link: x', variants, link: 'https://a.b', mode: 'now', publishAt: '',
       mediaType: 'video', mediaUrl: 'https://cdn/x.mp4', coverUrl: 'https://cdn/c.jpg', note: undefined,
+      videoSeconds: 12.5, videoWidth: 1080, videoHeight: 1920,
     })
     expect(go).toHaveBeenCalledWith('/new')
   })

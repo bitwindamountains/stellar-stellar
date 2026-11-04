@@ -4,7 +4,7 @@ import pytest
 from fakes import FakeRepository
 
 from postpilot.config import load_config
-from postpilot.models import PlatformError, PublishResult
+from postpilot.models import PlatformError, PublishResult, StoreError
 from postpilot.runner import run
 
 NOW = datetime(2026, 10, 5, 10, 0, tzinfo=UTC)
@@ -617,3 +617,23 @@ def test_stale_row_with_a_flagged_id_fails_instead_of_posting():
     r = repo.row(2)
     assert report.failed == [2] and r["status"] == "failed" and not r["posted_at"]
     assert r["last_error"].startswith(msg + "; Run stopped while posting. Check facebook, then reschedule")
+
+
+def test_a_failed_id_save_stops_the_run():
+    # The Reel is live but its ID couldn't be stored: carrying on would offer a Repost that posts it twice.
+    repo = FakeRepository([row(), row(publish_at="2026-10-05 17:55")], ACCOUNTS)
+    calls = []
+
+    def save_fails(post, account, save_id):
+        calls.append(post.row)
+        save_id("V1")
+
+    def broken_write(updates):
+        if any("fb_post_id" in f for f in updates.values()):
+            raise StoreError("Supabase 503 on posts")
+        FakeRepository.write(repo, updates)
+
+    repo.write = broken_write
+    with pytest.raises(StoreError):
+        run(repo, {"facebook": save_fails}, None, CFG, NOW)
+    assert calls == [2] and repo.row(2)["status"] == "posting"

@@ -36,7 +36,6 @@ def upload_video(
     token: str,
     url: str,
     sleep: Callable[[float], None],
-    checks: int,
     seconds: float = 300,
     clock: Callable[[], float] = time.monotonic,
 ) -> str:
@@ -72,16 +71,15 @@ def upload_video(
             timeout=300,
         )
     info = call("POST", f"/{media_id}/finalize").get("processing_info")
-    polls, started = 0, clock()
+    started = clock()
     while info and info.get("state") != "succeeded":
         if info.get("state") == "failed":
             reason = (info.get("error") or {}).get("message") or "no reason given"
             raise PlatformError("permanent", f"X couldn't process the video: {reason}")
-        if polls == checks or clock() - started >= seconds:
+        if clock() - started >= seconds:
             raise PlatformError("transient", "X is still processing the video, will retry next run")
         sleep(min(info.get("check_after_secs") or 1, 10))
         info = call("GET", "", params={"command": "STATUS", "media_id": media_id}).get("processing_info")
-        polls += 1
     return media_id
 
 
@@ -90,16 +88,13 @@ def publish(
     token: str,
     post: Post,
     sleep: Callable[[float], None] = time.sleep,
-    checks: int = 60,
     seconds: float = 300,
     clock: Callable[[], float] = time.monotonic,
 ) -> PublishResult:
     text = "\n\n".join(t for t in (post.text_for("x"), post.get("link")) if t)
     body: dict = {"text": text}
-    if post.media_urls and post.get("media_type") == "video":
-        body["media"] = {
-            "media_ids": [upload_video(http, token, post.media_urls[0], sleep, checks, seconds, clock)]
-        }
+    if post.media_urls and post.video:
+        body["media"] = {"media_ids": [upload_video(http, token, post.media_urls[0], sleep, seconds, clock)]}
     elif post.media_urls:
         image, mime = rest.download(http, post.media_urls[0], "X")
         # An uploaded image that never gets attached is harmless, so the upload may retry.

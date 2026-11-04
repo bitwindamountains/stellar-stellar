@@ -6,6 +6,8 @@ from postpilot.models import Account, PlatformError, Post, PublishResult
 
 REEL_STILL_PROCESSING = "Facebook accepted the Reel but was still processing; check it's on your Page"
 _CHECK = "check the Reel is on your Page"
+# Reels usually take 1-3 minutes: with less wait left than this, leave it for the next run.
+REEL_MIN_WAIT = 120
 
 
 def comment(graph, post_id: str, text: str) -> str:
@@ -18,15 +20,14 @@ def publish(
     account: Account,
     post: Post,
     sleep: Callable[[float], None] = time.sleep,
-    checks: int = 60,
     download: Callable[[str], tuple[bytes, str]] | None = None,
     save_id: Callable[[str], None] | None = None,
     seconds: float = 300,
     clock: Callable[[], float] = time.monotonic,
 ) -> PublishResult:
-    """A Reel waits up to `checks` status reads and `seconds` of wall-clock time for Facebook to finish."""
-    if post.get("media_type") == "video":
-        return _publish_reel(graph, account, post, sleep, checks, download, save_id, seconds, clock)
+    """A Reel waits up to `seconds` of wall-clock time for Facebook to finish it."""
+    if post.video:
+        return _publish_reel(graph, account, post, sleep, download, save_id, seconds, clock)
     caption, link, urls = post.text_for("facebook"), post.get("link"), post.media_urls
     if urls:
         # Photo posts have no link field, so the link goes in the caption.
@@ -39,7 +40,11 @@ def publish(
     return PublishResult(post_id, fetch_permalink(graph, post_id, "permalink_url"))
 
 
-def _publish_reel(graph, account, post, sleep, checks, download, save_id, seconds, clock) -> PublishResult:
+def _publish_reel(graph, account, post, sleep, download, save_id, seconds, clock) -> PublishResult:
+    if seconds < REEL_MIN_WAIT:  # nothing staged yet: a retry next run is clean, a cut-short wait is not
+        raise PlatformError(
+            "transient", "Not enough time left in this run to wait for the Reel; next run posts it"
+        )
     page = account.fb_page_id
     # Start and upload only stage an unpublished Reel, so they may retry; finish makes it public.
     video_id = graph.post(f"{page}/video_reels", safe=True, upload_phase="start")["video_id"]
@@ -65,7 +70,7 @@ def _publish_reel(graph, account, post, sleep, checks, download, save_id, second
     if save_id:
         save_id(video_id)  # now, not after the wait: a run killed mid-wait must still never resend it
     try:
-        return _await_reel(graph, post, video_id, sleep, checks, download, seconds, clock)
+        return _await_reel(graph, post, video_id, sleep, download, seconds, clock)
     except PlatformError as e:  # after finish, every error keeps the video ID
         e.object_id = e.object_id or video_id
         raise
@@ -77,9 +82,9 @@ def _publish_reel(graph, account, post, sleep, checks, download, save_id, second
         ) from None
 
 
-def _await_reel(graph, post, video_id, sleep, checks, download, seconds, clock) -> PublishResult:
+def _await_reel(graph, post, video_id, sleep, download, seconds, clock) -> PublishResult:
     started = clock()
-    for check in range(checks):
+    while True:
         try:
             state = _reel_state(graph.get(video_id, fields="status"))
         except PlatformError as e:
@@ -99,7 +104,7 @@ def _await_reel(graph, post, video_id, sleep, checks, download, seconds, clock) 
             raise PlatformError(
                 "permanent", f"Facebook couldn't publish the Reel: {state}", object_id=video_id
             )
-        if check == checks - 1 or clock() - started >= seconds:
+        if clock() - started >= seconds:
             raise PlatformError("unknown", REEL_STILL_PROCESSING, object_id=video_id)
         sleep(5)
     permalink = fetch_permalink(graph, video_id, "permalink_url")
