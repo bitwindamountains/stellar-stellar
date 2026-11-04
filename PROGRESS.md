@@ -1,9 +1,9 @@
 # PostPilot progress
 
-_Last updated: 2026-11-04_
+_Last updated: 2026-11-05_
 
 ## Where things stand
-Everything is merged to `main` (PRs #1–#11) and the web app is live. TikTok works in Sandbox: Connect works, and two
+Everything is merged to `main` (PRs #1–#17) and the web app is live. TikTok works in Sandbox: Connect works, and two
 real uploads returned `SEND_TO_USER_INBOX`, but no draft showed up in the TikTok app. So the production review (drafts
 only: Login Kit, `user.info.basic`, `video.upload`) was submitted on 2026-10-29. Site verification file, `/terms` and
 `/privacy` are live (PR #9). After approval: put the production key/secret into Supabase + GitHub, reconnect, test
@@ -23,10 +23,10 @@ affiliate links.
 
 | Part | State |
 |---|---|
-| Publisher (Python, GitHub Actions every 30 min) | Done. 275 tests. FB, IG (posts + Reels), X (text + video) automatic; TikTok to drafts. |
+| Publisher (Python, GitHub Actions every 30 min) | Done. 293 tests. FB, IG (posts + Reels), X (text + video) automatic; TikTok to drafts. |
 | Supabase schema + RLS | Applied to project `wsclesrylegjsyfxaamr` (private, own project); RLS verified with simulated users. |
 | `dispatch` function (instant Post now) | Deployed (v2), rejects anyone not signed in. Needs `GITHUB_TOKEN`/`GITHUB_REPO` secrets. |
-| Web app (PWA) | Done. 97 tests. Live on Cloudflare Workers. |
+| Web app (PWA) | Done. 98 tests. Live on Cloudflare Workers. |
 | GitHub repo | `bitwindamountains/PostPilot`, private. Secret set: `SUPABASE_URL`. |
 
 ## Done
@@ -50,7 +50,7 @@ affiliate links.
   the raised (+); desktop: glass sidebar. Look: Liquid Glass over a stellar night sky (one shared starfield);
   older browsers fall back to solid glass. Old Queue screen and its CSS removed.
 
-## Video to Reels (branch `feat/video-reels`, 2026-11-04, needs a PR)
+## Video to Reels (PR #17, merged 2026-11-05)
 Video now goes to Facebook Page Reels, Instagram Reels and X video automatically. TikTok still gets inbox drafts;
 YouTube Shorts and the FB profile stay by hand (Telegram + handoff page).
 - **Cover image** (optional): `posts.cover_url`, migration `20261104000000_video_cover.sql` (applied to the live
@@ -59,16 +59,28 @@ YouTube Shorts and the FB profile stay by hand (Telegram + handoff page).
 - **Length check** in the Composer, from the clip in the browser: FB 3-90 s, IG 3 s-15 min, X up to 140 s. The FB/IG
   limits are not yet confirmed against Meta's docs. A length the browser can't read is not blocked.
   FB Reels also need a vertical clip at least 540 px wide (checked only when the browser reads the size).
+  The measured length and size are saved with the post (`video_seconds`, `video_width`, `video_height`, migration
+  `20261105000000_video_meta.sql`, applied), so the publisher re-checks the same limits before posting. Edit and
+  Post again keep them; Sheet rows and pasted links have none and go unchecked.
 - **Never twice**: a FB Reel that was accepted but is still processing (or failed processing) keeps its ID and is
   marked failed for a check. "Repost only what failed" on the post's detail page clears just those platforms and
   requeues.
-- **Storage cleanup**: after a post is posted and handed off, the publisher deletes that post's own uploads, skipping
-  files other rows still use. Handoff "Done" follows the same rule.
+- **Storage cleanup** lives only in the publisher: every real run sweeps posts that are posted and handed off,
+  deletes their own uploads unless a row that isn't finished still uses them, and drops the dead links. "I posted it"
+  only marks the post done, so files go at the next run (up to 30 min later); a failed delete is retried.
 - The publish workflow timeout went from 10 to 30 minutes (video uploads are slow). A run starts no new post
-  after 20 minutes (claimed rows go back for the next run) and each video wait stops after 5 minutes.
+  after 20 minutes (claimed rows go back for the next run). Each video wait stops after 5 minutes, and all waits
+  end 25 minutes into the job. A FB Reel with under 2 minutes of wait left isn't started: it goes out next run
+  (this uses one retry attempt).
 - A FB Reel's ID is saved the moment Facebook accepts it, with a "facebook: …" mark, so a run killed while
   waiting leaves the row failed for a check (never posted) and Repost offered.
-- **Not verified live**: no real Reel or X video has been posted. X is untested until the developer app is
+- `media_type` is matched in any case ("Video" works). Facebook upload (rupload) errors show their own reason
+  (`debug_info`); the ones Facebook marks retriable are retried.
+- A failed save of a Reel's ID stops the run (the row is then found stale and failed for a check), so a Repost can't
+  post the Reel twice.
+- **Not verified live**: no real Reel or X video has been posted. One developer report says rupload needs
+  `Offset`/`file_size` headers even with `file_url`; we don't send them: check this first if the first Reel fails.
+  Codex never reviewed the final version (usage limit). X is untested until the developer app is
   connected. One real test post, only when you say so. The local dry run wasn't run (no `.env` on this PC).
 
 ## Live (2026-10-28)
@@ -141,5 +153,6 @@ Android share target, PNG→JPEG conversion on upload, the 4 pm nudge, copy butt
 ## Known limits / later
 - Google Sheet backend: claim can't be conditional (Sheets has no conditional writes).
 - Automatic-only posts that are never handed off keep their uploads in storage (`cleanup_media` needs
-  `assist_done_at`), and a skipped cleanup isn't retried.
+  `assist_done_at`).
+- Big X video uploads aren't bounded by the run deadline (each chunk has its own 300 s timeout).
 - Not built: feed autopilot (RSS/YouTube → posts), insights, AI captions, calendar view.
