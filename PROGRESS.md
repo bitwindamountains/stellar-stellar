@@ -26,7 +26,7 @@ affiliate links.
 | Publisher (Python, GitHub Actions every 30 min) | Done. 275 tests. FB, IG (posts + Reels), X (text + video) automatic; TikTok to drafts. |
 | Supabase schema + RLS | Applied to project `wsclesrylegjsyfxaamr` (private, own project); RLS verified with simulated users. |
 | `dispatch` function (instant Post now) | Deployed (v2), rejects anyone not signed in. Needs `GITHUB_TOKEN`/`GITHUB_REPO` secrets. |
-| Web app (PWA) | Done. 43 tests. Live on Cloudflare Workers. |
+| Web app (PWA) | Done. 97 tests. Live on Cloudflare Workers. |
 | GitHub repo | `bitwindamountains/PostPilot`, private. Secret set: `SUPABASE_URL`. |
 
 ## Done
