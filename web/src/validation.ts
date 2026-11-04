@@ -59,6 +59,8 @@ export interface Draft {
   firstComment?: string // undefined = none
   coverUrl?: string
   videoSeconds?: number | null // null/undefined = not measured yet: no duration check
+  videoWidth?: number | null // pixels; null/undefined = unknown: no shape check
+  videoHeight?: number | null
 }
 
 export function hashtagCount(text: string): number {
@@ -100,6 +102,10 @@ export function validate(d: Draft, requireTime: boolean): string[] {
         errors.push(`${PLATFORM_NAMES[p]} takes videos of ${min ? `${fmtSeconds(min)} to ` : 'up to '}${fmtSeconds(max)}: this one is ${d.videoSeconds} s`)
     }
   }
+  const [w, h] = [d.videoWidth, d.videoHeight]
+  // Facebook Reels must be vertical and at least 540p, or Facebook fails them after they were accepted.
+  if (d.mediaType === 'video' && has('facebook') && w && h && !(h > w && Math.min(w, h) >= 540))
+    errors.push(`Facebook Reels need a vertical video at least 540 px wide: this one is ${w}×${h}`)
   if (has('instagram')) {
     if (d.mediaType !== 'image' && d.mediaType !== 'video') errors.push('Instagram needs an image or a video')
     else if (d.mediaType === 'image' && urls[0] && NON_JPEG.test(urls[0].split(/[?#]/)[0])) errors.push('Instagram needs a JPEG image (PNG, WebP and GIF are rejected at post time)')

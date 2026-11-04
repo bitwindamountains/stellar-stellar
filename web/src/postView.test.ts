@@ -162,3 +162,15 @@ describe('automaticPending', () => {
     expect(automaticPending(post({ ...base, status: 'scheduled', fb_post_id: '' }))).toBe(true)
   })
 })
+
+describe('a run stopped after Facebook kept an unconfirmed Reel ID', () => {
+  // As the publisher's stale pass writes it: the stopped run's "<platform>: …" part stays in front.
+  const last_error = "facebook: Facebook accepted the Reel but was still processing; check it's on your Page; Run stopped while posting. Check facebook, instagram, x, then reschedule if it's missing."
+  const p = post({ status: 'failed', platforms: ['facebook', 'instagram', 'x'], media_type: 'video', media_urls: ['https://cdn/x.mp4'], fb_post_id: 'V1', last_error })
+  it('names Facebook as failed, offers Repost not Retry, and keeps the upload', () => {
+    expect(failedPlatforms(p)).toEqual(['facebook'])
+    expect(canRetry(p)).toBe(false)
+    expect(automaticPending(p)).toBe(true)
+    expect(automaticPending({ ...p, ig_media_id: 'M1', x_post_id: 'X1' })).toBe(true) // Facebook still awaits Repost
+  })
+})
