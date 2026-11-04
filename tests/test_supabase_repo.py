@@ -287,7 +287,7 @@ def test_claim_nudge_error_is_a_store_error():
 MEDIA = "https://abc.supabase.co/storage/v1/object/public/media/"
 
 
-def cleanup_repo(delete_status=200):
+def cleanup_repo(delete_status=200, siblings=()):
     rows = [
         {
             "num": 1,
@@ -300,6 +300,8 @@ def cleanup_repo(delete_status=200):
         if request.url.path.endswith("/storage/v1/object/media"):
             return httpx.Response(delete_status, json=[])
         if request.method == "GET":
+            if "or" in request.url.params:
+                return httpx.Response(200, json=list(siblings))
             return httpx.Response(200, json=rows)
         return httpx.Response(204)
 
@@ -314,13 +316,33 @@ def test_cleanup_deletes_only_own_uploads_of_finished_handed_off_rows():
     delete = next(c for c in calls if c.method == "DELETE")
     assert json.loads(delete.content) == {"prefixes": ["u/a.mp4", "u/c.jpg"]}
     patch = next(c for c in calls if c.method == "PATCH")
-    assert json.loads(patch.content) == {"media_urls": [], "cover_url": ""}
+    assert json.loads(patch.content) == {"media_urls": ["https://elsewhere/b.mp4"], "cover_url": ""}
 
 
 def test_cleanup_failed_delete_keeps_links():
     r, calls = cleanup_repo(delete_status=500)
     r.cleanup_media([1])
     assert not [c for c in calls if c.method == "PATCH"]
+
+
+def test_cleanup_keeps_a_clip_a_sibling_row_still_references():
+    sibling = [{"media_urls": [MEDIA + "u/a.mp4"], "cover_url": ""}]
+    r, calls = cleanup_repo(siblings=sibling)
+    r.cleanup_media([1])
+    delete = next(c for c in calls if c.method == "DELETE")
+    assert json.loads(delete.content) == {"prefixes": ["u/c.jpg"]}
+    patch = next(c for c in calls if c.method == "PATCH")
+    assert json.loads(patch.content) == {
+        "media_urls": [MEDIA + "u/a.mp4", "https://elsewhere/b.mp4"],
+        "cover_url": "",
+    }
+
+
+def test_cleanup_nothing_deletable_makes_no_delete_or_patch():
+    sibling = [{"media_urls": [MEDIA + "u/a.mp4"], "cover_url": MEDIA + "u/c.jpg"}]
+    r, calls = cleanup_repo(siblings=sibling)
+    r.cleanup_media([1])
+    assert not [c for c in calls if c.method in ("DELETE", "PATCH")]
 
 
 def test_cleanup_without_matching_rows_does_nothing():
