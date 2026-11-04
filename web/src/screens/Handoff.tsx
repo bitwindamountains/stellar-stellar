@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { textFor, titleFor, type Variants } from '../content'
 import { Check, FlightPath, Logo } from '../icons'
+import { unsharedFiles } from '../media'
 import { go } from '../route'
 import { supabase } from '../supabase'
 import { ACCOUNT_SELECT, isDone, isDraft, needsFinishing, sentByHand, PLATFORM_NAMES, type Account, type Platform, type Post } from '../types'
@@ -80,7 +81,15 @@ export default function Handoff({ num }: { num: number }) {
     // Free-plan storage is 1 GB: once nothing else needs the upload, remove it. Pasted outside links are left alone.
     const automaticPending = post!.platforms.some((p) => !sentByHand(post!, p, post!.account) && !isDone(post!, p))
     const prefix = supabase.storage.from('media').getPublicUrl('').data.publicUrl
-    let removed = automaticPending ? [] : post!.media_urls.filter((u) => u.startsWith(prefix))
+    const own = automaticPending ? [] : [...post!.media_urls, post!.cover_url ?? ''].filter((u) => u.startsWith(prefix))
+    let removed: string[] = []
+    if (own.length) {
+      // Group rows and Post again copies point at the same files: keep any another row still uses.
+      const quoted = own.map((u) => `"${u}"`).join(',')
+      const others = await supabase.from('posts').select('media_urls,cover_url').neq('num', num)
+        .or(`media_urls.ov.{${quoted}},cover_url.in.(${quoted})`)
+      removed = others.error ? [] : unsharedFiles(own, others.data)
+    }
     if (removed.length) {
       // Delete first; only forget the links if that worked, so a failed delete leaves a findable file.
       const { error } = await supabase.storage.from('media').remove(removed.map((u) => u.slice(prefix.length).replace(/^\//, '')))
@@ -89,7 +98,11 @@ export default function Handoff({ num }: { num: number }) {
     // Drop removed links from the post, so nothing (like Post again) reuses a dead URL.
     const { error } = await supabase
       .from('posts')
-      .update({ assist_done_at: new Date().toISOString(), media_urls: post!.media_urls.filter((u) => !removed.includes(u)) })
+      .update({
+        assist_done_at: new Date().toISOString(),
+        media_urls: post!.media_urls.filter((u) => !removed.includes(u)),
+        ...(removed.includes(post!.cover_url) ? { cover_url: '' } : {}),
+      })
       .eq('num', num)
     if (error) return setError(error.message)
     go('/')
@@ -108,7 +121,7 @@ export default function Handoff({ num }: { num: number }) {
 
       <div className="tray">
         <div className="core flush">
-          {media && post.media_type === 'video' && <video src={media} controls playsInline style={{ width: '100%', maxHeight: 280, background: '#1e2026', display: 'block' }} />}
+          {media && post.media_type === 'video' && <video src={media} poster={post.cover_url || undefined} controls playsInline style={{ width: '100%', maxHeight: 280, background: '#1e2026', display: 'block' }} />}
           {media && post.media_type === 'image' && <img src={media} alt="" style={{ width: '100%', maxHeight: 280, objectFit: 'cover', display: 'block' }} />}
           <p style={{ margin: 0, padding: '16px 18px 18px', fontSize: 15, lineHeight: 1.5, whiteSpace: 'pre-wrap' }}>{text || 'No caption'}</p>
         </div>
@@ -116,6 +129,7 @@ export default function Handoff({ num }: { num: number }) {
 
       <ol style={{ listStyle: 'none', margin: 0, padding: 0, display: 'flex', flexDirection: 'column', gap: 8 }}>
         {media && shareNeeded && <li><button type="button" className="step" onClick={shareMedia} disabled={sharing}>{sharing ? 'Preparing…' : `Share ${post.media_type}`}</button></li>}
+        {post.cover_url && <li><a href={post.cover_url} target="_blank" rel="noopener" download className="step">Open cover image</a></li>}
         {targets.map((p) => (
           <li key={p} style={{ display: 'flex', flexDirection: 'column', gap: 8, paddingTop: 8 }}>
             <span className="mono" style={{ paddingLeft: 4 }}>{PLATFORM_NAMES[p].toUpperCase()}</span>

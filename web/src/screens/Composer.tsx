@@ -4,7 +4,7 @@ import { cleanVariants, isCustomized, textFor, type Variant, type Variants } fro
 import { Arrow, Asteroids, Check, Close, Eye, FlightPath, LinkIcon, MediaIcon, More, WhenIcon, WhereIcon } from '../icons'
 import { publishSoon } from '../actions'
 import { postLinks } from '../groups'
-import { toJpeg } from '../media'
+import { toJpeg, videoSeconds } from '../media'
 import { mediaWasRemoved } from '../postView'
 import PostPreview from '../PostPreview'
 import Sheet from '../Sheet'
@@ -48,7 +48,7 @@ function problemsFor(active: Account[], targets: Targets, base: Omit<Parameters<
   return [...byMessage].map(([m, names]) => (active.length === 1 || names.length === active.length ? m : `${names.join(', ')}: ${m}`))
 }
 
-type SheetName = '' | 'media' | 'where' | 'when' | 'link' | 'preview' | 'more'
+type SheetName = '' | 'media' | 'cover' | 'where' | 'when' | 'link' | 'preview' | 'more'
 
 /** Wide screens keep the preview beside the form; narrow ones open it in a sheet. */
 function useWide(): boolean {
@@ -85,9 +85,11 @@ export default function Composer({ num, day }: { num?: number; day?: string }) {
   const [tab, setTab] = useState<'all' | Platform>('all')
   const [mediaType, setMediaType] = useState<MediaType>(restored?.mediaType ?? 'none')
   const [mediaUrl, setMediaUrl] = useState(restored?.mediaUrl ?? '')
+  const [coverUrl, setCoverUrl] = useState(restored?.coverUrl ?? '')
+  const [seconds, setSeconds] = useState<number | null>(restored?.videoSeconds ?? null) // null = unknown: no length check
   const [link, setLink] = useState(restored?.link ?? '')
   const [dragging, setDragging] = useState(false)
-  const [busy, setBusy] = useState<'' | 'upload' | 'save'>('')
+  const [busy, setBusy] = useState<'' | 'upload' | 'cover' | 'save'>('')
   const [error, setError] = useState('')
   const [tried, setTried] = useState(false)
   const [touched, setTouched] = useState<Section[]>([]) // sections left once: their errors show from then on
@@ -131,14 +133,15 @@ export default function Composer({ num, day }: { num?: number; day?: string }) {
       setVariants((lead.variants as Variants) ?? {})
       setMediaType(lead.media_type)
       setMediaUrl(lead.media_urls[0] ?? '')
+      setCoverUrl(lead.cover_url ?? '')
       setLink(lead.link)
     })()
   }, [num, accounts])
 
   useEffect(() => {
     if (num) return
-    saveDraft({ targets, caption, firstComment, variants, mediaType, mediaUrl, link, mode, publishAt })
-  }, [num, targets, caption, firstComment, variants, mediaType, mediaUrl, link, mode, publishAt])
+    saveDraft({ targets, caption, firstComment, variants, mediaType, mediaUrl, coverUrl, videoSeconds: seconds, link, mode, publishAt })
+  }, [num, targets, caption, firstComment, variants, mediaType, mediaUrl, coverUrl, seconds, link, mode, publishAt])
 
   useEffect(() => {
     if (num) return
@@ -158,7 +161,7 @@ export default function Composer({ num, day }: { num?: number; day?: string }) {
   const lead = active[0] // its time zone sets the time for every account
   const tz = lead?.timezone ?? accounts?.[0]?.timezone ?? 'Asia/Manila'
   const chosen = PLATFORMS.filter((p) => active.some((a) => targets[a.id].includes(p)))
-  const base = { publishAt, caption, firstComment, variants, mediaType, mediaUrls: mediaUrl ? [mediaUrl] : [], link }
+  const base = { publishAt, caption, firstComment, variants, mediaType, mediaUrls: mediaUrl ? [mediaUrl] : [], link, coverUrl, videoSeconds: seconds }
   const editing = tab !== 'all' && chosen.includes(tab) ? tab : 'all' // a deselected platform's tab falls back
   const problems = problemsFor(active, targets, base, mode === 'later')
   const locked = rows.some((r) => r.status === 'posting')
@@ -215,9 +218,30 @@ export default function Composer({ num, day }: { num?: number; day?: string }) {
     const remembered = num ? undefined : rememberedTargets(kind)
     // Only Instagram needs JPEG; other platforms keep the original (and its transparency).
     if (Object.values(remembered ?? targets).some((list) => list.includes('instagram'))) file = await toJpeg(file)
+    const length = kind === 'video' ? await videoSeconds(file) : null
+    const url = await put(file)
+    if (!url) return
+    setMediaUrl(url)
+    setMediaType(kind)
+    setSeconds(length)
+    if (kind !== 'video') setCoverUrl('') // a cover only goes with a video
+    if (remembered) setTargets(remembered)
+  }
+
+  // Covers go to Instagram as-is, so they are always JPEG.
+  async function uploadCover(file: File) {
+    setBusy('cover')
+    setError('')
+    const url = await put(await toJpeg(file))
+    if (url) setCoverUrl(url)
+  }
+
+  /** Uploads to the media bucket; the public URL, or null with the error shown. Clears `busy` either way. */
+  async function put(file: File): Promise<string | null> {
     if (file.size > MAX_BYTES) {
       setBusy('')
-      return setError('Files over 50 MB are too big for the free plan; shrink it first')
+      setError('Files over 50 MB are too big for the free plan; shrink it first')
+      return null
     }
     const { data: auth } = await supabase.auth.getUser()
     const ext = file.name.split('.').pop()?.toLowerCase() || 'bin'
@@ -225,10 +249,11 @@ export default function Composer({ num, day }: { num?: number; day?: string }) {
     const path = `${auth.user?.id}/${crypto.randomUUID()}.${ext}`
     const { error } = await supabase.storage.from('media').upload(path, file, { contentType: file.type })
     setBusy('')
-    if (error) return setError(error.message)
-    setMediaUrl(supabase.storage.from('media').getPublicUrl(path).data.publicUrl)
-    setMediaType(kind)
-    if (remembered) setTargets(remembered)
+    if (error) {
+      setError(error.message)
+      return null
+    }
+    return supabase.storage.from('media').getPublicUrl(path).data.publicUrl
   }
 
   async function save(status: 'draft' | 'scheduled') {
@@ -252,6 +277,7 @@ export default function Composer({ num, day }: { num?: number; day?: string }) {
       ...(commentLocked ? {} : { first_comment: firstComment.trim() }),
       media_type: mediaType,
       media_urls: mediaUrl ? [mediaUrl] : [],
+      cover_url: coverUrl,
       link,
       status,
       // Rescheduling starts a fresh retry budget; filled platform IDs still stop any repost.
@@ -298,6 +324,8 @@ export default function Composer({ num, day }: { num?: number; day?: string }) {
       targets, caption, firstComment, variants, link, mode: 'now', publishAt: '',
       mediaType: gone ? 'none' : mediaType,
       mediaUrl: gone ? '' : mediaUrl,
+      coverUrl: gone ? '' : coverUrl,
+      videoSeconds: gone ? null : seconds,
       note: gone ? 'The original file was removed after you posted it by hand. Add it again.' : undefined,
     })
     go('/new')
@@ -443,6 +471,10 @@ export default function Composer({ num, day }: { num?: number; day?: string }) {
           <div className="core flush">
             <SettingRow name="media" label="Media" value={mediaValue} warnings={errors.media} alert={shown('media').length > 0} onOpen={() => setSheet('media')}
               icon={mediaType === 'image' && mediaUrl ? <span className="s-thumb" style={{ backgroundImage: `url("${mediaUrl}")` }} /> : <MediaIcon />} />
+            {mediaType === 'video' && (
+              <SettingRow name="cover" label="Cover" value={busy === 'cover' ? 'Uploading…' : coverUrl ? 'Added' : 'None'} onOpen={() => setSheet('cover')}
+                icon={coverUrl ? <span className="s-thumb" style={{ backgroundImage: `url("${coverUrl}")` }} /> : <MediaIcon />} />
+            )}
             <SettingRow name="where" label="Where" value={whereSummary(targets, accounts)} warnings={errors.where} alert={shown('where').length > 0}
               icon={<WhereIcon />} onOpen={() => setSheet('where')} />
             <SettingRow name="when" label="When" value={whenSummary(mode, publishAt, tz)} warnings={errors.when} alert={shown('when').length > 0}
@@ -487,12 +519,34 @@ export default function Composer({ num, day }: { num?: number; day?: string }) {
             <button type="button" className="link-btn" onClick={() => {
               setMediaUrl('')
               setMediaType('none')
+              setCoverUrl('')
+              setSeconds(null)
               const remembered = rememberedTargets('none')
               if (!num && remembered) setTargets(remembered)
             }}>
               Remove media
             </button>
           )}
+        </fieldset>
+      </Sheet>
+
+      <Sheet open={sheet === 'cover'} onClose={closeSheet('cover')} title="Cover">
+        <fieldset className="bare field" disabled={locked}>
+          <label className="dropzone">
+            <span className="thumb" aria-hidden="true" style={coverUrl ? { width: 64, height: 64, backgroundImage: `url("${coverUrl}")`, color: 'transparent' } : { width: 64, height: 64 }}>
+              None
+            </span>
+            <span className="dz-text">
+              <span className="dz-title">{busy === 'cover' ? 'Uploading…' : coverUrl ? 'Cover added' : 'Add a cover image'}</span>
+              <span className="dz-hint">{coverUrl ? 'Tap to replace it' : 'Optional · JPEG, PNG or WebP · used where the platform allows it'}</span>
+            </span>
+            <span className="btn dark" aria-hidden="true" style={{ minHeight: 44 }}>{coverUrl ? 'Replace' : 'Choose image'}</span>
+            <input id="cover-file" type="file" className="sr-only" accept="image/jpeg,image/png,image/webp" disabled={busy !== ''}
+              onChange={(e) => e.target.files?.[0] && uploadCover(e.target.files[0])} />
+          </label>
+          <FieldError messages={errors.media.filter((m) => /cover/i.test(m))} alert={false} />
+          {error && <p className="notice" role="alert">{error}</p>}
+          {coverUrl && <button type="button" className="link-btn" onClick={() => setCoverUrl('')}>Remove cover</button>}
         </fieldset>
       </Sheet>
 

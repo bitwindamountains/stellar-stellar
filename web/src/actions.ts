@@ -33,6 +33,7 @@ export function startPostAgain(rows: Post[]): void {
     mode: 'now', publishAt: '',
     mediaType: gone ? 'none' : lead.media_type,
     mediaUrl: gone ? '' : lead.media_urls[0] ?? '',
+    coverUrl: gone ? '' : lead.cover_url ?? '',
     note: gone ? 'The original file was removed after you posted it by hand. Add it again.' : undefined,
   })
   go('/new')

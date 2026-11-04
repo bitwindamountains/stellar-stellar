@@ -25,21 +25,21 @@ describe('startPostAgain', () => {
     const variants = { instagram: { hashtags: '#coffee' } }
     startPostAgain([
       post({ num: 3, account_id: 1, platforms: ['facebook', 'instagram'], caption: 'Hi', first_comment: 'Link: x', variants,
-        link: 'https://a.b', media_type: 'image', media_urls: ['https://cdn/x.jpg'] }),
+        link: 'https://a.b', media_type: 'video', media_urls: ['https://cdn/x.mp4'], cover_url: 'https://cdn/c.jpg' }),
       post({ num: 4, account_id: 2, platforms: ['fb_profile'], caption: 'Hi' }),
     ])
     expect(saveDraft).toHaveBeenCalledWith({
       targets: { 1: ['facebook', 'instagram'], 2: ['fb_profile'] },
       caption: 'Hi', firstComment: 'Link: x', variants, link: 'https://a.b', mode: 'now', publishAt: '',
-      mediaType: 'image', mediaUrl: 'https://cdn/x.jpg', note: undefined,
+      mediaType: 'video', mediaUrl: 'https://cdn/x.mp4', coverUrl: 'https://cdn/c.jpg', note: undefined,
     })
     expect(go).toHaveBeenCalledWith('/new')
   })
 
   it('drops media the handoff removed, with the note', () => {
-    startPostAgain([post({ media_type: 'video', media_urls: [], tg_message_id: '5' })])
+    startPostAgain([post({ media_type: 'video', media_urls: [], cover_url: 'https://cdn/c.jpg', tg_message_id: '5' })])
     expect(saveDraft).toHaveBeenCalledWith(expect.objectContaining({
-      mediaType: 'none', mediaUrl: '', note: 'The original file was removed after you posted it by hand. Add it again.',
+      mediaType: 'none', mediaUrl: '', coverUrl: '', note: 'The original file was removed after you posted it by hand. Add it again.',
     }))
   })
 })
