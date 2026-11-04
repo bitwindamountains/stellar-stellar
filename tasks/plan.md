@@ -66,7 +66,7 @@ Each task: failing test, code, full suite + ruff green, one commit.
 
 ### Later (one-pager order)
 - [ ] 7 Feed autopilot: RSS/YouTube to rows (Feeds tab, GUID dedupe, slot times)
-- [ ] 8 Video: FB video/Reels, IG Reels with status polling, media host
+- [x] 8 Video: FB Page Reels, IG Reels with status polling, X video, optional cover, length check (branch `feat/video-reels`; not yet tried live)
 - [ ] 9 TikTok / YouTube API audits; move them from assisted to automatic if granted
 
 ## Phase 10: Web + mobile app (Supabase)

@@ -1,6 +1,6 @@
 # PostPilot progress
 
-_Last updated: 2026-10-29_
+_Last updated: 2026-11-04_
 
 ## Where things stand
 Everything is merged to `main` (PRs #1–#11) and the web app is live. TikTok works in Sandbox: Connect works, and two
@@ -23,7 +23,7 @@ affiliate links.
 
 | Part | State |
 |---|---|
-| Publisher (Python, GitHub Actions every 30 min) | Done. 186 tests. FB, IG, X automatic; TikTok to drafts. |
+| Publisher (Python, GitHub Actions every 30 min) | Done. 275 tests. FB, IG (posts + Reels), X (text + video) automatic; TikTok to drafts. |
 | Supabase schema + RLS | Applied to project `wsclesrylegjsyfxaamr` (private, own project); RLS verified with simulated users. |
 | `dispatch` function (instant Post now) | Deployed (v2), rejects anyone not signed in. Needs `GITHUB_TOKEN`/`GITHUB_REPO` secrets. |
 | Web app (PWA) | Done. 43 tests. Live on Cloudflare Workers. |
@@ -49,6 +49,23 @@ affiliate links.
   **Accounts** (now also the last-run line and Sign out, which left the nav). Phone: floating glass tab bar with
   the raised (+); desktop: glass sidebar. Look: Liquid Glass over a stellar night sky (one shared starfield);
   older browsers fall back to solid glass. Old Queue screen and its CSS removed.
+
+## Video to Reels (branch `feat/video-reels`, 2026-11-04, needs a PR)
+Video now goes to Facebook Page Reels, Instagram Reels and X video automatically. TikTok still gets inbox drafts;
+YouTube Shorts and the FB profile stay by hand (Telegram + handoff page).
+- **Cover image** (optional): `posts.cover_url`, migration `20261104000000_video_cover.sql` (applied to the live
+  project). IG uses it; the FB Reel cover is best-effort via thumbnails; X shows its own frame; Telegram sends it with
+  by-hand clips; the handoff page shows it.
+- **Length check** in the Composer, from the clip in the browser: FB 3-90 s, IG 3 s-15 min, X up to 140 s. The FB/IG
+  limits are not yet confirmed against Meta's docs. A length the browser can't read is not blocked.
+- **Never twice**: a FB Reel that was accepted but is still processing (or failed processing) keeps its ID and is
+  marked failed for a check. "Repost only what failed" on the post's detail page clears just those platforms and
+  requeues.
+- **Storage cleanup**: after a post is posted and handed off, the publisher deletes that post's own uploads, skipping
+  files other rows still use. Handoff "Done" follows the same rule.
+- The publish workflow timeout went from 10 to 30 minutes (video uploads are slow).
+- **Not verified live**: no real Reel or X video has been posted. X is untested until the developer app is
+  connected. One real test post, only when you say so. The local dry run wasn't run (no `.env` on this PC).
 
 ## Live (2026-10-28)
 - Web app: https://postpilot.postpilot-web.workers.dev (Cloudflare Workers static assets; redeploy from `web/`:
@@ -119,5 +136,4 @@ Android share target, PNG→JPEG conversion on upload, the 4 pm nudge, copy butt
 
 ## Known limits / later
 - Google Sheet backend: claim can't be conditional (Sheets has no conditional writes).
-- Image cleanup after automatic posts isn't done (only by-hand uploads are deleted).
-- Not built: feed autopilot (RSS/YouTube → posts), FB/IG video and Reels, insights, AI captions, calendar view.
+- Not built: feed autopilot (RSS/YouTube → posts), insights, AI captions, calendar view.
