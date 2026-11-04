@@ -60,7 +60,10 @@ def _publish_reel(graph, account, post, sleep, checks, download) -> PublishResul
         if state == "published":
             break
         if state:
-            raise PlatformError("permanent", f"Facebook couldn't publish the Reel: {state}")
+            # Keep the ID: it never goes out twice; the user's Repost clears it.
+            raise PlatformError(
+                "permanent", f"Facebook couldn't publish the Reel: {state}", object_id=video_id
+            )
         if check < checks - 1:
             sleep(5)
     else:
