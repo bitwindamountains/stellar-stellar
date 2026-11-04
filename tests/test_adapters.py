@@ -24,6 +24,9 @@ class FakeGraph:
     def post(self, path, *, safe, **data):
         return self._next(("POST", path, data, safe))
 
+    def rupload(self, video_id, file_url):
+        return self._next(("RUPLOAD", video_id, file_url))
+
 
 def post(**cells):
     return Post(row=2, cells={"caption": "Hello", **cells})
@@ -54,6 +57,134 @@ def test_fb_photo_puts_link_in_caption_and_uses_post_id():
 def test_fb_permalink_failure_keeps_post_id():
     g = FakeGraph([{"id": "PAGE_1"}, PlatformError("transient", "down")])
     assert facebook.publish(g, ACCOUNT, post()).id == "PAGE_1"
+
+
+def reel(**cells):
+    return post(media_type="video", media_urls="https://x/clip.mp4", **cells)
+
+
+def status(video="processing", publishing="not_started", processing="in_progress", error=None):
+    phase = {"status": processing, **({"error": {"message": error}} if error else {})}
+    return {
+        "status": {
+            "video_status": video,
+            "uploading_phase": {"status": "complete"},
+            "processing_phase": phase,
+            "publishing_phase": {"status": publishing, "publish_status": "published"},
+        }
+    }
+
+
+REEL_START = [{"video_id": "V1", "upload_url": "https://rupload/V1"}, {"success": True}, {"success": True}]
+PUBLISHED = status("ready", publishing="complete", processing="complete")
+
+
+def test_fb_reel_start_upload_finish_wait_permalink():
+    g = FakeGraph(REEL_START + [status(), PUBLISHED, {"permalink_url": "/reel/V1"}])
+    sleeps = []
+    result = facebook.publish(
+        g, ACCOUNT, reel(variants='{"facebook": {"hashtags": "#fb"}}'), sleep=sleeps.append
+    )
+    assert g.calls == [
+        ("POST", "PAGE/video_reels", {"upload_phase": "start"}, True),
+        ("RUPLOAD", "V1", "https://x/clip.mp4"),
+        (
+            "POST",
+            "PAGE/video_reels",
+            {
+                "upload_phase": "finish",
+                "video_id": "V1",
+                "video_state": "PUBLISHED",
+                "description": "Hello\n\n#fb",
+            },
+            False,
+        ),
+        ("GET", "V1", {"fields": "status"}),
+        ("GET", "V1", {"fields": "status"}),
+        ("GET", "V1", {"fields": "permalink_url"}),
+    ]
+    assert sleeps == [5]
+    assert (result.id, result.permalink) == ("V1", "https://www.facebook.com/reel/V1")
+
+
+def test_fb_reel_processing_error_is_permanent_without_id():
+    g = FakeGraph(REEL_START + [status("error", processing="error", error="Resolution too low.")])
+    with pytest.raises(PlatformError) as e:
+        facebook.publish(g, ACCOUNT, reel(), sleep=lambda s: None)
+    assert e.value.kind == "permanent" and e.value.object_id == ""
+    assert "Resolution too low." in str(e.value)
+
+
+def test_fb_reel_still_processing_is_unknown_with_id():
+    g = FakeGraph(REEL_START + [status()] * 3)
+    with pytest.raises(PlatformError) as e:
+        facebook.publish(g, ACCOUNT, reel(), sleep=lambda s: None, checks=3)
+    assert e.value.kind == "unknown" and e.value.object_id == "V1"
+    assert "check it's on your Page" in str(e.value)
+
+
+def test_fb_reel_status_read_failure_keeps_waiting_and_keeps_id():
+    g = FakeGraph(REEL_START + [PlatformError("transient", "down"), PUBLISHED, {"permalink_url": ""}])
+    assert facebook.publish(g, ACCOUNT, reel(), sleep=lambda s: None).id == "V1"
+    g = FakeGraph(REEL_START + [PlatformError("auth", "x")] * 2)
+    with pytest.raises(PlatformError) as e:
+        facebook.publish(g, ACCOUNT, reel(), sleep=lambda s: None, checks=2)
+    assert e.value.kind == "unknown" and e.value.object_id == "V1"
+
+
+def test_fb_reel_finish_unclear_is_unknown():
+    g = FakeGraph(REEL_START[:2] + [PlatformError("unknown", "no answer")])
+    with pytest.raises(PlatformError) as e:
+        facebook.publish(g, ACCOUNT, reel(), sleep=lambda s: None)
+    assert e.value.kind == "unknown" and e.value.object_id == "V1"
+    assert all(c[0] != "GET" for c in g.calls)
+
+
+def test_fb_reel_finish_rejected_is_permanent_without_id():
+    g = FakeGraph(REEL_START[:2] + [PlatformError("permanent", "too long")])
+    with pytest.raises(PlatformError) as e:
+        facebook.publish(g, ACCOUNT, reel(), sleep=lambda s: None)
+    assert e.value.kind == "permanent" and e.value.object_id == ""
+
+
+def test_fb_reel_sets_cover_as_preferred_thumbnail():
+    g = FakeGraph(REEL_START + [PUBLISHED, {"permalink_url": "https://fb/r"}, {"success": True}])
+    got = []
+    download = lambda u: got.append(u) or (b"JPG", "image/jpeg")  # noqa: E731
+    result = facebook.publish(
+        g, ACCOUNT, reel(cover_url="https://x/c.jpg"), sleep=lambda s: None, download=download
+    )
+    assert got == ["https://x/c.jpg"]
+    assert g.calls[-1] == (
+        "POST",
+        "V1/thumbnails",
+        {"files": {"source": ("cover.jpg", b"JPG", "image/jpeg")}, "is_preferred": "true"},
+        True,
+    )
+    assert result.permalink == "https://fb/r"
+
+
+def test_fb_reel_cover_failure_is_ignored():
+    g = FakeGraph(REEL_START + [PUBLISHED, {"permalink_url": ""}, PlatformError("auth", "no perm")])
+    result = facebook.publish(
+        g, ACCOUNT, reel(cover_url="https://x/c.jpg"), sleep=lambda s: None, download=lambda u: (b"J", "")
+    )
+    assert result.id == "V1"
+
+    def broken(url):
+        raise PlatformError("permanent", "Media link answered HTTP 404")
+
+    g = FakeGraph(REEL_START + [PUBLISHED, {"permalink_url": ""}])
+    result = facebook.publish(
+        g, ACCOUNT, reel(cover_url="https://x/c.jpg"), sleep=lambda s: None, download=broken
+    )
+    assert result.id == "V1"
+
+
+def test_fb_reel_without_download_skips_cover():
+    g = FakeGraph(REEL_START + [PUBLISHED, {"permalink_url": ""}])
+    facebook.publish(g, ACCOUNT, reel(cover_url="https://x/c.jpg"), sleep=lambda s: None)
+    assert all("thumbnails" not in str(c[1]) for c in g.calls)
 
 
 def test_ig_container_wait_publish_permalink():
@@ -304,3 +435,21 @@ def test_fb_stats_comments_error_propagates():
     g, _ = _client(routes)
     with pytest.raises(PlatformError):
         facebook.stats(g, "P")
+
+
+def test_fb_reel_stats_use_video_fields_and_reel_insights():
+    routes = {
+        ("V", None): {
+            "likes": {"data": [], "summary": {"total_count": 3}},
+            "comments": {"data": [], "summary": {"total_count": 2}},
+        },
+        ("V/video_insights", "blue_reels_play_count"): _ins("blue_reels_play_count", 40),
+        ("V/video_insights", "post_impressions_unique"): _ins("post_impressions_unique", 30),
+        ("V/comments", None): {"data": []},
+    }
+    g, seen = _client(routes)
+    out = facebook.stats(g, "V", video=True)
+    assert _params(seen, "V")["fields"] == (
+        "likes.summary(total_count).limit(0),comments.summary(total_count).limit(0)"
+    )
+    assert out == {"likes": 3, "comments": 2, "views": 40, "reach": 30, "top_comments": []}
