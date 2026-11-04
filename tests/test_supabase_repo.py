@@ -338,6 +338,27 @@ def test_cleanup_keeps_a_clip_a_sibling_row_still_references():
     }
 
 
+def test_cleanup_ignores_a_finished_sibling_and_drops_its_dead_link():
+    sibling = [
+        {
+            "num": 7,
+            "media_urls": [MEDIA + "u/a.mp4"],
+            "cover_url": "",
+            "status": "posted",
+            "assist_done_at": "2026-11-04T00:00:00Z",
+        }
+    ]
+    r, calls = cleanup_repo(siblings=sibling)
+    r.cleanup_media([1])
+    delete = next(c for c in calls if c.method == "DELETE")
+    assert json.loads(delete.content) == {"prefixes": ["u/a.mp4", "u/c.jpg"]}
+    patches = {c.url.params["num"]: json.loads(c.content) for c in calls if c.method == "PATCH"}
+    assert patches == {
+        "eq.1": {"media_urls": ["https://elsewhere/b.mp4"], "cover_url": ""},
+        "eq.7": {"media_urls": []},
+    }
+
+
 def test_cleanup_nothing_deletable_makes_no_delete_or_patch():
     sibling = [{"media_urls": [MEDIA + "u/a.mp4"], "cover_url": MEDIA + "u/c.jpg"}]
     r, calls = cleanup_repo(siblings=sibling)

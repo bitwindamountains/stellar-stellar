@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { textFor, titleFor, type Variants } from '../content'
 import { Check, FlightPath, Logo } from '../icons'
 import { automaticPending } from '../postView'
-import { unsharedFiles } from '../media'
+import { isFinished, unsharedFiles, type FileUser } from '../media'
 import { go } from '../route'
 import { supabase } from '../supabase'
 import { ACCOUNT_SELECT, isDraft, needsFinishing, PLATFORM_NAMES, type Account, type Platform, type Post } from '../types'
@@ -84,12 +84,14 @@ export default function Handoff({ num }: { num: number }) {
     const prefix = supabase.storage.from('media').getPublicUrl('').data.publicUrl
     const own = keepUpload ? [] : [...post!.media_urls, post!.cover_url ?? ''].filter((u) => u.startsWith(prefix))
     let removed: string[] = []
+    let finished: FileUser[] = []
     if (own.length) {
-      // Group rows and Post again copies point at the same files: keep any another row still uses.
+      // Group rows and Post again copies point at the same files: keep any another unfinished row still uses.
       const quoted = own.map((u) => `"${u}"`).join(',')
-      const others = await supabase.from('posts').select('media_urls,cover_url').neq('num', num)
+      const others = await supabase.from('posts').select('num,media_urls,cover_url,status,assist_done_at').neq('num', num)
         .or(`media_urls.ov.{${quoted}},cover_url.in.(${quoted})`)
       removed = others.error ? [] : unsharedFiles(own, others.data)
+      finished = others.error ? [] : others.data.filter(isFinished)
     }
     if (removed.length) {
       // Delete first; only forget the links if that worked, so a failed delete leaves a findable file.
@@ -106,6 +108,15 @@ export default function Handoff({ num }: { num: number }) {
       })
       .eq('num', num)
     if (error) return setError(error.message)
+    // Finished rows that shared a deleted file lose the dead link too.
+    for (const o of finished) {
+      const media_urls = o.media_urls.filter((u) => !removed.includes(u))
+      const coverGone = removed.includes(o.cover_url ?? '')
+      if (media_urls.length === o.media_urls.length && !coverGone) continue
+      const { error } = await supabase.from('posts').update({ media_urls, ...(coverGone ? { cover_url: '' } : {}) })
+        .eq('num', o.num!).neq('status', 'posting')
+      if (error) return setError(error.message)
+    }
     go('/')
   }
 

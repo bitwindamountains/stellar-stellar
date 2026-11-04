@@ -51,7 +51,8 @@ def _publish_reel(graph, account, post, sleep, checks, download, save_id, second
             upload_phase="finish",
             video_id=video_id,
             video_state="PUBLISHED",
-            description=post.text_for("facebook"),
+            # Reels have no link field either, so the link goes in the description.
+            description="\n\n".join(t for t in (post.text_for("facebook"), post.get("link")) if t),
         )
     except PlatformError as e:
         if e.kind == "unknown":  # it may have gone public: keep the ID so it is never sent again

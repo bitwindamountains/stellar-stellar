@@ -57,6 +57,12 @@ describe('unsharedFiles', () => {
     expect(unsharedFiles(['https://s/clip.mp4', 'https://s/cover.jpg', 'https://s/own.jpg'], others)).toEqual(['https://s/own.jpg'])
   })
 
+  it('ignores rows that are posted and handed off: they no longer need the file', () => {
+    const others = [{ media_urls: ['https://s/clip.mp4'], cover_url: '', status: 'posted', assist_done_at: '2026-11-04T00:00:00Z' }]
+    expect(unsharedFiles(['https://s/clip.mp4'], others)).toEqual(['https://s/clip.mp4'])
+    expect(unsharedFiles(['https://s/clip.mp4'], [{ ...others[0], assist_done_at: null }])).toEqual([])
+  })
+
   it('deletes everything when nothing else uses it', () => {
     expect(unsharedFiles(['https://s/a.mp4', 'https://s/c.jpg'], [])).toEqual(['https://s/a.mp4', 'https://s/c.jpg'])
   })

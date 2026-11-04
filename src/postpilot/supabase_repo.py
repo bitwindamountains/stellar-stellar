@@ -176,12 +176,14 @@ class SupabaseRepository:
             "GET",
             "posts",
             params={
-                "select": "media_urls,cover_url",
+                "select": "num,media_urls,cover_url,status,assist_done_at",
                 "num": f"not.in.({','.join(map(str, nums))})",
                 "or": f"(media_urls.ov.{{{quoted}}},cover_url.in.({quoted}))",
             },
         )
-        used = {u for o in others for u in [*o["media_urls"], o["cover_url"] or ""]}
+        # A finished row (posted, handed off) no longer needs the file: it must not keep it alive forever.
+        finished = [o for o in others if o.get("status") == "posted" and o.get("assist_done_at")]
+        used = {u for o in others if o not in finished for u in [*o["media_urls"], o["cover_url"] or ""]}
         gone = [u for u in own if u not in used]
         if not gone:
             return
@@ -193,10 +195,13 @@ class SupabaseRepository:
         )
         if not r.is_success:
             return
-        patch = {"media_urls": [u for u in row["media_urls"] if u not in gone]}
-        if cover in gone:
-            patch["cover_url"] = ""
-        self._request("PATCH", "posts", params={"num": f"eq.{row['num']}"}, json=patch)
+        # Drop the dead links here and from finished rows that shared them, so Post again never reuses one.
+        for target in [row, *finished]:
+            patch = {"media_urls": [u for u in target["media_urls"] if u not in gone]}
+            if (target["cover_url"] or "") in gone:
+                patch["cover_url"] = ""
+            if patch["media_urls"] != target["media_urls"] or "cover_url" in patch:
+                self._request("PATCH", "posts", params={"num": f"eq.{target['num']}"}, json=patch)
 
     def record_run(self, **counts) -> None:
         self._request("POST", "runs", json=counts)
