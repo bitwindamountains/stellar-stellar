@@ -48,6 +48,13 @@ export function canRetry(post: Post): boolean {
   return ['failed', 'missed'].includes(post.status) && !/check|stopped/i.test(post.last_error)
 }
 
+/** Automatic platforms a failed post names as "<platform>: …" in last_error (not "<platform> comment: …"). */
+export function failedPlatforms(post: Post): Platform[] {
+  if (post.status !== 'failed') return []
+  const parts = post.last_error.split('; ')
+  return post.platforms.filter((p) => p !== 'telegram' && parts.some((s) => s.startsWith(`${p}: `)))
+}
+
 /** "Last run 16:06 · 1 posted · 0 failed" (time in `tz`; missed counts as failed), or "No runs yet". */
 export function runLine(run: Run | null, tz: string): string {
   if (!run) return 'No runs yet'

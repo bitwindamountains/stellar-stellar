@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { ago, awaitingHandoff, canRetry, chipState, chips, errorNotes, flightStep, mediaWasRemoved, mergePosts, runLine, statsLine, statusLabel } from './postView'
+import { failedPlatforms, ago, awaitingHandoff, canRetry, chipState, chips, errorNotes, flightStep, mediaWasRemoved, mergePosts, runLine, statsLine, statusLabel } from './postView'
 import { isDraft, needsFinishing, postedByApi, sentByHand, type Post } from './types'
 
 function post(over: Partial<Post>): Post {
@@ -129,5 +129,13 @@ describe('errorNotes', () => {
     expect(errorNotes(err, 'facebook')).toEqual({ general: 'Gave up after 3 attempt(s). Token expired', comment: ['Comment not added on Facebook: add it by hand'] })
     expect(errorNotes(err, 'instagram').comment).toEqual(['Comment on Instagram may not have been added: check, and add it by hand if missing'])
     expect(errorNotes('', 'facebook')).toEqual({ general: '', comment: [] })
+  })
+})
+
+describe('failedPlatforms', () => {
+  it('names platforms from "<platform>: " parts, not comment notes', () => {
+    const p = post({ status: 'failed', platforms: ['facebook', 'instagram', 'x'], last_error: 'facebook: Facebook accepted the Reel, check; instagram comment: x' })
+    expect(failedPlatforms(p)).toEqual(['facebook'])
+    expect(failedPlatforms(post({ status: 'posted', platforms: ['facebook'], last_error: 'facebook: x' }))).toEqual([])
   })
 })
