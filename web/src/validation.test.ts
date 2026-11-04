@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import type { Account } from './types'
+import type { Account, Platform } from './types'
 import { hashtagCount, validate, xLength, type Draft } from './validation'
 
 const account: Account = { id: 1, name: 'Kape', fb_page_id: 'P', ig_user_id: 'I', token_env: 'META_TOKEN_KAPE', timezone: 'Asia/Manila' }
@@ -133,5 +133,15 @@ describe('video and covers (mirrors validation.py)', () => {
     expect(got).toContain('this one is 120 s')
     expect(got).not.toContain('X takes')
     expect(validate(draft({ ...video, account: linked, platforms: ['facebook', 'x'], videoSeconds: null }), true)).toEqual([])
+  })
+  it('needs a vertical, at least 540 px wide clip for Facebook, only when the size is known', () => {
+    const fb = (videoWidth: number | null, videoHeight: number | null, platforms: Platform[] = ['facebook']) =>
+      validate(draft({ ...video, account: linked, platforms, videoWidth, videoHeight }), true)
+    expect(fb(1920, 1080)).toEqual(['Facebook Reels need a vertical video at least 540 px wide: this one is 1920×1080'])
+    expect(fb(480, 854)).toHaveLength(1)
+    expect(fb(1080, 1080)).toHaveLength(1)
+    expect(fb(540, 960)).toEqual([])
+    expect(fb(null, null)).toEqual([])
+    expect(fb(1920, 1080, ['x'])).toEqual([])
   })
 })

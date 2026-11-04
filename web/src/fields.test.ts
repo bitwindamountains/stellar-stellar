@@ -10,7 +10,7 @@ describe('sectionOf', () => {
     expect(sectionOf('Instagram needs an image')).toBe('media')
     expect(sectionOf('fb: Only one media file per post for now')).toBe('media')
     expect(sectionOf('TikTok/YouTube need a video')).toBe('media')
-    for (const m of ['A cover is only for videos', 'Cover link must start with https://', 'The cover must be a JPEG', 'Facebook Page takes videos of 3 s to 90 s: this one is 120 s'])
+    for (const m of ['A cover is only for videos', 'Cover link must start with https://', 'The cover must be a JPEG', 'Facebook Page takes videos of 3 s to 90 s: this one is 120 s', 'Facebook Reels need a vertical video at least 540 px wide: this one is 1920×1080'])
       expect(sectionOf(m)).toBe('media')
     expect(sectionOf('Facebook post is empty: add a caption, link or image')).toBe('caption')
     expect(sectionOf('X posts max 280 characters (this one counts 300)')).toBe('caption')

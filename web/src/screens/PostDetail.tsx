@@ -75,7 +75,9 @@ export default function PostDetail({ num }: { num: number }) {
   const failed = !canRetry(row) ? failedPlatforms(row) : []
   const repost = async () => {
     const names = failed.map((p) => NAMED[p] ?? p).join(', ')
-    if (!confirm(`Repost to ${names} only? Check first that it is not already there.`)) return
+    // Facebook can finish a Reel after the run gave up waiting; reposting it then posts it twice.
+    const wait = /still processing/i.test(row.last_error) ? ' Wait a few minutes and check your Page first; Facebook may still finish it.' : ''
+    if (!confirm(`Repost to ${names} only? Check first that it is not already there.${wait}`)) return
     const err = await repostFailed(row)
     if (err) setRepostError(err)
     else location.replace(`#${back}`)

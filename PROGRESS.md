@@ -58,12 +58,16 @@ YouTube Shorts and the FB profile stay by hand (Telegram + handoff page).
   by-hand clips; the handoff page shows it.
 - **Length check** in the Composer, from the clip in the browser: FB 3-90 s, IG 3 s-15 min, X up to 140 s. The FB/IG
   limits are not yet confirmed against Meta's docs. A length the browser can't read is not blocked.
+  FB Reels also need a vertical clip at least 540 px wide (checked only when the browser reads the size).
 - **Never twice**: a FB Reel that was accepted but is still processing (or failed processing) keeps its ID and is
   marked failed for a check. "Repost only what failed" on the post's detail page clears just those platforms and
   requeues.
 - **Storage cleanup**: after a post is posted and handed off, the publisher deletes that post's own uploads, skipping
   files other rows still use. Handoff "Done" follows the same rule.
-- The publish workflow timeout went from 10 to 30 minutes (video uploads are slow).
+- The publish workflow timeout went from 10 to 30 minutes (video uploads are slow). A run starts no new post
+  after 20 minutes (claimed rows go back for the next run) and each video wait stops after 5 minutes.
+- A FB Reel's ID is saved the moment Facebook accepts it, with a "facebook: …" mark, so a run killed while
+  waiting leaves the row failed for a check (never posted) and Repost offered.
 - **Not verified live**: no real Reel or X video has been posted. X is untested until the developer app is
   connected. One real test post, only when you say so. The local dry run wasn't run (no `.env` on this PC).
 
@@ -136,4 +140,6 @@ Android share target, PNG→JPEG conversion on upload, the 4 pm nudge, copy butt
 
 ## Known limits / later
 - Google Sheet backend: claim can't be conditional (Sheets has no conditional writes).
+- Automatic-only posts that are never handed off keep their uploads in storage (`cleanup_media` needs
+  `assist_done_at`), and a skipped cleanup isn't retried.
 - Not built: feed autopilot (RSS/YouTube → posts), insights, AI captions, calendar view.

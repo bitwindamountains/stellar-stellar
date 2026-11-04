@@ -4,7 +4,7 @@ import { cleanVariants, isCustomized, textFor, type Variant, type Variants } fro
 import { Arrow, Asteroids, Check, Close, Eye, FlightPath, LinkIcon, MediaIcon, More, WhenIcon, WhereIcon } from '../icons'
 import { publishSoon } from '../actions'
 import { postLinks } from '../groups'
-import { toJpeg, videoSeconds } from '../media'
+import { NO_VIDEO_META, toJpeg, videoMeta, type VideoMeta } from '../media'
 import { mediaWasRemoved } from '../postView'
 import PostPreview from '../PostPreview'
 import Sheet from '../Sheet'
@@ -86,7 +86,12 @@ export default function Composer({ num, day }: { num?: number; day?: string }) {
   const [mediaType, setMediaType] = useState<MediaType>(restored?.mediaType ?? 'none')
   const [mediaUrl, setMediaUrl] = useState(restored?.mediaUrl ?? '')
   const [coverUrl, setCoverUrl] = useState(restored?.coverUrl ?? '')
-  const [seconds, setSeconds] = useState<number | null>(restored?.videoSeconds ?? null) // null = unknown: no length check
+  // null = unknown: no length or shape check
+  const [meta, setMeta] = useState<VideoMeta>({
+    videoSeconds: restored?.videoSeconds ?? null,
+    videoWidth: restored?.videoWidth ?? null,
+    videoHeight: restored?.videoHeight ?? null,
+  })
   const [link, setLink] = useState(restored?.link ?? '')
   const [dragging, setDragging] = useState(false)
   const [busy, setBusy] = useState<'' | 'upload' | 'cover' | 'save'>('')
@@ -140,8 +145,8 @@ export default function Composer({ num, day }: { num?: number; day?: string }) {
 
   useEffect(() => {
     if (num) return
-    saveDraft({ targets, caption, firstComment, variants, mediaType, mediaUrl, coverUrl, videoSeconds: seconds, link, mode, publishAt })
-  }, [num, targets, caption, firstComment, variants, mediaType, mediaUrl, coverUrl, seconds, link, mode, publishAt])
+    saveDraft({ targets, caption, firstComment, variants, mediaType, mediaUrl, coverUrl, ...meta, link, mode, publishAt })
+  }, [num, targets, caption, firstComment, variants, mediaType, mediaUrl, coverUrl, meta, link, mode, publishAt])
 
   useEffect(() => {
     if (num) return
@@ -161,7 +166,7 @@ export default function Composer({ num, day }: { num?: number; day?: string }) {
   const lead = active[0] // its time zone sets the time for every account
   const tz = lead?.timezone ?? accounts?.[0]?.timezone ?? 'Asia/Manila'
   const chosen = PLATFORMS.filter((p) => active.some((a) => targets[a.id].includes(p)))
-  const base = { publishAt, caption, firstComment, variants, mediaType, mediaUrls: mediaUrl ? [mediaUrl] : [], link, coverUrl, videoSeconds: seconds }
+  const base = { publishAt, caption, firstComment, variants, mediaType, mediaUrls: mediaUrl ? [mediaUrl] : [], link, coverUrl, ...meta }
   const editing = tab !== 'all' && chosen.includes(tab) ? tab : 'all' // a deselected platform's tab falls back
   const problems = problemsFor(active, targets, base, mode === 'later')
   const locked = rows.some((r) => r.status === 'posting')
@@ -218,12 +223,12 @@ export default function Composer({ num, day }: { num?: number; day?: string }) {
     const remembered = num ? undefined : rememberedTargets(kind)
     // Only Instagram needs JPEG; other platforms keep the original (and its transparency).
     if (Object.values(remembered ?? targets).some((list) => list.includes('instagram'))) file = await toJpeg(file)
-    const length = kind === 'video' ? await videoSeconds(file) : null
+    const read = kind === 'video' ? await videoMeta(file) : NO_VIDEO_META
     const url = await put(file)
     if (!url) return
     setMediaUrl(url)
     setMediaType(kind)
-    setSeconds(length)
+    setMeta(read)
     if (kind !== 'video') setCoverUrl('') // a cover only goes with a video
     if (remembered) setTargets(remembered)
   }
@@ -325,7 +330,7 @@ export default function Composer({ num, day }: { num?: number; day?: string }) {
       mediaType: gone ? 'none' : mediaType,
       mediaUrl: gone ? '' : mediaUrl,
       coverUrl: gone ? '' : coverUrl,
-      videoSeconds: gone ? null : seconds,
+      ...(gone ? NO_VIDEO_META : meta),
       note: gone ? 'The original file was removed after you posted it by hand. Add it again.' : undefined,
     })
     go('/new')
@@ -509,7 +514,7 @@ export default function Composer({ num, day }: { num?: number; day?: string }) {
               <span className="dz-hint">{mediaUrl ? 'Tap to replace it' : 'Tap, drop or paste · JPEG, PNG, WebP, MP4 · up to 50 MB'}</span>
             </span>
             <span className="btn dark" aria-hidden="true" style={{ minHeight: 44 }}>{mediaUrl ? 'Replace' : 'Choose file'}</span>
-            <input id="media-file" type="file" className="sr-only" accept={ACCEPT} disabled={busy === 'upload'} {...invalid('media')}
+            <input id="media-file" type="file" className="sr-only" accept={ACCEPT} disabled={busy !== ''} {...invalid('media')}
               onChange={(e) => e.target.files?.[0] && upload(e.target.files[0])} />
           </label>
           <FieldError messages={errors.media} alert={false} />
@@ -520,7 +525,7 @@ export default function Composer({ num, day }: { num?: number; day?: string }) {
               setMediaUrl('')
               setMediaType('none')
               setCoverUrl('')
-              setSeconds(null)
+              setMeta(NO_VIDEO_META)
               const remembered = rememberedTargets('none')
               if (!num && remembered) setTargets(remembered)
             }}>

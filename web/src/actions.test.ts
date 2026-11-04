@@ -63,6 +63,13 @@ describe('repostFailed', () => {
     expect(sent).not.toHaveProperty('x_post_id')
   })
 
+  it('reposts Facebook after a run stopped with its unconfirmed Reel ID kept', async () => {
+    const last_error = "facebook: Facebook accepted the Reel but was still processing; check it's on your Page; Run stopped while posting. Check facebook, instagram, x, then reschedule if it's missing."
+    expect(await repostFailed({ ...failed, ig_media_id: '', x_post_id: '', last_error })).toBeNull()
+    const sent = (db.update.mock.calls[0] as unknown[])[0] as Record<string, unknown>
+    expect(sent).toMatchObject({ fb_post_id: '', status: 'scheduled' })
+  })
+
   it('refuses when the media is gone or the row changed', async () => {
     expect(await repostFailed({ ...failed, media_type: 'video', media_urls: [] })).toMatch(/removed/)
     expect(db.update).not.toHaveBeenCalled()
