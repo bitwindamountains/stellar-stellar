@@ -6,6 +6,7 @@ import httpx
 from postpilot.models import PlatformError
 
 BASE_URL = "https://graph.facebook.com"
+RUPLOAD_URL = "https://rupload.facebook.com/video-upload"
 RATE_CODES = {4, 17, 32, 613}
 TRANSIENT_CODES = {1, 2}
 IG_PUBLISH_LIMIT_SUBCODE = 2207042
@@ -38,6 +39,7 @@ class GraphClient:
         sleep: Callable[[float], None] = time.sleep,
         attempts: int = 3,
     ):
+        self.version = version
         self.base = f"{BASE_URL}/{version}"
         self.headers = {"Authorization": f"Bearer {token}"}
         self.http = http or httpx.Client(timeout=30)
@@ -47,15 +49,38 @@ class GraphClient:
     def get(self, path: str, **params: str) -> dict:
         return self._request("GET", path, params, safe=True)
 
-    def post(self, path: str, *, safe: bool, **data: str) -> dict:
+    def post(self, path: str, *, safe: bool, files: dict | None = None, **data: str) -> dict:
         """safe=False for publishing calls: never retried; unclear outcomes become `unknown`."""
-        return self._request("POST", path, data, safe=safe)
+        return self._request("POST", path, data, safe=safe, files=files)
 
-    def _request(self, method: str, path: str, fields: dict, safe: bool) -> dict:
+    def rupload(self, video_id: str, file_url: str) -> dict:
+        """Make Facebook fetch a hosted clip into an unfinished Reel; safe because a repeat is harmless."""
+        token = self.headers["Authorization"].removeprefix("Bearer ")
+        return self._request(
+            "POST",
+            "",
+            {},
+            safe=True,
+            url=f"{RUPLOAD_URL}/{self.version}/{video_id}",
+            headers={"Authorization": f"OAuth {token}", "file_url": file_url},
+        )
+
+    def _request(
+        self,
+        method: str,
+        path: str,
+        fields: dict,
+        safe: bool,
+        files: dict | None = None,
+        url: str | None = None,
+        headers: dict | None = None,
+    ) -> dict:
         for attempt in range(1, self.attempts + 1):
             try:
-                kwargs = {"params": fields} if method == "GET" else {"data": fields}
-                response = self.http.request(method, f"{self.base}/{path}", headers=self.headers, **kwargs)
+                kwargs = {"params": fields} if method == "GET" else {"data": fields, "files": files}
+                response = self.http.request(
+                    method, url or f"{self.base}/{path}", headers=headers or self.headers, **kwargs
+                )
             except httpx.TransportError:
                 error = PlatformError("transient", "Couldn't reach Meta (network problem)")
             else:
