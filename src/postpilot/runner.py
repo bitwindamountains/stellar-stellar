@@ -181,6 +181,8 @@ def _publish_row(post, account, publishers, assist, commenters, write, cfg, stam
         try:
             result = publishers[platform](post, account)
         except PlatformError as e:
+            if e.object_id:
+                save({ID_COLUMN[platform]: e.object_id})
             errors.append((platform, e))
             continue
         except Exception as e:  # never surface raw text: it may contain URLs with tokens
@@ -194,7 +196,14 @@ def _publish_row(post, account, publishers, assist, commenters, write, cfg, stam
     # First comments: once per platform, only after its post is out. Failures never undo a live post.
     comment_errors: list[tuple[str, PlatformError]] = []  # retryable: tried again by a later run
     gave_up: list[tuple[str, str]] = []  # (platform, note kind), stored as a sentinel right away
+    errored = {p for p, _ in errors}
     for platform in post.platforms:
+        if (
+            platform in errored
+        ):  # its post may not be live yet: no comment now (no sentinel: a repost can comment)
+            if post.get("first_comment") and platform in commenters and post.comment_pending(platform):
+                gave_up.append((platform, "unknown"))
+            continue
         if not (account.by_api(platform) and platform in commenters and post.comment_pending(platform)):
             continue
         try:
