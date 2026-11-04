@@ -349,3 +349,13 @@ def test_cleanup_without_matching_rows_does_nothing():
     r, calls = repo(lambda request: httpx.Response(200, json=[]))
     r.cleanup_media([1])
     assert [c.method for c in calls] == ["GET"]
+
+
+def test_cleanup_keeps_a_clip_used_by_a_posted_row_not_yet_handed_off():
+    sibling = [{"media_urls": [MEDIA + "u/a.mp4"], "cover_url": None}]
+    r, calls = cleanup_repo(siblings=sibling)
+    r.cleanup_media([1, 2])
+    others = next(c for c in calls if "or" in c.url.params)
+    assert others.url.params["num"] == "not.in.(1)"
+    delete = next(c for c in calls if c.method == "DELETE")
+    assert json.loads(delete.content) == {"prefixes": ["u/c.jpg"]}
