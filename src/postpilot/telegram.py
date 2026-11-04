@@ -23,13 +23,16 @@ def send_assist(
     first_id = None
     if post.media_urls and len(drafts) < len(platforms):  # a draft already has its video
         url = post.media_urls[0]
-        method, field = (
-            ("sendVideo", "video") if post.get("media_type").lower() == "video" else ("sendPhoto", "photo")
-        )
+        method, field = ("sendVideo", "video") if post.video else ("sendPhoto", "photo")
         try:
             first_id = _call(http, token, method, chat_id=chat_id, caption=header, **{field: url})[
                 "message_id"
             ]
+            if method == "sendVideo" and (cover := post.get("cover_url")):
+                try:
+                    _call(http, token, "sendPhoto", chat_id=chat_id, photo=cover, caption="Cover")
+                except PlatformError:
+                    pass  # the cover is a nicety; never fail the handoff over it
         except PlatformError as e:
             if e.kind != "permanent":
                 raise

@@ -10,6 +10,12 @@ from postpilot.models import PlatformError, Post
 NOW = datetime(2026, 10, 28, 10, 0, tzinfo=UTC)
 
 
+def fake_time():
+    """A sleep that moves the clock on: a wall-clock bound ends the wait without real time passing."""
+    now = [0.0]
+    return {"sleep": lambda s: now.__setitem__(0, now[0] + s), "clock": lambda: now[0]}
+
+
 def client(handler):
     calls = []
 
@@ -47,6 +53,74 @@ def test_x_uploads_image_then_attaches_it():
     x.publish(http, "TOK", post(media_type="image", media_urls="https://cdn.test/a.jpg"))
     assert [c.url.path for c in calls] == ["/a.jpg", "/2/media/upload", "/2/tweets"]
     assert json.loads(calls[-1].content)["media"] == {"media_ids": ["m1"]}
+
+
+def x_video_handler(statuses, finalize_info=None):
+    def handler(r):
+        path = r.url.path
+        if r.url.host == "cdn.test":
+            return httpx.Response(200, content=b"0123456789", headers={"content-type": "video/mp4"})
+        if path == "/2/media/upload/initialize":
+            return httpx.Response(200, json={"data": {"id": "m9"}})
+        if path.endswith("/append"):
+            return httpx.Response(204)
+        if path.endswith("/finalize"):
+            return httpx.Response(200, json={"data": {"id": "m9", "processing_info": finalize_info}})
+        if path == "/2/media/upload":
+            return httpx.Response(200, json={"data": {"id": "m9", "processing_info": statuses.pop(0)}})
+        return httpx.Response(201, json={"data": {"id": "7"}})
+
+    return handler
+
+
+def test_x_video_chunked_upload_then_post(monkeypatch):
+    monkeypatch.setattr(x, "CHUNK", 4)
+    http, calls = client(
+        x_video_handler(
+            [{"state": "in_progress", "check_after_secs": 30}, {"state": "succeeded"}],
+            {"state": "pending", "check_after_secs": 1},
+        )
+    )
+    naps = []
+    result = x.publish(http, "TOK", post(**VIDEO), sleep=naps.append)
+    assert result.permalink == "https://x.com/i/status/7"
+    assert [c.url.path for c in calls[1:]] == [
+        "/2/media/upload/initialize",
+        *["/2/media/upload/m9/append"] * 3,  # 10 bytes in 4-byte chunks
+        "/2/media/upload/m9/finalize",
+        "/2/media/upload",
+        "/2/media/upload",
+        "/2/tweets",
+    ]
+    assert json.loads(calls[1].content) == {
+        "total_bytes": 10,
+        "media_type": "video/mp4",
+        "media_category": "tweet_video",
+    }
+    for i in range(3):
+        assert b'name="segment_index"\r\n\r\n%d' % i in calls[2 + i].content
+    assert calls[-1].url.path == "/2/tweets" and json.loads(calls[-1].content)["media"] == {
+        "media_ids": ["m9"]
+    }
+    assert calls[6].url.params["command"] == "STATUS" and calls[6].url.params["media_id"] == "m9"
+    assert naps == [1, 10]  # check_after_secs honoured, capped at 10
+
+
+def test_x_video_processing_failed_is_permanent_and_never_posts():
+    failed = {"state": "failed", "error": {"message": "unsupported codec"}}
+    http, calls = client(x_video_handler([failed], {"state": "pending"}))
+    with pytest.raises(PlatformError) as e:
+        x.publish(http, "TOK", post(**VIDEO), sleep=lambda s: None)
+    assert e.value.kind == "permanent" and "unsupported codec" in str(e.value)
+    assert all(c.url.path != "/2/tweets" for c in calls)
+
+
+def test_x_video_still_processing_is_transient_and_never_posts():
+    http, calls = client(x_video_handler([{"state": "in_progress"}] * 2, {"state": "pending"}))
+    with pytest.raises(PlatformError) as e:
+        x.publish(http, "TOK", post(**VIDEO), seconds=2, **fake_time())
+    assert e.value.kind == "transient"
+    assert all(c.url.path != "/2/tweets" for c in calls)
 
 
 @pytest.mark.parametrize(
@@ -207,3 +281,12 @@ def test_tiktok_big_video_uploads_every_chunk(monkeypatch):
     assert (init["chunk_size"], init["total_chunk_count"]) == (4, 2)
     puts = [c.headers["Content-Range"] for c in calls if c.url.host == "upload.test"]
     assert puts == ["bytes 0-3/10", "bytes 4-9/10"]
+
+
+def test_x_video_poll_stops_at_its_time_bound():
+    http, calls = client(x_video_handler([{"state": "in_progress"}] * 5, {"state": "pending"}))
+    ticks = iter([0, 100, 400])  # start, before the 1st status poll, before the 2nd
+    with pytest.raises(PlatformError) as e:
+        x.publish(http, "TOK", post(**VIDEO), sleep=lambda s: None, seconds=300, clock=lambda: next(ticks))
+    assert e.value.kind == "transient"
+    assert [c.url.path for c in calls].count("/2/media/upload") == 1

@@ -101,6 +101,10 @@ class Post:
         return list(dict.fromkeys(n for n in names if n))
 
     @property
+    def video(self) -> bool:
+        return self.get("media_type").lower() == "video"
+
+    @property
     def media_urls(self) -> list[str]:
         return [u.strip() for u in self.get("media_urls").splitlines() if u.strip()]
 
@@ -164,9 +168,10 @@ class PlatformError(Exception):
 
     RETRYABLE = ("rate", "transient")
 
-    def __init__(self, kind: str, message: str):
+    def __init__(self, kind: str, message: str, object_id: str = ""):
         super().__init__(message)
         self.kind = kind
+        self.object_id = object_id  # set: the platform holds this object; save it so it's never sent again
 
     @property
     def retryable(self) -> bool:

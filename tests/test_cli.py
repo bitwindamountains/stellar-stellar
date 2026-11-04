@@ -315,3 +315,21 @@ def test_stats_any_error_keeps_exit_code_and_prints_after_report(monkeypatch):
     assert result.exit_code == 0 and "Stats skipped: ValueError" in result.output
     assert "abc" not in result.output
     assert result.output.index("posted,") < result.output.index("Stats skipped")
+
+
+class CleanupRepo(FakeRepository):
+    def __init__(self, *a):
+        super().__init__(*a)
+        self.cleaned = []
+
+    def cleanup_media(self):
+        self.cleaned.append(True)
+
+
+@pytest.mark.parametrize("dry, expected", [(True, []), (False, [True])])
+def test_cleanup_runs_only_on_real_runs(monkeypatch, dry, expected):
+    monkeypatch.setattr(cli, "run", lambda *a, **k: Report())  # a handoff done since the last run
+    repo = CleanupRepo([], ACCOUNTS)
+    args = ["publish", "--dry-run"] if dry else ["publish", "--local"]
+    invoke(monkeypatch, args, repo)
+    assert repo.cleaned == expected

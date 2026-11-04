@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import type { Account } from './types'
+import type { Account, Platform } from './types'
 import { hashtagCount, validate, xLength, type Draft } from './validation'
 
 const account: Account = { id: 1, name: 'Kape', fb_page_id: 'P', ig_user_id: 'I', token_env: 'META_TOKEN_KAPE', timezone: 'Asia/Manila' }
@@ -23,7 +23,6 @@ describe('validate (mirrors validation.py)', () => {
     expectError({ mediaType: 'image' }, 'Add the image')
     expectError({ mediaType: 'image', mediaUrls: ['http://x/a.jpg'] }, 'https://')
     expectError({ mediaType: 'image', mediaUrls: ['https://drive.google.com/file/d/x'] }, 'Google Drive')
-    expectError({ mediaType: 'video', mediaUrls: ['https://x/a.mp4'] }, "isn't supported yet")
     expectError({ platforms: ['tiktok'] }, 'TikTok/YouTube need a video')
     expectError({ caption: '' }, 'Facebook post is empty')
     expectError({ platforms: ['instagram'], mediaType: 'image', mediaUrls: ['https://x/a.jpg'], caption: 'x'.repeat(2201) }, '2,200')
@@ -84,7 +83,6 @@ describe('X and connected logins (mirrors validation.py)', () => {
   it('limits X', () => {
     expectError({ account: linked, platforms: ['x'], caption: 'a'.repeat(281) }, '280')
     expectError({ account: linked, platforms: ['x'], caption: 'a'.repeat(260), link: 'https://example.com' }, '280')
-    expectError({ account: linked, platforms: ['x'], mediaType: 'video', mediaUrls: ['https://x/a.mp4'] }, 'Video to X')
     expect(validate(draft({ account: linked, platforms: ['x'], caption: 'a'.repeat(280) }), true)).toEqual([])
   })
   it('limits connected TikTok captions, Shopee goes by hand', () => {
@@ -110,5 +108,40 @@ describe('X and connected logins (mirrors validation.py)', () => {
     expectError({ ...tiktok, account: linked, firstComment: 'x'.repeat(4037) }, 'First comment too long for the phone handoff')
     expect(validate(draft({ ...tiktok, account: linked, firstComment: 'x'.repeat(4036) }), true)).toEqual([])
     expectError({ ...tiktok, account: undefined, firstComment: 'x'.repeat(4037) }, 'First comment too long for the phone handoff')
+  })
+})
+
+describe('video and covers (mirrors validation.py)', () => {
+  const video = { mediaType: 'video' as const, mediaUrls: ['https://x/a.mp4'] }
+  const linked: Account = { ...account, connections: [{ platform: 'meta', handle: 'Kape' }, { platform: 'x', handle: '@kape' }] }
+  it('allows video to Facebook, Instagram and X', () => {
+    expect(validate(draft({ ...video, account: linked, platforms: ['facebook', 'instagram', 'x'] }), true)).toEqual([])
+  })
+  it('keeps the JPEG rule for images only', () => {
+    expect(validate(draft({ ...video, platforms: ['instagram'] }), true).join('|')).not.toContain('JPEG')
+    expectError({ platforms: ['instagram'], mediaType: 'image', mediaUrls: ['https://x/a.png'] }, 'JPEG')
+  })
+  it('checks the cover', () => {
+    expectError({ mediaType: 'image', mediaUrls: ['https://x/a.jpg'], coverUrl: 'https://x/c.jpg' }, 'A cover is only for videos')
+    expectError({ ...video, coverUrl: 'http://x/c.jpg' }, 'https://')
+    expectError({ ...video, coverUrl: 'https://x/c.png' }, 'The cover must be a JPEG')
+    expect(validate(draft({ ...video, coverUrl: 'https://x/c.jpg' }), true)).toEqual([])
+  })
+  it('checks video length per platform only when known', () => {
+    const got = validate(draft({ ...video, account: linked, platforms: ['facebook', 'x'], videoSeconds: 120 }), true).join('|')
+    expect(got).toContain('Facebook Page takes videos of 3 s to 90 s')
+    expect(got).toContain('this one is 120 s')
+    expect(got).not.toContain('X takes')
+    expect(validate(draft({ ...video, account: linked, platforms: ['facebook', 'x'], videoSeconds: null }), true)).toEqual([])
+  })
+  it('needs a vertical, at least 540 px wide clip for Facebook, only when the size is known', () => {
+    const fb = (videoWidth: number | null, videoHeight: number | null, platforms: Platform[] = ['facebook']) =>
+      validate(draft({ ...video, account: linked, platforms, videoWidth, videoHeight }), true)
+    expect(fb(1920, 1080)).toEqual(['Facebook Reels need a vertical video at least 540 px wide: this one is 1920×1080'])
+    expect(fb(480, 854)).toHaveLength(1)
+    expect(fb(1080, 1080)).toHaveLength(1)
+    expect(fb(540, 960)).toEqual([])
+    expect(fb(null, null)).toEqual([])
+    expect(fb(1920, 1080, ['x'])).toEqual([])
   })
 })

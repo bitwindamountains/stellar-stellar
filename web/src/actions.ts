@@ -1,5 +1,5 @@
 import type { Variants } from './content'
-import { mediaWasRemoved } from './postView'
+import { failedPlatforms, mediaWasRemoved, PLATFORM_COLUMNS } from './postView'
 import { saveDraft } from './prefs'
 import { go } from './route'
 import { supabase } from './supabase'
@@ -22,6 +22,23 @@ export async function retryNow(num: number): Promise<string | null> {
   return null
 }
 
+/** Requeue a failed post but redo only the platforms that failed; the ones that went out keep their IDs. */
+export async function repostFailed(post: Post): Promise<string | null> {
+  if (mediaWasRemoved(post)) return 'The original file was removed, so it cannot be reposted. Use Post again and add it again.'
+  const clear = Object.fromEntries(failedPlatforms(post).flatMap((p) => (PLATFORM_COLUMNS[p] ?? []).map((c) => [c, ''])))
+  const { data, error } = await supabase
+    .from('posts')
+    .update({ ...clear, status: 'scheduled', publish_at: new Date().toISOString(), attempts: 0, last_error: '', claimed_at: null })
+    .eq('num', post.num)
+    .eq('last_error', post.last_error) // a stale page must not clear a platform that succeeded since
+    .in('status', ['failed', 'missed'])
+    .select('num')
+  if (error) return error.message
+  if (!data?.length) return 'This post changed; reload'
+  await publishSoon()
+  return null
+}
+
 /** Copies a post (all its account rows) into a fresh "now" draft and opens New post; nothing posts until Save. */
 export function startPostAgain(rows: Post[]): void {
   const lead = rows[0]
@@ -33,6 +50,8 @@ export function startPostAgain(rows: Post[]): void {
     mode: 'now', publishAt: '',
     mediaType: gone ? 'none' : lead.media_type,
     mediaUrl: gone ? '' : lead.media_urls[0] ?? '',
+    coverUrl: gone ? '' : lead.cover_url ?? '',
+    ...(gone ? {} : { videoSeconds: lead.video_seconds ?? null, videoWidth: lead.video_width ?? null, videoHeight: lead.video_height ?? null }),
     note: gone ? 'The original file was removed after you posted it by hand. Add it again.' : undefined,
   })
   go('/new')
