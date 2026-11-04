@@ -98,7 +98,9 @@ def publish(
     def meta(module):
         def publish_one(post, account):
             graph = GraphClient(cfg.meta_graph_version, token(account, "meta"), http=http)
-            return module.publish(graph, account, post)
+            # Video takes minutes to process: wait up to 5 minutes (checks are 5s apart).
+            extra = {"checks": 60} if post.get("media_type") == "video" else {}
+            return module.publish(graph, account, post, **extra)
 
         return publish_one
 
