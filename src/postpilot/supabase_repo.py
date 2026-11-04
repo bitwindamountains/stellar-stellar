@@ -159,14 +159,16 @@ class SupabaseRepository:
         except (StoreError, httpx.HTTPError, ValueError):
             print("Storage cleanup skipped")
             return
+        cleaning = [r.get("num") for r in rows]
         for row in rows:
             try:
-                self._cleanup_row(row, nums, prefix)
+                self._cleanup_row(row, cleaning, prefix)
             except (StoreError, httpx.HTTPError, ValueError, KeyError, TypeError):
                 print(f"Storage cleanup skipped for post {row.get('num')}")
 
     def _cleanup_row(self, row: dict, nums: list[int], prefix: str) -> None:
-        own = [u for u in [*row["media_urls"], row["cover_url"]] if u.startswith(prefix)]
+        cover = row["cover_url"] or ""
+        own = [u for u in [*row["media_urls"], cover] if u.startswith(prefix)]
         if not own:
             return
         quoted = ",".join(f'"{u}"' for u in own)
@@ -179,7 +181,7 @@ class SupabaseRepository:
                 "or": f"(media_urls.ov.{{{quoted}}},cover_url.in.({quoted}))",
             },
         )
-        used = {u for o in others for u in [*o["media_urls"], o["cover_url"]]}
+        used = {u for o in others for u in [*o["media_urls"], o["cover_url"] or ""]}
         gone = [u for u in own if u not in used]
         if not gone:
             return
@@ -192,7 +194,7 @@ class SupabaseRepository:
         if not r.is_success:
             return
         patch = {"media_urls": [u for u in row["media_urls"] if u not in gone]}
-        if row["cover_url"] in gone:
+        if cover in gone:
             patch["cover_url"] = ""
         self._request("PATCH", "posts", params={"num": f"eq.{row['num']}"}, json=patch)
 
