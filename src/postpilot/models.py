@@ -164,9 +164,10 @@ class PlatformError(Exception):
 
     RETRYABLE = ("rate", "transient")
 
-    def __init__(self, kind: str, message: str):
+    def __init__(self, kind: str, message: str, object_id: str = ""):
         super().__init__(message)
         self.kind = kind
+        self.object_id = object_id  # set: the platform holds this object; save it so it's never sent again
 
     @property
     def retryable(self) -> bool:

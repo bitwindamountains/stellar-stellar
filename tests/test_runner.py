@@ -509,3 +509,32 @@ def test_dry_run_comments_nothing_written():
     report = go_c(repo, plats, comments, dry_run=True)
     assert repo.writes == [] and plats.calls == [] and comments.calls == []
     assert report.posted == [2] and "facebook comment" in report.lines[0]
+
+
+UNCLEAR = PlatformError(
+    "unknown", "Facebook accepted the Reel but was still processing; check it's on your Page", object_id="V1"
+)
+
+
+def test_error_with_object_id_saves_the_id_and_fails_for_a_check():
+    repo = FakeRepository([row()], ACCOUNTS)
+    go(repo, Platforms(facebook=[UNCLEAR]))
+    assert repo.row(2)["fb_post_id"] == "V1" and repo.row(2)["status"] == "failed"
+    assert "facebook: Facebook accepted" in repo.row(2)["last_error"]
+
+
+def test_no_first_comment_on_a_platform_that_errored_this_run():
+    repo = FakeRepository([row(first_comment="hi")], ACCOUNTS)
+    comments = Comments(facebook=["C1"])
+    go_c(repo, Platforms(facebook=[UNCLEAR]), comments)
+    assert comments.calls == [] and not repo.row(2).get("fb_comment_id")
+    assert "Comment on Facebook may not have been added" in repo.row(2)["last_error"]
+
+
+def test_retry_after_object_id_error_never_resends_that_platform():
+    repo = FakeRepository([row()], ACCOUNTS)
+    plats = Platforms(facebook=[UNCLEAR])
+    go(repo, plats)
+    repo.write({2: {"status": "scheduled"}})
+    go(repo, plats)
+    assert plats.calls == [("facebook", 2)]
