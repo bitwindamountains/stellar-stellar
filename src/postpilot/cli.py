@@ -79,6 +79,10 @@ def validate_command() -> None:
         raise typer.Exit(1)
 
 
+# Past this no new post starts: the workflow kills the job at 30 minutes, and a post can take a few.
+RUN_SECONDS = 20 * 60
+
+
 @app.command()
 def publish(
     dry_run: bool = typer.Option(False, "--dry-run", help="Show what would happen; change nothing."),
@@ -92,16 +96,24 @@ def publish(
     repo = _repository(cfg)
     http = httpx.Client(timeout=30)
 
+    started = time.monotonic()
+    deadline = started + RUN_SECONDS
     now = _now()
     token = _tokens(repo, cfg, http, now)
 
+    def wait_seconds() -> float:
+        # Video takes minutes to process: wait up to 5 minutes, less near the deadline (at least a minute).
+        return min(300, max(60, deadline - time.monotonic()))
+
     def meta(module):
-        def publish_one(post, account):
+        def publish_one(post, account, save_id=None):
             graph = GraphClient(cfg.meta_graph_version, token(account, "meta"), http=http)
-            # Video takes minutes to process: wait up to 5 minutes (checks are 5s apart).
-            extra = {"checks": 60} if post.get("media_type") == "video" else {}
+            # checks are 5s apart
+            video = post.get("media_type") == "video"
+            extra = {"checks": 60, "seconds": wait_seconds()} if video else {}
             if module is facebook:
                 extra["download"] = lambda u: rest.download(http, u, "Facebook")
+                extra["save_id"] = save_id
             return module.publish(graph, account, post, **extra)
 
         return publish_one
@@ -128,8 +140,10 @@ def publish(
     publishers = {
         "facebook": meta(facebook),
         "instagram": meta(instagram),
-        "x": lambda post, account: x.publish(http, token(account, "x"), post),
-        "tiktok": lambda post, account: tiktok.publish(http, token(account, "tiktok"), post),
+        "x": lambda post, account, save_id=None: x.publish(
+            http, token(account, "x"), post, seconds=wait_seconds()
+        ),
+        "tiktok": lambda post, account, save_id=None: tiktok.publish(http, token(account, "tiktok"), post),
     }
 
     assist = None
@@ -141,7 +155,6 @@ def publish(
                 http, cfg.telegram_bot_token, cfg.telegram_chat_id, post, platforms, link
             )
 
-    started = time.monotonic()
     try:
         report = run(
             repo,
@@ -151,6 +164,7 @@ def publish(
             now,
             dry_run=dry_run,
             commenters=commenters,
+            deadline=deadline,
         )
     except StoreError as e:
         raise _fail(f"Store error: {e}") from None

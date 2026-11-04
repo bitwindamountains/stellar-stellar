@@ -275,3 +275,12 @@ def test_tiktok_big_video_uploads_every_chunk(monkeypatch):
     assert (init["chunk_size"], init["total_chunk_count"]) == (4, 2)
     puts = [c.headers["Content-Range"] for c in calls if c.url.host == "upload.test"]
     assert puts == ["bytes 0-3/10", "bytes 4-9/10"]
+
+
+def test_x_video_poll_stops_at_its_time_bound():
+    http, calls = client(x_video_handler([{"state": "in_progress"}] * 5, {"state": "pending"}))
+    ticks = iter([0, 100, 400])  # start, before the 1st status poll, before the 2nd
+    with pytest.raises(PlatformError) as e:
+        x.publish(http, "TOK", post(**VIDEO), sleep=lambda s: None, seconds=300, clock=lambda: next(ticks))
+    assert e.value.kind == "transient"
+    assert [c.url.path for c in calls].count("/2/media/upload") == 1
