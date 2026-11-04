@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { failedPlatforms, ago, awaitingHandoff, canRetry, chipState, chips, errorNotes, flightStep, mediaWasRemoved, mergePosts, runLine, statsLine, statusLabel } from './postView'
+import { automaticPending, failedPlatforms, ago, awaitingHandoff, canRetry, chipState, chips, errorNotes, flightStep, mediaWasRemoved, mergePosts, runLine, statsLine, statusLabel } from './postView'
 import { isDraft, needsFinishing, postedByApi, sentByHand, type Post } from './types'
 
 function post(over: Partial<Post>): Post {
@@ -151,5 +151,14 @@ describe('failedPlatforms', () => {
     const p = post({ status: 'failed', platforms: ['facebook', 'instagram', 'x'], last_error: 'facebook: Facebook accepted the Reel, check; instagram comment: x' })
     expect(failedPlatforms(p)).toEqual(['facebook'])
     expect(failedPlatforms(post({ status: 'posted', platforms: ['facebook'], last_error: 'facebook: x' }))).toEqual([])
+  })
+})
+
+describe('automaticPending', () => {
+  it('keeps the upload while an automatic platform is undone or failed with its ID kept', () => {
+    const base = { platforms: ['facebook'] as Post['platforms'] }
+    expect(automaticPending(post({ ...base, status: 'posted', fb_post_id: 'V1' }))).toBe(false)
+    expect(automaticPending(post({ ...base, status: 'failed', fb_post_id: 'V1', last_error: "facebook: Facebook couldn't publish the Reel: ERROR" }))).toBe(true)
+    expect(automaticPending(post({ ...base, status: 'scheduled', fb_post_id: '' }))).toBe(true)
   })
 })

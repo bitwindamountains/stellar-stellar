@@ -1,10 +1,11 @@
 import { useEffect, useState } from 'react'
 import { textFor, titleFor, type Variants } from '../content'
 import { Check, FlightPath, Logo } from '../icons'
+import { automaticPending } from '../postView'
 import { unsharedFiles } from '../media'
 import { go } from '../route'
 import { supabase } from '../supabase'
-import { ACCOUNT_SELECT, isDone, isDraft, needsFinishing, sentByHand, PLATFORM_NAMES, type Account, type Platform, type Post } from '../types'
+import { ACCOUNT_SELECT, isDraft, needsFinishing, PLATFORM_NAMES, type Account, type Platform, type Post } from '../types'
 
 const OPEN_URL: Partial<Record<Platform, string>> = {
   tiktok: 'https://www.tiktok.com/upload',
@@ -79,9 +80,9 @@ export default function Handoff({ num }: { num: number }) {
 
   async function done() {
     // Free-plan storage is 1 GB: once nothing else needs the upload, remove it. Pasted outside links are left alone.
-    const automaticPending = post!.platforms.some((p) => !sentByHand(post!, p, post!.account) && !isDone(post!, p))
+    const keepUpload = automaticPending(post!, post!.account)
     const prefix = supabase.storage.from('media').getPublicUrl('').data.publicUrl
-    const own = automaticPending ? [] : [...post!.media_urls, post!.cover_url ?? ''].filter((u) => u.startsWith(prefix))
+    const own = keepUpload ? [] : [...post!.media_urls, post!.cover_url ?? ''].filter((u) => u.startsWith(prefix))
     let removed: string[] = []
     if (own.length) {
       // Group rows and Post again copies point at the same files: keep any another row still uses.

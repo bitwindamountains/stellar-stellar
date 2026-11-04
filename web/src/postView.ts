@@ -1,5 +1,5 @@
 import type { PostGroup } from './groups'
-import { isDone, needsFinishing, PLATFORM_CODES, PLATFORM_NAMES, type Platform, type PlatformStats, type Post, type Run } from './types'
+import { isDone, needsFinishing, sentByHand, PLATFORM_CODES, PLATFORM_NAMES, type Account, type Platform, type PlatformStats, type Post, type Run } from './types'
 
 export type ChipState = 'done' | 'queued' | 'assist' | 'retry'
 
@@ -63,6 +63,12 @@ export function failedPlatforms(post: Post): Platform[] {
   if (post.status !== 'failed') return []
   const parts = post.last_error.replace(/^Gave up after \d+ attempt\(s\)\. /, '').split('; ')
   return post.platforms.filter((p) => parts.some((s) => s.startsWith(`${p}: `)))
+}
+
+/** An automatic platform still has work to do (not posted, or failed and awaiting Repost): the upload must stay. */
+export function automaticPending(post: Post, account?: Account): boolean {
+  const failed = failedPlatforms(post)
+  return post.platforms.some((p) => !sentByHand(post, p, account) && (!isDone(post, p) || failed.includes(p)))
 }
 
 /** "Last run 16:06 · 1 posted · 0 failed" (time in `tz`; missed counts as failed), or "No runs yet". */
