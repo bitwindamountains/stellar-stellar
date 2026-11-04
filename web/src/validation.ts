@@ -9,6 +9,7 @@ export const TELEGRAM_MESSAGE_MAX = 4096
 const TELEGRAM_OVERHEAD = 60 // platform label line and title label (Telegram counts text after parsing tags)
 const NON_JPEG = /\.(png|webp|gif|heic|heif|avif|bmp|tiff?|svg)$/i // links with no extension get the benefit of the doubt
 
+// ponytail: FB/IG limits unconfirmed against Meta docs (X's 140 s is from docs.x.com); recheck before relying.
 // Reel/video length limits in seconds [min, max] (Meta Reel specs, X media docs).
 const VIDEO_SECONDS: Partial<Record<Platform, [number, number]>> = { facebook: [3, 90], instagram: [3, 900], x: [0, 140] }
 const fmtSeconds = (s: number) => (s >= 60 && s % 60 === 0 ? `${s / 60} min` : `${s} s`)
