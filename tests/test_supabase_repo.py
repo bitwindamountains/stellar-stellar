@@ -282,3 +282,48 @@ def test_claim_nudge_error_is_a_store_error():
     r, _ = repo(lambda req: httpx.Response(500, json={"message": "boom"}))
     with pytest.raises(StoreError):
         r.claim_nudge(date(2026, 10, 5))
+
+
+MEDIA = "https://abc.supabase.co/storage/v1/object/public/media/"
+
+
+def cleanup_repo(delete_status=200):
+    rows = [
+        {
+            "num": 1,
+            "media_urls": [MEDIA + "u/a.mp4", "https://elsewhere/b.mp4"],
+            "cover_url": MEDIA + "u/c.jpg",
+        },
+    ]
+
+    def handler(request):
+        if request.url.path.endswith("/storage/v1/object/media"):
+            return httpx.Response(delete_status, json=[])
+        if request.method == "GET":
+            return httpx.Response(200, json=rows)
+        return httpx.Response(204)
+
+    return repo(handler)
+
+
+def test_cleanup_deletes_only_own_uploads_of_finished_handed_off_rows():
+    r, calls = cleanup_repo()
+    r.cleanup_media([1])
+    get = next(c for c in calls if c.method == "GET")
+    assert "assist_done_at" in str(get.url) and "eq.posted" in str(get.url)
+    delete = next(c for c in calls if c.method == "DELETE")
+    assert json.loads(delete.content) == {"prefixes": ["u/a.mp4", "u/c.jpg"]}
+    patch = next(c for c in calls if c.method == "PATCH")
+    assert json.loads(patch.content) == {"media_urls": [], "cover_url": ""}
+
+
+def test_cleanup_failed_delete_keeps_links():
+    r, calls = cleanup_repo(delete_status=500)
+    r.cleanup_media([1])
+    assert not [c for c in calls if c.method == "PATCH"]
+
+
+def test_cleanup_without_matching_rows_does_nothing():
+    r, calls = repo(lambda request: httpx.Response(200, json=[]))
+    r.cleanup_media([1])
+    assert [c.method for c in calls] == ["GET"]

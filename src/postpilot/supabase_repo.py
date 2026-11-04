@@ -19,7 +19,8 @@ class SupabaseRepository:
     """
 
     def __init__(self, url: str, service_key: str, http: httpx.Client | None = None):
-        self.base = url.rstrip("/") + "/rest/v1"
+        self.url = url.rstrip("/")
+        self.base = self.url + "/rest/v1"
         self.headers = {"apikey": service_key, "Authorization": f"Bearer {service_key}"}
         self.http = http or httpx.Client(timeout=30)
         self.timezone = DEFAULT_TIMEZONE  # set from the first account on load; used for the daily nudge
@@ -138,6 +139,42 @@ class SupabaseRepository:
             )
             is True
         )
+
+    def cleanup_media(self, nums: list[int]) -> None:
+        """Delete our own uploaded files of posted rows already handed off by hand, then clear the links.
+        Any failure leaves the row as it is (links intact) and never raises into the run."""
+        prefix = f"{self.url}/storage/v1/object/public/media/"
+        try:
+            rows = self._request(
+                "GET",
+                "posts",
+                params={
+                    "select": "num,media_urls,cover_url",
+                    "num": f"in.({','.join(map(str, nums))})",
+                    "status": "eq.posted",
+                    "assist_done_at": "not.is.null",
+                },
+            )
+            for row in rows:
+                urls = [*row["media_urls"], row["cover_url"]]
+                paths = [u[len(prefix) :] for u in urls if u.startswith(prefix)]
+                if paths:
+                    r = self.http.request(
+                        "DELETE",
+                        f"{self.url}/storage/v1/object/media",
+                        json={"prefixes": paths},
+                        headers=self.headers,
+                    )
+                    if not r.is_success:
+                        continue
+                self._request(
+                    "PATCH",
+                    "posts",
+                    params={"num": f"eq.{row['num']}"},
+                    json={"media_urls": [], "cover_url": ""},
+                )
+        except (StoreError, httpx.TransportError, KeyError, TypeError):
+            return
 
     def record_run(self, **counts) -> None:
         self._request("POST", "runs", json=counts)
