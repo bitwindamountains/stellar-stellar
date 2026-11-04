@@ -14,25 +14,31 @@ def publish(
     graph, account: Account, post: Post, sleep: Callable[[float], None] = time.sleep, checks: int = 12
 ) -> PublishResult:
     # An unpublished container is harmless if duplicated, so this call may retry.
+    video = post.get("media_type") == "video"
+    if video:
+        fields = {"media_type": "REELS", "video_url": post.media_urls[0], "share_to_feed": "true"}
+        if post.get("cover_url"):
+            fields["cover_url"] = post.get("cover_url")
+        what, hint = (
+            "video",
+            "check the link opens in a private window and is an MP4 (H.264/AAC) up to 90 seconds",
+        )
+    else:
+        fields = {"image_url": post.media_urls[0]}
+        what, hint = "image", "check the link opens in a private window and is a JPEG"
     container = graph.post(
-        f"{account.ig_user_id}/media",
-        safe=True,
-        image_url=post.media_urls[0],
-        caption=post.text_for("instagram"),
+        f"{account.ig_user_id}/media", safe=True, caption=post.text_for("instagram"), **fields
     )["id"]
     for check in range(checks):
         status = graph.get(container, fields="status_code").get("status_code")
         if status == "FINISHED":
             break
         if status in ("ERROR", "EXPIRED"):
-            raise PlatformError(
-                "permanent",
-                "Instagram couldn't use the image: check the link opens in a private window and is a JPEG",
-            )
+            raise PlatformError("permanent", f"Instagram couldn't use the {what}: {hint}")
         if check < checks - 1:
             sleep(5)
     else:
-        raise PlatformError("transient", "Instagram is still processing the image; will retry next run")
+        raise PlatformError("transient", f"Instagram is still processing the {what}; will retry next run")
     media_id = graph.post(f"{account.ig_user_id}/media_publish", safe=False, creation_id=container)["id"]
     return PublishResult(media_id, fetch_permalink(graph, media_id, "permalink"))
 

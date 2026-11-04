@@ -230,6 +230,37 @@ def test_ig_still_processing_is_transient():
     assert e.value.kind == "transient"
 
 
+def test_ig_reel_container_fields():
+    for cells, extra in (({}, {}), ({"cover_url": "https://x/c.jpg"}, {"cover_url": "https://x/c.jpg"})):
+        g = FakeGraph([{"id": "C1"}, {"status_code": "FINISHED"}, {"id": "M1"}, {"permalink": ""}])
+        instagram.publish(g, ACCOUNT, reel(**cells), sleep=lambda s: None)
+        fields = {
+            "media_type": "REELS",
+            "video_url": "https://x/clip.mp4",
+            "share_to_feed": "true",
+            "caption": "Hello",
+            **extra,
+        }
+        assert g.calls[0] == ("POST", "IGUSER/media", fields, True)
+
+
+def test_ig_reel_error_message_mentions_the_video():
+    g = FakeGraph([{"id": "C1"}, {"status_code": "ERROR"}])
+    with pytest.raises(PlatformError) as e:
+        instagram.publish(g, ACCOUNT, reel(), sleep=lambda s: None)
+    assert e.value.kind == "permanent"
+    assert str(e.value).startswith("Instagram couldn't use the video: ")
+    assert "JPEG" not in str(e.value)
+
+
+def test_ig_reel_still_processing_is_transient():
+    g = FakeGraph([{"id": "C1"}] + [{"status_code": "IN_PROGRESS"}] * 3)
+    with pytest.raises(PlatformError) as e:
+        instagram.publish(g, ACCOUNT, reel(), sleep=lambda s: None, checks=3)
+    assert e.value.kind == "transient"
+    assert all(c[1] != "IGUSER/media_publish" for c in g.calls)
+
+
 def test_fb_and_ig_use_their_own_text():
     import json as _json
 
