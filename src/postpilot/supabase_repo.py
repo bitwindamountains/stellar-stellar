@@ -19,7 +19,8 @@ class SupabaseRepository:
     """
 
     def __init__(self, url: str, service_key: str, http: httpx.Client | None = None):
-        self.base = url.rstrip("/") + "/rest/v1"
+        self.url = url.rstrip("/")
+        self.base = self.url + "/rest/v1"
         self.headers = {"apikey": service_key, "Authorization": f"Bearer {service_key}"}
         self.http = http or httpx.Client(timeout=30)
         self.timezone = DEFAULT_TIMEZONE  # set from the first account on load; used for the daily nudge
@@ -139,6 +140,57 @@ class SupabaseRepository:
             is True
         )
 
+    def cleanup_media(self) -> None:
+        """Delete our uploads that only finished posts (posted, handed off by hand) still use, then drop the
+        dead links. Every run sweeps, so a failed delete is retried. Any failure is skipped, never raised."""
+        prefix = f"{self.url}/storage/v1/object/public/media/"
+        select = "num,media_urls,cover_url,status,assist_done_at"
+        try:
+            # ponytail: rows linking only to outside files stay in this sweep for good; fine for one person.
+            rows = self._request(
+                "GET",
+                "posts",
+                params={
+                    "select": select,
+                    "status": "eq.posted",
+                    "assist_done_at": "not.is.null",
+                    "or": "(media_urls.neq.{},cover_url.neq.)",
+                },
+            )
+            own = sorted({u for r in rows for u in _links(r) if u.startswith(prefix)})
+            if not own:
+                return
+            # Every row using any of these files (group rows and Post again copies share them), in one query.
+            quoted = ",".join(f'"{u}"' for u in own)
+            users = self._request(
+                "GET",
+                "posts",
+                params={"select": select, "or": f"(media_urls.ov.{{{quoted}}},cover_url.in.({quoted}))"},
+            )
+            used = {u for r in users if not _finished(r) for u in _links(r)}
+            gone = [u for u in own if u not in used]
+            if not gone:
+                return
+            r = self.http.request(
+                "DELETE",
+                f"{self.url}/storage/v1/object/media",
+                json={"prefixes": [u[len(prefix) :] for u in gone]},
+                headers=self.headers,
+            )
+            if not r.is_success:
+                print("Storage cleanup skipped: the delete failed")
+                return
+            # Drop the dead links from every finished row, so Post again never reuses one.
+            for target in {t["num"]: t for t in [*users, *rows] if _finished(t)}.values():
+                patch = {"media_urls": [u for u in target["media_urls"] if u not in gone]}
+                if (target["cover_url"] or "") in gone:
+                    patch["cover_url"] = ""
+                if patch["media_urls"] != target["media_urls"] or "cover_url" in patch:
+                    params = {"num": f"eq.{target['num']}", "status": "eq.posted"}
+                    self._request("PATCH", "posts", params=params, json=patch)
+        except (StoreError, httpx.HTTPError, ValueError, KeyError, TypeError):
+            print("Storage cleanup skipped")
+
     def record_run(self, **counts) -> None:
         self._request("POST", "runs", json=counts)
 
@@ -163,6 +215,15 @@ class SupabaseRepository:
         except ValueError:
             message = ""
         raise StoreError(f"Supabase {r.status_code} on {table}: {message or 'request failed'}")
+
+
+def _links(row: dict) -> list[str]:
+    return [*row["media_urls"], row["cover_url"] or ""]
+
+
+def _finished(row: dict) -> bool:
+    """Posted and handed off: it needs its files no more, so it must not keep them alive."""
+    return row.get("status") == "posted" and bool(row.get("assist_done_at"))
 
 
 def _to_cells(row: dict, accounts: dict[str, Account]) -> dict[str, str]:

@@ -1,12 +1,12 @@
 import { describe, expect, it } from 'vitest'
-import { ago, awaitingHandoff, canRetry, chipState, chips, errorNotes, flightStep, mediaWasRemoved, mergePosts, runLine, statsLine, statusLabel } from './postView'
+import { failedPlatforms, ago, awaitingHandoff, canRetry, chipState, chips, errorNotes, flightStep, mediaWasRemoved, mergePosts, runLine, statsLine, statusLabel } from './postView'
 import { isDraft, needsFinishing, postedByApi, sentByHand, type Post } from './types'
 
 function post(over: Partial<Post>): Post {
   return {
     num: 1, account_id: 1, group_id: null, platforms: ['facebook'], publish_at: null, caption: '', media_type: 'none', media_urls: [],
     link: '', status: 'scheduled', attempts: 0, claimed_at: null, fb_post_id: '', fb_permalink: '', ig_media_id: '',
-    ig_permalink: '', first_comment: '', fb_comment_id: '', ig_comment_id: '', stats: {}, x_post_id: '', x_permalink: '', tiktok_id: '', tiktok_permalink: '', tg_message_id: '', variants: {}, assist_done_at: null, last_error: '', posted_at: null, ...over,
+    ig_permalink: '', first_comment: '', cover_url: '', fb_comment_id: '', ig_comment_id: '', stats: {}, x_post_id: '', x_permalink: '', tiktok_id: '', tiktok_permalink: '', tg_message_id: '', variants: {}, assist_done_at: null, last_error: '', posted_at: null, ...over,
   }
 }
 
@@ -129,5 +129,37 @@ describe('errorNotes', () => {
     expect(errorNotes(err, 'facebook')).toEqual({ general: 'Gave up after 3 attempt(s). Token expired', comment: ['Comment not added on Facebook: add it by hand'] })
     expect(errorNotes(err, 'instagram').comment).toEqual(['Comment on Instagram may not have been added: check, and add it by hand if missing'])
     expect(errorNotes('', 'facebook')).toEqual({ general: '', comment: [] })
+  })
+})
+
+describe('canRetry with a kept ID', () => {
+  const err = "facebook: Facebook couldn't publish the Reel: ERROR"
+  it('needs Repost only while the failed platform still has its ID', () => {
+    expect(canRetry(post({ status: 'failed', platforms: ['facebook'], last_error: err, fb_post_id: 'V1' }))).toBe(false)
+    expect(canRetry(post({ status: 'failed', platforms: ['facebook'], last_error: err, fb_post_id: '' }))).toBe(true)
+  })
+})
+
+describe('failedPlatforms', () => {
+  it('handles inner "; " and the gave-up prefix', () => {
+    const base = { status: 'failed' as const, platforms: ['facebook', 'instagram'] as Post['platforms'] }
+    expect(failedPlatforms(post({ ...base, last_error: "facebook: Facebook accepted the Reel but was still processing; check it's on your Page" }))).toEqual(['facebook'])
+    expect(failedPlatforms(post({ ...base, last_error: 'Gave up after 3 attempt(s). facebook: a; instagram: b' }))).toEqual(['facebook', 'instagram'])
+  })
+
+  it('names platforms from "<platform>: " parts, not comment notes', () => {
+    const p = post({ status: 'failed', platforms: ['facebook', 'instagram', 'x'], last_error: 'facebook: Facebook accepted the Reel, check; instagram comment: x' })
+    expect(failedPlatforms(p)).toEqual(['facebook'])
+    expect(failedPlatforms(post({ status: 'posted', platforms: ['facebook'], last_error: 'facebook: x' }))).toEqual([])
+  })
+})
+
+describe('a run stopped after Facebook kept an unconfirmed Reel ID', () => {
+  // As the publisher's stale pass writes it: the stopped run's "<platform>: …" part stays in front.
+  const last_error = "facebook: Facebook accepted the Reel but was still processing; check it's on your Page; Run stopped while posting. Check facebook, instagram, x, then reschedule if it's missing."
+  const p = post({ status: 'failed', platforms: ['facebook', 'instagram', 'x'], media_type: 'video', media_urls: ['https://cdn/x.mp4'], fb_post_id: 'V1', last_error })
+  it('names Facebook as failed and offers Repost, not Retry', () => {
+    expect(failedPlatforms(p)).toEqual(['facebook'])
+    expect(canRetry(p)).toBe(false)
   })
 })

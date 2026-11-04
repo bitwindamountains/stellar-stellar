@@ -28,6 +28,9 @@ TELEGRAM_OVERHEAD = 60  # platform label line and title label (Telegram counts t
 NON_JPEG = (".png", ".webp", ".gif", ".heic", ".heif", ".avif", ".bmp", ".tif", ".tiff", ".svg")
 # (links with no extension get the benefit of the doubt)
 YOUTUBE_TITLE_MAX = 100
+# ponytail: FB/IG limits unconfirmed against Meta docs (X's 140 s is from docs.x.com); recheck before relying.
+# Reel/video length limits in seconds (min, max), same as validation.ts.
+VIDEO_SECONDS = {FACEBOOK: ("Facebook Page", 3, 90), INSTAGRAM: ("Instagram", 3, 900), X: ("X", 0, 140)}
 
 
 def validate(post: Post, accounts: dict[str, Account]) -> list[str]:
@@ -75,17 +78,22 @@ def validate(post: Post, accounts: dict[str, Account]) -> list[str]:
     if any("drive.google.com" in u.lower() for u in urls):
         errors.append("Google Drive links open a web page, not the file: use a direct link (e.g. Cloudinary)")
     if len(urls) > 1:
-        errors.append("Only one image per post for now (carousels come later)")
+        errors.append("Only one media file per post for now")
 
-    api_platforms = {FACEBOOK, INSTAGRAM} & set(platforms)
-    if media_type == "video" and api_platforms:
-        errors.append(
-            "Video to Facebook/Instagram isn't supported yet; use tiktok/youtube/fb_profile for now"
-        )
+    cover = post.get("cover_url")
+    if cover:
+        if media_type != "video":
+            errors.append("A cover is only for videos")
+        if not cover.lower().startswith("https://"):
+            errors.append(f"Cover link must start with https:// ({cover})")
+        if re.split(r"[?#]", cover.lower())[0].endswith(NON_JPEG):
+            errors.append("The cover must be a JPEG")
+    if media_type == "video":
+        errors += _video_errors(post, platforms)
     if INSTAGRAM in platforms:
-        if media_type != "image":
-            errors.append("Instagram needs an image (media_type image + media_urls)")
-        elif urls and re.split(r"[?#]", urls[0].lower())[0].endswith(NON_JPEG):
+        if media_type not in ("image", "video"):
+            errors.append("Instagram needs an image or a video (media_type + media_urls)")
+        elif media_type == "image" and urls and re.split(r"[?#]", urls[0].lower())[0].endswith(NON_JPEG):
             errors.append("Instagram needs a JPEG image (PNG, WebP and GIF are rejected at post time)")
         caption = post.text_for(INSTAGRAM)
         if len(caption) > IG_CAPTION_MAX:
@@ -99,8 +107,6 @@ def validate(post: Post, accounts: dict[str, Account]) -> list[str]:
     if {"tiktok", "youtube"} & set(platforms) and media_type != "video":
         errors.append("TikTok/YouTube need a video (media_type video + media_urls)")
     if X in platforms:
-        if media_type == "video":
-            errors.append("Video to X isn't supported yet; use an image or text")
         size = x_length("\n\n".join(t for t in (post.text_for(X), post.get("link")) if t))
         if size > X_TEXT_MAX:
             errors.append(f"X posts max {X_TEXT_MAX} characters (this one counts {size:,})")
@@ -129,6 +135,32 @@ def validate(post: Post, accounts: dict[str, Account]) -> list[str]:
     if len(post.title_for("youtube")) > YOUTUBE_TITLE_MAX:
         errors.append(f"YouTube titles max {YOUTUBE_TITLE_MAX} characters")
     return errors
+
+
+def _video_errors(post: Post, platforms: list[str]) -> list[str]:
+    """Length and shape checks; skipped when the size wasn't measured (Sheet rows, pasted links)."""
+    errors = []
+    seconds, w, h = (_number(post.get(c)) for c in ("video_seconds", "video_width", "video_height"))
+    if seconds is not None:
+        for p, (name, low, high) in VIDEO_SECONDS.items():
+            if p in platforms and not low <= seconds <= high:
+                span = f"{_fmt_seconds(low)} to " if low else "up to "
+                errors.append(f"{name} takes videos of {span}{_fmt_seconds(high)}: this one is {seconds:g} s")
+    # Facebook Reels must be vertical and at least 540p, or Facebook fails them after they were accepted.
+    if FACEBOOK in platforms and w and h and not (h > w and min(w, h) >= 540):
+        errors.append(f"Facebook Reels need a vertical video at least 540 px wide: this one is {w:g}×{h:g}")
+    return errors
+
+
+def _number(value: str) -> float | None:
+    try:
+        return float(value) if value else None
+    except ValueError:
+        return None
+
+
+def _fmt_seconds(s: int) -> str:
+    return f"{s // 60} min" if s >= 60 and s % 60 == 0 else f"{s} s"
 
 
 def x_length(text: str) -> int:

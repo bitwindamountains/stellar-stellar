@@ -5,7 +5,7 @@ from datetime import UTC, datetime
 import httpx
 import typer
 
-from postpilot import facebook, instagram, oauth, stats, telegram, tiktok, x
+from postpilot import facebook, instagram, oauth, rest, stats, telegram, tiktok, x
 from postpilot.config import Config, ConfigError, load_config
 from postpilot.graph import GraphClient
 from postpilot.models import DEFAULT_TIMEZONE, PlatformError, StoreError
@@ -79,6 +79,12 @@ def validate_command() -> None:
         raise typer.Exit(1)
 
 
+# The workflow kills the job at 30 minutes. Past RUN_SECONDS no new post starts; every wait for a video
+# ends by WAIT_END_SECONDS, which leaves time for setup, cleanup and stats.
+RUN_SECONDS = 20 * 60
+WAIT_END_SECONDS = 25 * 60
+
+
 @app.command()
 def publish(
     dry_run: bool = typer.Option(False, "--dry-run", help="Show what would happen; change nothing."),
@@ -92,13 +98,23 @@ def publish(
     repo = _repository(cfg)
     http = httpx.Client(timeout=30)
 
+    started = time.monotonic()
+    deadline = started + RUN_SECONDS
     now = _now()
     token = _tokens(repo, cfg, http, now)
 
+    def wait_seconds() -> float:
+        # Video takes minutes to process: wait up to 5 minutes, less near the end of the job.
+        return min(300, max(0, started + WAIT_END_SECONDS - time.monotonic()))
+
     def meta(module):
-        def publish_one(post, account):
+        def publish_one(post, account, save_id=None):
             graph = GraphClient(cfg.meta_graph_version, token(account, "meta"), http=http)
-            return module.publish(graph, account, post)
+            extra = {"seconds": wait_seconds()} if post.video else {}
+            if module is facebook:
+                extra["download"] = lambda u: rest.download(http, u, "Facebook")
+                extra["save_id"] = save_id
+            return module.publish(graph, account, post, **extra)
 
         return publish_one
 
@@ -114,7 +130,8 @@ def publish(
     def meta_stats(module):
         def stats_one(post, account, object_id):
             graph = GraphClient(cfg.meta_graph_version, token(account, "meta"), http=stats_http, attempts=1)
-            return module.stats(graph, object_id)
+            extra = {"video": post.video} if module is facebook else {}
+            return module.stats(graph, object_id, **extra)
 
         return stats_one
 
@@ -123,8 +140,10 @@ def publish(
     publishers = {
         "facebook": meta(facebook),
         "instagram": meta(instagram),
-        "x": lambda post, account: x.publish(http, token(account, "x"), post),
-        "tiktok": lambda post, account: tiktok.publish(http, token(account, "tiktok"), post),
+        "x": lambda post, account, save_id=None: x.publish(
+            http, token(account, "x"), post, seconds=wait_seconds()
+        ),
+        "tiktok": lambda post, account, save_id=None: tiktok.publish(http, token(account, "tiktok"), post),
     }
 
     assist = None
@@ -136,7 +155,6 @@ def publish(
                 http, cfg.telegram_bot_token, cfg.telegram_chat_id, post, platforms, link
             )
 
-    started = time.monotonic()
     try:
         report = run(
             repo,
@@ -146,9 +164,12 @@ def publish(
             now,
             dry_run=dry_run,
             commenters=commenters,
+            deadline=deadline,
         )
     except StoreError as e:
         raise _fail(f"Store error: {e}") from None
+    if not dry_run and hasattr(repo, "cleanup_media"):
+        repo.cleanup_media()
     if hasattr(repo, "record_run") and not dry_run:
         counts = {k: len(getattr(report, k)) for k in ("posted", "partial", "failed", "missed")}
         repo.record_run(**counts, duration_ms=int((time.monotonic() - started) * 1000), dry_run=False)

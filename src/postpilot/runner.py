@@ -1,3 +1,4 @@
+import time
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from datetime import datetime
@@ -17,11 +18,13 @@ from postpilot.models import (
     PlatformError,
     Post,
     PublishResult,
+    StoreError,
 )
 from postpilot.selector import select
 from postpilot.validation import validate
 
-Publisher = Callable[[Post, Account], PublishResult]
+# The third argument saves the platform ID the moment it exists (before a long wait); adapters may ignore it.
+Publisher = Callable[[Post, Account, Callable[[str], None]], PublishResult]
 Assist = Callable[[Post, list[str]], str]
 Commenter = Callable[[Post, Account, str], str]  # (post, account, the platform's post ID) -> comment ID
 
@@ -51,14 +54,19 @@ def run(
     now: datetime,
     dry_run: bool = False,
     commenters: dict[str, Commenter] | None = None,
+    deadline: float | None = None,
+    clock: Callable[[], float] = time.monotonic,
 ) -> Report:
+    """`deadline` (a `clock` reading): past it no new post starts, so the run ends inside the job timeout."""
     report = Report()
     stamp = now.isoformat(timespec="seconds")
     claim = repo.claim
     commenters = commenters or {}
     if dry_run:
         write = lambda updates: None  # noqa: E731
-        publishers = {name: (lambda post, account: PublishResult("dry-run", "")) for name in publishers}
+        publishers = {
+            name: (lambda post, account, save_id: PublishResult("dry-run", "")) for name in publishers
+        }
         assist = lambda post, platforms: "dry-run"  # noqa: E731
         commenters = {name: (lambda post, account, object_id: "dry-run") for name in commenters}
     else:
@@ -87,7 +95,8 @@ def run(
         comments = [p for p in post.platforms if post.comment_pending(p)]
         gave_up = {COMMENT_COLUMN[p]: sentinel for p in comments}
         post.cells.update(gave_up)
-        if comments and all(post.done(p) for p in post.platforms):
+        flagged = _flagged(post)  # has an ID, but the run that saved it flagged it as not confirmed
+        if comments and all(post.done(p) and p not in flagged for p in post.platforms):
             # Live everywhere, only first comments were left: the post is out, so it's posted.
             fields = {"status": "posted", "posted_at": stamp, "last_error": _comment_notes(post)}
             report.posted.append(post.row)
@@ -96,10 +105,14 @@ def run(
             fields = {"status": "failed", "last_error": "; ".join(filter(None, [why, _comment_notes(post)]))}
             report.failed.append(post.row)
         else:
-            pending = [p for p in post.platforms if not post.done(p)]
+            pending = [p for p in post.platforms if not post.done(p) or p in flagged]
             why = f"Run stopped while posting. Check {', '.join(pending)}, then reschedule if it's missing."
             notes = [_comment_note(p, "unknown") for p in comments]
-            fields = {"status": "failed", "last_error": "; ".join([why, *notes])}
+            # Keep what the stopped run wrote ("<platform>: …"): the app reads it to offer Repost.
+            fields = {
+                "status": "failed",
+                "last_error": "; ".join(filter(None, [post.get("last_error"), why, *notes])),
+            }
             report.failed.append(post.row)
         updates[post.row] = {**gave_up, **fields}
     for post, errors in s.invalid:
@@ -122,6 +135,11 @@ def run(
         fresh = claimed.get(post.row)
         if fresh is None:
             report.lines.append(f"row {post.row}: skipped: changed or deleted while the run started")
+            continue
+        if deadline is not None and clock() >= deadline:
+            # Out of time: hand the row back untouched (as loaded) so the next run posts it, not a stale pass.
+            write({post.row: {k: post.get(k) for k in ("status", "attempts", "claimed_at", "last_error")}})
+            report.lines.append(f"row {post.row}: put back: the run ran out of time, the next run posts it")
             continue
         errors = validate(fresh, accounts)
         if errors:
@@ -157,6 +175,12 @@ def _comment_note(platform: str, kind: str) -> str:
     return f"Comment not added on {name}: add it by hand"
 
 
+def _flagged(post: Post) -> set[str]:
+    """Platforms last_error names as "<platform>: …" (not "<platform> comment: …")."""
+    parts = post.get("last_error").split("; ")
+    return {p for p in post.platforms if any(s.startswith(f"{p}: ") for s in parts)}
+
+
 def _comment_notes(post: Post, reconnect: tuple[str, ...] = ()) -> str:
     """Notes for the comments given up on this row (in any run), read from the sentinels stored on it."""
     kinds = {COMMENT_UNCLEAR: "unknown", COMMENT_NOT_ADDED: "permanent"}
@@ -175,26 +199,50 @@ def _publish_row(post, account, publishers, assist, commenters, write, cfg, stam
 
     errors: list[tuple[str, PlatformError]] = []
     done_now: list[str] = []
+    # An ID saved before its platform finished goes with a "<platform>: …" mark in the same write, so a
+    # run killed right after it leaves the row failed for a check (never read as posted).
+    marks: dict[str, str] = {}
+
+    def save_marked(platform: str, object_id: str, why: str) -> None:
+        marks[platform] = f"{platform}: {why}"
+        save({ID_COLUMN[platform]: object_id, "last_error": "; ".join(marks.values())})
+
     for platform in post.platforms:
         if not account.by_api(platform) or post.done(platform):
             continue
         try:
-            result = publishers[platform](post, account)
+            result = publishers[platform](
+                post,
+                account,
+                lambda i, p=platform: save_marked(p, i, "sent, not confirmed live yet; check it"),
+            )
         except PlatformError as e:
+            if e.object_id:
+                save_marked(platform, e.object_id, str(e))
             errors.append((platform, e))
             continue
+        except StoreError:  # the ID save failed (save_id): stop the run, as any failed save does
+            raise
         except Exception as e:  # never surface raw text: it may contain URLs with tokens
             errors.append(
                 (platform, PlatformError("unknown", f"Unexpected {type(e).__name__}; check if it posted"))
             )
             continue
-        save({ID_COLUMN[platform]: result.id, PERMALINK_COLUMN[platform]: result.permalink})
+        cleared = {"last_error": "; ".join(marks.values())} if marks.pop(platform, None) else {}
+        save({ID_COLUMN[platform]: result.id, PERMALINK_COLUMN[platform]: result.permalink, **cleared})
         done_now.append(platform)
 
     # First comments: once per platform, only after its post is out. Failures never undo a live post.
     comment_errors: list[tuple[str, PlatformError]] = []  # retryable: tried again by a later run
     gave_up: list[tuple[str, str]] = []  # (platform, note kind), stored as a sentinel right away
+    errored = {p for p, _ in errors}
     for platform in post.platforms:
+        if (
+            platform in errored
+        ):  # its post may not be live yet: no comment now (no sentinel: a repost can comment)
+            if post.get("first_comment") and platform in commenters and post.comment_pending(platform):
+                gave_up.append((platform, "permanent"))  # never attempted: "add it by hand"
+            continue
         if not (account.by_api(platform) and platform in commenters and post.comment_pending(platform)):
             continue
         try:

@@ -14,7 +14,7 @@ class FakeRepository:
         connected: dict[str, set[str]] | None = None,
     ):
         # Supabase-only columns too, so runner tests can exercise first comments.
-        cols = [*POST_COLUMNS, "first_comment", *COMMENT_COLUMN.values()]
+        cols = [*POST_COLUMNS, "first_comment", "cover_url", *COMMENT_COLUMN.values()]
         self.posts = [cols] + [[p.get(c, "") for c in cols] for p in posts]
         self.accounts = [list(ACCOUNT_COLUMNS)] + [[a.get(c, "") for c in ACCOUNT_COLUMNS] for a in accounts]
         self.connected = connected or {}  # account name -> saved logins, like Supabase `connections`

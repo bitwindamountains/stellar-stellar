@@ -1,10 +1,10 @@
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 
 import pytest
 from fakes import FakeRepository
 
 from postpilot.config import load_config
-from postpilot.models import PlatformError, PublishResult
+from postpilot.models import PlatformError, PublishResult, StoreError
 from postpilot.runner import run
 
 NOW = datetime(2026, 10, 5, 10, 0, tzinfo=UTC)
@@ -32,7 +32,7 @@ class Platforms:
         self.calls = []
 
     def publisher(self, platform):
-        def publish(post, account):
+        def publish(post, account, save_id=None):
             self.calls.append((platform, post.row))
             outcome = self.script[platform].pop(0)
             if isinstance(outcome, BaseException):
@@ -178,7 +178,9 @@ def test_claim_uses_content_edited_after_load():
     seen = []
     plats = Platforms(facebook=[PublishResult("F1", "")])
     publishers = {
-        "facebook": lambda post, account: seen.append(post.text_for("facebook")) or PublishResult("F1", "")
+        "facebook": lambda post, account, save_id: (
+            seen.append(post.text_for("facebook")) or PublishResult("F1", "")
+        )
     }
     run(repo, publishers, plats.assist, CFG, NOW)
     assert seen == ["edited caption"]
@@ -509,3 +511,129 @@ def test_dry_run_comments_nothing_written():
     report = go_c(repo, plats, comments, dry_run=True)
     assert repo.writes == [] and plats.calls == [] and comments.calls == []
     assert report.posted == [2] and "facebook comment" in report.lines[0]
+
+
+UNCLEAR = PlatformError(
+    "unknown", "Facebook accepted the Reel but was still processing; check it's on your Page", object_id="V1"
+)
+
+
+def test_error_with_object_id_saves_the_id_and_fails_for_a_check():
+    repo = FakeRepository([row()], ACCOUNTS)
+    go(repo, Platforms(facebook=[UNCLEAR]))
+    assert repo.row(2)["fb_post_id"] == "V1" and repo.row(2)["status"] == "failed"
+    assert "facebook: Facebook accepted" in repo.row(2)["last_error"]
+
+
+def test_no_first_comment_on_a_platform_that_errored_this_run():
+    repo = FakeRepository([row(first_comment="hi")], ACCOUNTS)
+    comments = Comments(facebook=["C1"])
+    go_c(repo, Platforms(facebook=[UNCLEAR]), comments)
+    assert comments.calls == [] and not repo.row(2).get("fb_comment_id")
+    assert "Comment not added on Facebook: add it by hand" in repo.row(2)["last_error"]
+
+
+def test_retry_after_object_id_error_never_resends_that_platform():
+    repo = FakeRepository([row()], ACCOUNTS)
+    plats = Platforms(facebook=[UNCLEAR])
+    go(repo, plats)
+    repo.write({2: {"status": "scheduled"}})
+    go(repo, plats)
+    assert plats.calls == [("facebook", 2)]
+
+
+def test_deadline_stops_new_posts_and_puts_claimed_rows_back():
+    repo = FakeRepository([row(), row(attempts="1", status="partial", last_error="facebook: down")], ACCOUNTS)
+    plats = Platforms(facebook=[PublishResult("F1", "")])
+    ticks = iter([0, 100])  # row 2 starts in time, row 3 is past the deadline
+    report = run(repo, plats.publishers(), plats.assist, CFG, NOW, deadline=50, clock=lambda: next(ticks))
+    assert plats.calls == [("facebook", 2)] and report.posted == [2]
+    r = repo.row(3)
+    assert (r["status"], r["attempts"], r["claimed_at"], r["last_error"]) == (
+        "partial",
+        "1",
+        "",
+        "facebook: down",
+    )
+    assert any("row 3: put back" in line for line in report.lines)
+
+
+class Killed(BaseException):
+    """Stands in for the job being killed: nothing in the runner catches it."""
+
+
+def test_id_saved_before_a_wait_survives_a_killed_run_and_is_never_resent():
+    repo = FakeRepository([row(platforms="facebook,instagram", first_comment="hi", **IMG)], ACCOUNTS)
+    calls = []
+
+    def killed_mid_wait(post, account, save_id):
+        calls.append(post.row)
+        save_id("V1")
+        raise Killed
+
+    with pytest.raises(Killed):
+        run(repo, {"facebook": killed_mid_wait}, None, CFG, NOW)
+    r = repo.row(2)
+    assert r["fb_post_id"] == "V1" and r["last_error"].startswith("facebook: ") and r["status"] == "posting"
+    # The next run finds it stale: failed for a check, Facebook named, never sent again, never "posted".
+    later = NOW + timedelta(minutes=CFG.stale_posting_minutes + 1)
+    report = run(repo, {"facebook": killed_mid_wait}, None, CFG, later)
+    r = repo.row(2)
+    assert calls == [2] and report.failed == [2] and r["status"] == "failed"
+    assert r["last_error"].startswith(
+        "facebook: sent, not confirmed live yet; check it; Run stopped while posting."
+    )
+    assert "Check facebook, instagram" in r["last_error"]
+
+
+def test_error_id_is_saved_with_its_error_in_one_write():
+    repo = FakeRepository([row()], ACCOUNTS)
+    go(repo, Platforms(facebook=[UNCLEAR]))
+    first = repo.writes[1][2]  # writes[0] is the claim
+    assert first["fb_post_id"] == "V1" and first["last_error"].startswith("facebook: Facebook accepted")
+
+
+def test_mark_is_cleared_once_the_platform_succeeds():
+    repo = FakeRepository([row()], ACCOUNTS)
+
+    def slow_ok(post, account, save_id):
+        save_id("V1")
+        return PublishResult("V1", "https://fb/r")
+
+    report = run(repo, {"facebook": slow_ok}, None, CFG, NOW)
+    r = repo.row(2)
+    assert report.posted == [2] and (r["status"], r["last_error"], r["fb_permalink"]) == (
+        "posted",
+        "",
+        "https://fb/r",
+    )
+
+
+def test_stale_row_with_a_flagged_id_fails_instead_of_posting():
+    # Facebook kept the ID of a Reel it never confirmed; only its first comment was left.
+    msg = "facebook: Facebook accepted the Reel but was still processing; check it's on your Page"
+    repo = FakeRepository([stuck(last_error=msg)], ACCOUNTS)
+    report = go_c(repo, Platforms(), Comments(facebook=[]))
+    r = repo.row(2)
+    assert report.failed == [2] and r["status"] == "failed" and not r["posted_at"]
+    assert r["last_error"].startswith(msg + "; Run stopped while posting. Check facebook, then reschedule")
+
+
+def test_a_failed_id_save_stops_the_run():
+    # The Reel is live but its ID couldn't be stored: carrying on would offer a Repost that posts it twice.
+    repo = FakeRepository([row(), row(publish_at="2026-10-05 17:55")], ACCOUNTS)
+    calls = []
+
+    def save_fails(post, account, save_id):
+        calls.append(post.row)
+        save_id("V1")
+
+    def broken_write(updates):
+        if any("fb_post_id" in f for f in updates.values()):
+            raise StoreError("Supabase 503 on posts")
+        FakeRepository.write(repo, updates)
+
+    repo.write = broken_write
+    with pytest.raises(StoreError):
+        run(repo, {"facebook": save_fails}, None, CFG, NOW)
+    assert calls == [2] and repo.row(2)["status"] == "posting"

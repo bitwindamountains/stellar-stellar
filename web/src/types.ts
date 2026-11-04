@@ -64,6 +64,10 @@ export interface Post {
   publish_at: string | null
   caption: string
   first_comment: string
+  cover_url: string
+  video_seconds?: number | null // measured in the browser at upload; null = unknown
+  video_width?: number | null
+  video_height?: number | null
   media_type: MediaType
   media_urls: string[]
   link: string

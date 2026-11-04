@@ -6,6 +6,7 @@ import httpx
 from postpilot.models import PlatformError
 
 BASE_URL = "https://graph.facebook.com"
+RUPLOAD_URL = "https://rupload.facebook.com/video-upload"
 RATE_CODES = {4, 17, 32, 613}
 TRANSIENT_CODES = {1, 2}
 IG_PUBLISH_LIMIT_SUBCODE = 2207042
@@ -14,17 +15,20 @@ UNKNOWN_OUTCOME = "No clear answer from Meta while publishing: check if it poste
 
 def classify(status: int, body: dict) -> PlatformError:
     error = body.get("error") or {}
+    debug = body.get("debug_info") or {}  # rupload's error shape
     code, subcode = error.get("code"), error.get("error_subcode")
-    message = error.get("message") or f"HTTP {status}"
+    message = error.get("message") or debug.get("message") or f"HTTP {status}"
     if code == 190 or code == 10 or (isinstance(code, int) and 200 <= code <= 299):
         return PlatformError("auth", f"Meta token/permission problem, operator must fix it: {message}")
     if code in RATE_CODES or subcode == IG_PUBLISH_LIMIT_SUBCODE:
         return PlatformError("rate", f"Meta rate limit reached, will retry next run: {message}")
-    if code in TRANSIENT_CODES or status >= 500:
+    if code in TRANSIENT_CODES or status >= 500 or debug.get("retriable") is True:
         return PlatformError("transient", f"Meta had a temporary problem: {message}")
     if code == 368:
         return PlatformError("permanent", f"Meta temporarily blocked posting from this account: {message}")
-    return PlatformError("permanent", f"Meta rejected the post: {message} (code {code})")
+    return PlatformError(
+        "permanent", f"Meta rejected the post: {message}" + (f" (code {code})" if code else "")
+    )
 
 
 class GraphClient:
@@ -38,6 +42,7 @@ class GraphClient:
         sleep: Callable[[float], None] = time.sleep,
         attempts: int = 3,
     ):
+        self.version = version
         self.base = f"{BASE_URL}/{version}"
         self.headers = {"Authorization": f"Bearer {token}"}
         self.http = http or httpx.Client(timeout=30)
@@ -47,15 +52,38 @@ class GraphClient:
     def get(self, path: str, **params: str) -> dict:
         return self._request("GET", path, params, safe=True)
 
-    def post(self, path: str, *, safe: bool, **data: str) -> dict:
+    def post(self, path: str, *, safe: bool, files: dict | None = None, **data: str) -> dict:
         """safe=False for publishing calls: never retried; unclear outcomes become `unknown`."""
-        return self._request("POST", path, data, safe=safe)
+        return self._request("POST", path, data, safe=safe, files=files)
 
-    def _request(self, method: str, path: str, fields: dict, safe: bool) -> dict:
+    def rupload(self, video_id: str, file_url: str) -> dict:
+        """Make Facebook fetch a hosted clip into an unfinished Reel; safe because a repeat is harmless."""
+        token = self.headers["Authorization"].removeprefix("Bearer ")
+        return self._request(
+            "POST",
+            "",
+            {},
+            safe=True,
+            url=f"{RUPLOAD_URL}/{self.version}/{video_id}",
+            headers={"Authorization": f"OAuth {token}", "file_url": file_url},
+        )
+
+    def _request(
+        self,
+        method: str,
+        path: str,
+        fields: dict,
+        safe: bool,
+        files: dict | None = None,
+        url: str | None = None,
+        headers: dict | None = None,
+    ) -> dict:
         for attempt in range(1, self.attempts + 1):
             try:
-                kwargs = {"params": fields} if method == "GET" else {"data": fields}
-                response = self.http.request(method, f"{self.base}/{path}", headers=self.headers, **kwargs)
+                kwargs = {"params": fields} if method == "GET" else {"data": fields, "files": files}
+                response = self.http.request(
+                    method, url or f"{self.base}/{path}", headers=headers or self.headers, **kwargs
+                )
             except httpx.TransportError:
                 error = PlatformError("transient", "Couldn't reach Meta (network problem)")
             else:
@@ -78,15 +106,15 @@ class GraphClient:
 def fetch_permalink(graph: GraphClient, object_id: str, field: str) -> str:
     # The post is already live here; losing its ID over a permalink hiccup would cause a repost.
     try:
-        return graph.get(object_id, fields=field).get(field, "")
+        return graph.get(object_id, fields=field).get(field) or ""
     except PlatformError:
         return ""
 
 
-def insight(graph, path: str, metric: str) -> int | None:
+def insight(graph, path: str, metric: str, edge: str = "insights") -> int | None:
     """One insights call per metric, so a retired metric only loses itself (key absent)."""
     try:
-        item = graph.get(f"{path}/insights", metric=metric)["data"][0]
+        item = graph.get(f"{path}/{edge}", metric=metric)["data"][0]
         return int(item["total_value"]["value"] if "total_value" in item else item["values"][0]["value"])
     except (PlatformError, KeyError, IndexError, TypeError, ValueError):
         return None
