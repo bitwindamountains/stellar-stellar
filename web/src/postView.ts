@@ -52,7 +52,7 @@ export function canRetry(post: Post): boolean {
 export function failedPlatforms(post: Post): Platform[] {
   if (post.status !== 'failed') return []
   const parts = post.last_error.split('; ')
-  return post.platforms.filter((p) => p !== 'telegram' && parts.some((s) => s.startsWith(`${p}: `)))
+  return post.platforms.filter((p) => parts.some((s) => s.startsWith(`${p}: `)))
 }
 
 /** "Last run 16:06 · 1 posted · 0 failed" (time in `tz`; missed counts as failed), or "No runs yet". */
