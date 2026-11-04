@@ -107,12 +107,18 @@ def test_fb_reel_start_upload_finish_wait_permalink():
     assert (result.id, result.permalink) == ("V1", "https://www.facebook.com/reel/V1")
 
 
-def test_fb_reel_processing_error_is_permanent_without_id():
+def test_fb_reel_processing_error_is_permanent_and_keeps_id():
     g = FakeGraph(REEL_START + [status("error", processing="error", error="Resolution too low.")])
     with pytest.raises(PlatformError) as e:
         facebook.publish(g, ACCOUNT, reel(), sleep=lambda s: None)
-    assert e.value.kind == "permanent" and e.value.object_id == ""
+    assert e.value.kind == "permanent" and e.value.object_id == "V1"
     assert "Resolution too low." in str(e.value)
+
+
+def test_fb_reel_null_permalink_keeps_id():
+    g = FakeGraph(REEL_START + [PUBLISHED, {"permalink_url": None}])
+    result = facebook.publish(g, ACCOUNT, reel(), sleep=lambda s: None)
+    assert (result.id, result.permalink) == ("V1", "")
 
 
 def test_fb_reel_still_processing_is_unknown_with_id():

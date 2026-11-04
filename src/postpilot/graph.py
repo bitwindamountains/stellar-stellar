@@ -103,7 +103,7 @@ class GraphClient:
 def fetch_permalink(graph: GraphClient, object_id: str, field: str) -> str:
     # The post is already live here; losing its ID over a permalink hiccup would cause a repost.
     try:
-        return graph.get(object_id, fields=field).get(field, "")
+        return graph.get(object_id, fields=field).get(field) or ""
     except PlatformError:
         return ""
 
