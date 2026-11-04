@@ -1,5 +1,5 @@
 import type { Variants } from './content'
-import { mediaWasRemoved } from './postView'
+import { failedPlatforms, mediaWasRemoved } from './postView'
 import { saveDraft } from './prefs'
 import { go } from './route'
 import { supabase } from './supabase'
@@ -18,6 +18,30 @@ export async function retryNow(num: number): Promise<string | null> {
     .eq('num', num)
     .in('status', ['failed', 'missed'])
   if (error) return error.message
+  await publishSoon()
+  return null
+}
+
+// ID, link and comment columns per platform; clearing them is what lets the publisher post there again.
+const PLATFORM_COLUMNS: Record<string, string[]> = {
+  facebook: ['fb_post_id', 'fb_permalink', 'fb_comment_id'],
+  instagram: ['ig_media_id', 'ig_permalink', 'ig_comment_id'],
+  x: ['x_post_id', 'x_permalink'],
+  tiktok: ['tiktok_id', 'tiktok_permalink'],
+}
+
+/** Requeue a failed post but redo only the platforms that failed; the ones that went out keep their IDs. */
+export async function repostFailed(post: Post): Promise<string | null> {
+  if (mediaWasRemoved(post)) return 'The original file was removed, so it cannot be reposted. Use Post again and add it again.'
+  const clear = Object.fromEntries(failedPlatforms(post).flatMap((p) => (PLATFORM_COLUMNS[p] ?? []).map((c) => [c, ''])))
+  const { data, error } = await supabase
+    .from('posts')
+    .update({ ...clear, status: 'scheduled', publish_at: new Date().toISOString(), attempts: 0, last_error: '', claimed_at: null })
+    .eq('num', post.num)
+    .in('status', ['failed', 'missed'])
+    .select('num')
+  if (error) return error.message
+  if (!data?.length) return 'This post changed; reload'
   await publishSoon()
   return null
 }

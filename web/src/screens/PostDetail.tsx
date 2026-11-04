@@ -1,8 +1,8 @@
 import { useEffect, useState } from 'react'
-import { startPostAgain } from '../actions'
+import { repostFailed, startPostAgain } from '../actions'
 import { postLinks } from '../groups'
 import { NewTab } from '../icons'
-import { ago, compact, errorNotes } from '../postView'
+import { ago, canRetry, compact, errorNotes, failedPlatforms } from '../postView'
 import { lastTab } from '../route'
 import { supabase } from '../supabase'
 import { sentByHand, type PlatformStats, type Post } from '../types'
@@ -31,6 +31,7 @@ export default function PostDetail({ num }: { num: number }) {
   const [error, setError] = useState('')
   const [account, setAccount] = useState<number | null>(null)
   const [picked, setPicked] = useState<Meta | null>(null)
+  const [repostError, setRepostError] = useState('')
 
   useEffect(() => {
     let current = true
@@ -71,6 +72,14 @@ export default function PostDetail({ num }: { num: number }) {
   const note = firstCommentNote(row, platform ?? 'facebook')
   const links = postLinks(row)
   const notes = errorNotes(row.last_error, platform)
+  const failed = !canRetry(row) ? failedPlatforms(row) : []
+  const repost = async () => {
+    const names = failed.map((p) => NAMED[p] ?? p).join(', ')
+    if (!confirm(`Repost to ${names} only? Check first that it is not already there.`)) return
+    const err = await repostFailed(row)
+    if (err) setRepostError(err)
+    else location.replace(`#${back}`)
+  }
 
   return (
     <div className="history">
@@ -133,12 +142,18 @@ export default function PostDetail({ num }: { num: number }) {
             <p className="d-quiet">Posted by hand ({byHand.map((p) => NAMED[p] ?? p).join(', ') || 'phone'}) · no stats.</p>
           )}
           {notes.comment.map((n) => <p key={n} className="d-note">{n}</p>)}
+          {repostError && <p className="notice" role="alert">{repostError}</p>}
           <div className="d-actions">
             {links.map((l) => (
               <a key={l.platform} className="btn light small" href={l.url} target="_blank" rel="noopener">
                 Open on {NAMED[l.platform]}<NewTab /><span className="sr-only"> (opens in a new tab)</span>
               </a>
             ))}
+            {failed.length > 0 && (
+              <button type="button" className="btn light small" onClick={repost}>
+                Checked: not on {failed.map((p) => NAMED[p] ?? p).join(', ')}. Repost there only
+              </button>
+            )}
             <button type="button" className="btn dark small" onClick={() => startPostAgain(rows)}>Post again</button>
           </div>
         </div>
