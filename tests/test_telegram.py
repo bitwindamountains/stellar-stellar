@@ -148,3 +148,31 @@ def test_assist_sends_first_comment():
 
 def test_assist_without_comment_unchanged():
     assert len(_assist_calls(first_comment="   ")) == len(_assist_calls()) == 2
+
+
+def test_assist_sends_cover_after_the_video():
+    calls, send = run(
+        lambda r, n: ok(100 + n),
+        media_type="video",
+        media_urls="https://x/a.mp4",
+        cover_url="https://x/c.jpg",
+    )
+    assert send() == "101"
+    assert calls[1] == ("sendPhoto", {"chat_id": "CHAT", "photo": "https://x/c.jpg", "caption": "Cover"})
+
+
+def test_cover_failure_is_ignored():
+    def handler(r, n):
+        if n == 2:
+            return httpx.Response(400, json={"ok": False, "description": "bad"})
+        return ok(100 + n)
+
+    calls, send = run(handler, media_type="video", media_urls="https://x/a.mp4", cover_url="https://x/c.jpg")
+    assert send() == "101"
+    assert calls[1][0] == "sendPhoto"
+
+
+def test_no_cover_no_extra_call():
+    calls, send = run(lambda r, n: ok(n), media_type="video", media_urls="https://x/a.mp4")
+    send()
+    assert "sendPhoto" not in [c[0] for c in calls]
