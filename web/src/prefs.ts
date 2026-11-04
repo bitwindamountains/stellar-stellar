@@ -21,6 +21,8 @@ export interface SavedDraft {
   variants: Variants
   mediaType: MediaType
   mediaUrl: string
+  coverUrl?: string
+  videoSeconds?: number | null
   link: string
   mode: 'now' | 'later'
   publishAt: string
