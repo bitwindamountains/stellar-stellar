@@ -14,7 +14,7 @@ concurrency:
 jobs:
   publish:
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 30
     steps:
       # Until the publisher is configured, scheduled runs skip instead of failing (and emailing) every 30 minutes.
       # Manual runs always go ahead so missing settings show up as a clear error.

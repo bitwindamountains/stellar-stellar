@@ -5,7 +5,7 @@ from datetime import UTC, datetime
 import httpx
 import typer
 
-from postpilot import facebook, instagram, oauth, stats, telegram, tiktok, x
+from postpilot import facebook, instagram, oauth, rest, stats, telegram, tiktok, x
 from postpilot.config import Config, ConfigError, load_config
 from postpilot.graph import GraphClient
 from postpilot.models import DEFAULT_TIMEZONE, PlatformError, StoreError
@@ -100,6 +100,8 @@ def publish(
             graph = GraphClient(cfg.meta_graph_version, token(account, "meta"), http=http)
             # Video takes minutes to process: wait up to 5 minutes (checks are 5s apart).
             extra = {"checks": 60} if post.get("media_type") == "video" else {}
+            if module is facebook:
+                extra["download"] = lambda u: rest.download(http, u, "Facebook")
             return module.publish(graph, account, post, **extra)
 
         return publish_one
@@ -116,7 +118,8 @@ def publish(
     def meta_stats(module):
         def stats_one(post, account, object_id):
             graph = GraphClient(cfg.meta_graph_version, token(account, "meta"), http=stats_http, attempts=1)
-            return module.stats(graph, object_id)
+            extra = {"video": post.get("media_type") == "video"} if module is facebook else {}
+            return module.stats(graph, object_id, **extra)
 
         return stats_one
 
@@ -151,6 +154,8 @@ def publish(
         )
     except StoreError as e:
         raise _fail(f"Store error: {e}") from None
+    if not dry_run and report.posted and hasattr(repo, "cleanup_media"):
+        repo.cleanup_media(report.posted)
     if hasattr(repo, "record_run") and not dry_run:
         counts = {k: len(getattr(report, k)) for k in ("posted", "partial", "failed", "missed")}
         repo.record_run(**counts, duration_ms=int((time.monotonic() - started) * 1000), dry_run=False)

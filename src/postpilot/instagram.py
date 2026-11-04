@@ -21,7 +21,7 @@ def publish(
             fields["cover_url"] = post.get("cover_url")
         what, hint = (
             "video",
-            "check the link opens in a private window and is an MP4 (H.264/AAC) up to 90 seconds",
+            "check the link opens in a private window and is an MP4 (H.264/AAC)",
         )
     else:
         fields = {"image_url": post.media_urls[0]}
