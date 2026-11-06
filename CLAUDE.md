@@ -1,4 +1,5 @@
 # PostPilot
+Shown to users (and on TikTok) as **Stellar Stellar**; code, repo and storage keys keep the PostPilot name.
 Personal social posting: write once in a web/phone app, Facebook Page + Instagram publish automatically via the
 Meta Graph API; personal FB profile, TikTok and YouTube go to Telegram + a phone handoff page to post by hand.
 
