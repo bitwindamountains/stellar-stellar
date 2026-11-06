@@ -325,7 +325,7 @@ class CleanupRepo(FakeRepository):
         super().__init__(*a)
         self.cleaned = []
 
-    def cleanup_media(self):
+    def cleanup_media(self, now):
         self.cleaned.append(True)
 
 

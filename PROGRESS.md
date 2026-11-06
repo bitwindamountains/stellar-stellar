@@ -7,7 +7,7 @@ _Last updated: 2026-11-06_
 schedule ran every 4-10 h; the 10-minute timer had no token; one post already `missed`). Fixed: `dispatch_due()` is
 now the only thing that starts the workflow early ("Post now" calls it over RPC, so the GitHub token lives only in
 Vault) and stops poking GitHub 3 h past due (migration `20261106000000`, applied; `dispatch` v8 deployed). Uploads of
-automatic-only posts are now cleaned up too. The Google Sheet store and `gspread` are gone. `pg_net` moved to the
+automatic-only posts are now cleaned up too, a week after posting (a Post again draft may still use them). The Google Sheet store and `gspread` are gone. `pg_net` moved to the
 `extensions` schema (migration `20261106000100`, applied). **Needs you**: put the GitHub token in Vault (On-time
 posting below) and turn on leaked-password protection (Auth → Providers → Email) if your plan has it.
 
