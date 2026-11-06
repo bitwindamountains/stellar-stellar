@@ -1,60 +1,25 @@
 # PostPilot
 
-Plan posts in a Google Sheet. Every 30 minutes a GitHub Action publishes due rows to your Facebook Pages and
-Instagram, writes back the post links, and never double-posts. Rows for your personal Facebook profile, TikTok or
-YouTube arrive in Telegram at post time, with the media and caption ready to share.
+Write a post once in the web/phone app. A GitHub Action publishes due posts to your Facebook Pages, Instagram and
+X, sends TikTok videos to your drafts, writes back the post links, and never double-posts. Posts for your personal
+Facebook profile, YouTube or Shopee arrive in Telegram at post time, with the media and caption ready to share.
 
-Status: in development. See `tasks/plan.md`.
+Status: live. See `PROGRESS.md`.
 
-## Quick start
+## Quick start (publisher)
 ```bash
 uv sync
 cp .env.example .env          # fill in values
-uv run --env-file .env postpilot init-sheet
+uv run --env-file .env postpilot doctor
 uv run --env-file .env postpilot validate
 uv run --env-file .env postpilot publish --dry-run
 ```
 
-## Sheet
-Run `init-sheet` once. Then fill in:
+A filled platform ID on a post means that platform is done and is never posted again. If a post ends up
+`failed` with "check if it posted", look at the platform first; only repost it if it is missing.
+A real `publish` on your laptop needs `--local`; pause the GitHub schedule first, or two runs could both post it.
 
-- **Accounts**: `account` (any short name), `fb_page_id`, `ig_user_id`, `token_env` (the *name* of the env var or
-  secret holding that Page's token, e.g. `META_TOKEN_MAIN`), `timezone` (blank = Asia/Manila).
-- **Posts**: `account`, `platforms` (comma list of `facebook, instagram, fb_profile, tiktok, youtube`),
-  `publish_at` (`2026-10-05 18:00`, account time zone), `caption`, `media_type` (`none`/`image`/`video`),
-  `media_urls` (public https link), `link` (Facebook only). Set `status` to `scheduled` when it's ready.
-
-PostPilot fills `status`, `attempts`, `claimed_at`, the ID and permalink columns, `tg_message_id`, `last_error`
-and `posted_at`. A filled ID means that platform is done for that row and is never posted again.
-
-If a row ends up `failed` with "check if it posted", look at the platform first. Only reschedule it if the post
-is missing.
-
-**Two rules that keep posts from doubling or landing in the wrong row:**
-- A real `publish` on your laptop needs `--local`; pause the GitHub schedule first. Two runs at the
-  same time can both post the same row.
-- Add new posts at the bottom. Don't insert, delete or sort rows in the minute around :07 and :37, when a run is
-  writing results back by row number.
-
-## Go-live setup
-1. **Google**: create a service account, download its JSON key, share the Sheet with its email (Editor).
-2. **Meta**: create a Business-type app in developer mode (no App Review needed for accounts where you have a
-   role). Link IG to the Page. Get a System User or long-lived Page token with `pages_show_list`,
-   `pages_read_engagement`, `pages_manage_posts`, `instagram_basic`, `instagram_content_publish`.
-   Find IDs with `GET /me/accounts` and `GET /{page-id}?fields=instagram_business_account`.
-3. **Telegram**: create a bot with @BotFather (gives `TELEGRAM_BOT_TOKEN`), send it a message, then read your chat
-   id from `https://api.telegram.org/bot<token>/getUpdates`.
-4. Locally: fill `.env`, then run `doctor`, `validate` and `publish --dry-run`.
-5. **GitHub**: use a **private** repo. Add secrets `GOOGLE_SERVICE_ACCOUNT_JSON`, `GOOGLE_SHEET_ID`,
-   `TELEGRAM_BOT_TOKEN`, `TELEGRAM_CHAT_ID` and one `META_TOKEN_*` per account (also listed in
-   `.github/workflows/publish.yml`). Add variable `META_GRAPH_VERSION`. Run the `publish` workflow manually (dry
-   run is the default), then let the schedule take over.
-
-Timing: posts go out within about 30 minutes of `publish_at` (GitHub cron can start late when busy).
-
-## Web + phone app (Supabase)
-The app in `web/` replaces the Sheet. The publisher switches to Supabase when `SUPABASE_URL` is set.
-
+## Setup
 1. **Supabase** (free): create a project, then run **every** file in `supabase/migrations/` in the SQL editor, oldest
    first (or `supabase db push` with the Supabase CLI). The app needs all of them.
    Under Authentication: turn **off** "Allow new users to sign up", then add yourself under Users.
@@ -62,11 +27,19 @@ The app in `web/` replaces the Sheet. The publisher switches to Supabase when `S
    `npm install` and `npm run dev`. Deploy: Cloudflare Pages (or Workers static assets) with build command
    `npm run build`, output `dist`, root `web`, and the same two `VITE_` variables. Add the deployed URL to
    Supabase Authentication > URL Configuration (Site URL and Redirect URLs) so sign-in links work.
-3. **Publisher**: add GitHub secrets `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY` and variable `WEB_APP_URL`.
-   The service-role key bypasses all access rules: keep it only in GitHub secrets, never in `web/`.
-4. On your phone, open the app and use "Add to Home Screen".
+3. **Meta / X / TikTok**: connect them from the app's Accounts page (see `docs/superpowers/specs/2026-10-28-connect-and-post-design.md`).
+   A Page token in a GitHub secret named by the account's `token_env` (e.g. `META_TOKEN_MAIN`) also works for Meta.
+4. **Telegram**: create a bot with @BotFather (gives `TELEGRAM_BOT_TOKEN`), send it a message, then read your chat
+   id from `https://api.telegram.org/bot<token>/getUpdates`.
+5. **GitHub**: use a **private** repo. Add secrets `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `TELEGRAM_BOT_TOKEN`,
+   `TELEGRAM_CHAT_ID` (and any `META_TOKEN_*`, also listed in `.github/workflows/publish.yml`), and variables
+   `META_GRAPH_VERSION` and `WEB_APP_URL`. The service-role key bypasses all access rules: keep it only in GitHub
+   secrets, never in `web/`. Run the `publish` workflow manually (dry run is the default), then let it run on its own.
+6. On your phone, open the app and use "Add to Home Screen".
 
-### "Post now" without the 30-minute wait (optional)
-Deploy `supabase/functions/dispatch` (JWT verification on) and set its secrets: `GITHUB_REPO` (`owner/name`) and
-`GITHUB_TOKEN`, a fine-grained token for this repo only with **Actions: read and write**. Without it, "Post now"
-still works; the post goes out at the next scheduled run.
+### Posting on time
+GitHub's 30-minute schedule really runs every few hours. A database timer (`dispatch_due`, every 10 minutes) and
+"Post now" start the workflow as soon as a post is due. They need one fine-grained GitHub token (this repo only,
+**Actions: read and write**) stored in Supabase Vault:
+`select vault.create_secret('<token>', 'postpilot_github_token');`
+Deploy `supabase/functions/dispatch` with JWT verification on; it needs no secrets of its own.
