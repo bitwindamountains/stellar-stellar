@@ -1,5 +1,5 @@
 import json
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 import httpx
@@ -10,6 +10,8 @@ from postpilot.models import DEFAULT_TIMEZONE, Account, Post, StoreError
 ACTIVE = "(draft,scheduled,partial,posting)"
 TIMESTAMPS = ("claimed_at", "posted_at")
 INTEGERS = ("attempts",)
+# Uploads stay this long after posting: a Post again draft (kept only in the browser) may still use them.
+KEEP_UPLOADS = timedelta(days=7)
 
 
 class SupabaseRepository:
@@ -140,7 +142,7 @@ class SupabaseRepository:
             is True
         )
 
-    def cleanup_media(self) -> None:
+    def cleanup_media(self, now: datetime) -> None:
         """Delete our uploads that only finished posts (posted, nothing left to do by hand) still use, then
         drop the dead links. Every run sweeps, so a failed delete is retried. Any failure is skipped, never
         raised."""
@@ -154,6 +156,7 @@ class SupabaseRepository:
                 params={
                     "select": select,
                     "status": "eq.posted",
+                    "posted_at": f"lt.{(now - KEEP_UPLOADS).isoformat()}",
                     # Handed off, or nothing went to Telegram; and it links to at least one file.
                     "and": "(or(assist_done_at.not.is.null,tg_message_id.eq.),"
                     "or(media_urls.neq.{},cover_url.neq.))",

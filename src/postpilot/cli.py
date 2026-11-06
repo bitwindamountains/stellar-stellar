@@ -153,7 +153,7 @@ def publish(
     except StoreError as e:
         raise _fail(f"Store error: {e}") from None
     if not dry_run and hasattr(repo, "cleanup_media"):
-        repo.cleanup_media()
+        repo.cleanup_media(now)
     if hasattr(repo, "record_run") and not dry_run:
         counts = {k: len(getattr(report, k)) for k in ("posted", "partial", "failed", "missed")}
         repo.record_run(**counts, duration_ms=int((time.monotonic() - started) * 1000), dry_run=False)

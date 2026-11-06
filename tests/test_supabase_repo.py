@@ -1,5 +1,5 @@
 import json
-from datetime import date
+from datetime import UTC, date, datetime
 
 import httpx
 import pytest
@@ -287,6 +287,9 @@ def test_claim_nudge_error_is_a_store_error():
 MEDIA = "https://abc.supabase.co/storage/v1/object/public/media/"
 
 
+NOW = datetime(2026, 11, 20, 8, 0, tzinfo=UTC)
+
+
 def cleanup_repo(delete_status=200, users=()):
     rows = [
         {
@@ -312,7 +315,7 @@ def cleanup_repo(delete_status=200, users=()):
 
 def test_cleanup_deletes_only_own_uploads_of_finished_handed_off_rows():
     r, calls = cleanup_repo()
-    r.cleanup_media()
+    r.cleanup_media(NOW)
     sweep = calls[0]
     assert sweep.url.params["status"] == "eq.posted" and "assist_done_at" not in sweep.url.params
     assert sweep.url.params["and"] == (
@@ -343,7 +346,7 @@ def test_cleanup_deletes_uploads_of_an_automatic_only_posted_row():
         return httpx.Response(204)
 
     r, calls = repo(handler)
-    r.cleanup_media()
+    r.cleanup_media(NOW)
     delete = next(c for c in calls if c.method == "DELETE")
     assert json.loads(delete.content) == {"prefixes": ["u/a.jpg"]}
     patches = {c.url.params["num"]: json.loads(c.content) for c in calls if c.method == "PATCH"}
@@ -360,14 +363,21 @@ def test_cleanup_keeps_a_tiktok_draft_until_handed_off():
         "tg_message_id": "55",
     }
     r, calls = cleanup_repo(users=[draft])
-    r.cleanup_media()
+    r.cleanup_media(NOW)
     delete = next(c for c in calls if c.method == "DELETE")
     assert "u/a.mp4" not in json.loads(delete.content)["prefixes"]
 
 
+def test_cleanup_only_sweeps_posts_out_for_a_week():
+    # A Post again draft (kept in the browser) may still point at the file: give it a week.
+    r, calls = cleanup_repo()
+    r.cleanup_media(NOW)
+    assert calls[0].url.params["posted_at"] == "lt.2026-11-13T08:00:00+00:00"
+
+
 def test_cleanup_failed_delete_keeps_links():
     r, calls = cleanup_repo(delete_status=500)
-    r.cleanup_media()
+    r.cleanup_media(NOW)
     assert not [c for c in calls if c.method == "PATCH"]
 
 
@@ -384,7 +394,7 @@ def test_cleanup_keeps_a_file_an_unfinished_row_still_uses():
         },
     ):
         r, calls = cleanup_repo(users=[user])
-        r.cleanup_media()
+        r.cleanup_media(NOW)
         delete = next(c for c in calls if c.method == "DELETE")
         assert json.loads(delete.content) == {"prefixes": ["u/c.jpg"]}
         patches = {c.url.params["num"]: json.loads(c.content) for c in calls if c.method == "PATCH"}
@@ -402,7 +412,7 @@ def test_cleanup_ignores_a_finished_row_and_drops_its_dead_link():
         "assist_done_at": "2026-11-04T00:00:00Z",
     }
     r, calls = cleanup_repo(users=[finished])
-    r.cleanup_media()
+    r.cleanup_media(NOW)
     delete = next(c for c in calls if c.method == "DELETE")
     assert json.loads(delete.content) == {"prefixes": ["u/a.mp4", "u/c.jpg"]}
     patches = {c.url.params["num"]: json.loads(c.content) for c in calls if c.method == "PATCH"}
@@ -415,7 +425,7 @@ def test_cleanup_ignores_a_finished_row_and_drops_its_dead_link():
 def test_cleanup_nothing_deletable_makes_no_delete_or_patch():
     user = {"num": 2, "media_urls": [MEDIA + "u/a.mp4"], "cover_url": MEDIA + "u/c.jpg"}
     r, calls = cleanup_repo(users=[user])
-    r.cleanup_media()
+    r.cleanup_media(NOW)
     assert not [c for c in calls if c.method in ("DELETE", "PATCH")]
 
 
@@ -431,11 +441,11 @@ def test_cleanup_without_own_uploads_does_nothing():
     ]
     for rows in ([], outside):
         r, calls = repo(lambda request, rows=rows: httpx.Response(200, json=rows))
-        r.cleanup_media()
+        r.cleanup_media(NOW)
         assert [c.method for c in calls] == ["GET"]
 
 
 def test_cleanup_store_error_is_skipped_not_raised():
     r, calls = repo(lambda request: httpx.Response(503, json={"message": "down"}))
-    r.cleanup_media()
+    r.cleanup_media(NOW)
     assert [c.method for c in calls] == ["GET"]
