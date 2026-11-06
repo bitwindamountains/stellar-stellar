@@ -19,7 +19,7 @@ def send_assist(
     ]
     header = f"Post now to {', '.join(names)} (post #{post.row})"
     if handoff_url:
-        header += f"\nOpen in PostPilot: {handoff_url}"
+        header += f"\nOpen in Stellar Stellar: {handoff_url}"
     first_id = None
     if post.media_urls and len(drafts) < len(platforms):  # a draft already has its video
         url = post.media_urls[0]

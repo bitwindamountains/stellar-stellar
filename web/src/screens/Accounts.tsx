@@ -59,7 +59,7 @@ export default function Accounts() {
   async function disconnect(c: Connection) {
     const { error } = await supabase.from('connections').delete().eq('account_id', editing!).eq('platform', c)
     if (error) return setError(error.message)
-    setSaved(`${LOGIN_NAME[c]} disconnected. To revoke it fully, remove PostPilot in that platform's settings too.`)
+    setSaved(`${LOGIN_NAME[c]} disconnected. To revoke it fully, remove Stellar Stellar in that platform's settings too.`)
     load()
   }
 

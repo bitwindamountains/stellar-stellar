@@ -14,7 +14,7 @@ export default function Nav({ current }: { current: Screen }) {
   )
   return (
     <nav className="nav glass" aria-label="Main">
-      <a href="#/" className="nav-brand"><Logo />PostPilot</a>
+      <a href="#/" className="nav-brand"><Logo />Stellar Stellar</a>
       {link('#/', 'today', 'Today', <TodayIcon />)}
       {link('#/planned', 'planned', 'Planned', <PlannedIcon />)}
       <a href="#/new" className="nav-new" aria-label="New post" aria-current={current === 'new' ? 'page' : undefined}>

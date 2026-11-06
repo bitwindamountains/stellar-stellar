@@ -14,7 +14,7 @@ from postpilot.runner import run
 from postpilot.supabase_repo import SupabaseRepository
 from postpilot.validation import validate
 
-app = typer.Typer(help="Publish due posts from the PostPilot app (Supabase).", no_args_is_help=True)
+app = typer.Typer(help="Publish due posts from the Stellar Stellar app (Supabase).", no_args_is_help=True)
 
 
 def _now() -> datetime:
