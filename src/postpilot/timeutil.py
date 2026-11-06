@@ -5,7 +5,7 @@ FORMATS = ("%Y-%m-%d %H:%M", "%Y-%m-%d %H:%M:%S")
 
 
 def parse_local(text: str, timezone: str) -> datetime:
-    """Parse a sheet `publish_at` in the account's time zone; return UTC."""
+    """Parse a local `publish_at` ("YYYY-MM-DD HH:MM") in the account's time zone; return UTC."""
     try:
         tz = ZoneInfo(timezone)
     except (ZoneInfoNotFoundError, ValueError):

@@ -8,7 +8,9 @@ from postpilot.models import PlatformError, PublishResult, StoreError
 from postpilot.runner import run
 
 NOW = datetime(2026, 10, 5, 10, 0, tzinfo=UTC)
-CFG = load_config({"GOOGLE_SHEET_ID": "s", "GOOGLE_SERVICE_ACCOUNT_FILE": "f", "META_GRAPH_VERSION": "v23.0"})
+CFG = load_config(
+    {"SUPABASE_URL": "https://x.supabase.co", "SUPABASE_SERVICE_ROLE_KEY": "k", "META_GRAPH_VERSION": "v23.0"}
+)
 ACCOUNTS = [{"account": "main", "fb_page_id": "PAGE", "ig_user_id": "IG", "token_env": "T"}]
 IMG = {"media_type": "image", "media_urls": "https://x/a.jpg"}
 

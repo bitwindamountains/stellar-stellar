@@ -47,7 +47,7 @@ describe('startPostAgain', () => {
   it('drops media the handoff removed, with the note', () => {
     startPostAgain([post({ media_type: 'video', media_urls: [], cover_url: 'https://cdn/c.jpg', tg_message_id: '5' })])
     expect(saveDraft).toHaveBeenCalledWith(expect.objectContaining({
-      mediaType: 'none', mediaUrl: '', coverUrl: '', note: 'The original file was removed after you posted it by hand. Add it again.',
+      mediaType: 'none', mediaUrl: '', coverUrl: '', note: 'The original file was removed after the post went out. Add it again.',
     }))
   })
 })

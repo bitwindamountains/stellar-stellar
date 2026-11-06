@@ -11,11 +11,10 @@ from postpilot.graph import GraphClient
 from postpilot.models import DEFAULT_TIMEZONE, PlatformError, StoreError
 from postpilot.nudge import nudge_window
 from postpilot.runner import run
-from postpilot.sheet import SheetError, SheetRepository, init_sheet, open_spreadsheet
 from postpilot.supabase_repo import SupabaseRepository
 from postpilot.validation import validate
 
-app = typer.Typer(help="Publish due posts from a Google Sheet content calendar.", no_args_is_help=True)
+app = typer.Typer(help="Publish due posts from the PostPilot app (Supabase).", no_args_is_help=True)
 
 
 def _now() -> datetime:
@@ -34,13 +33,8 @@ def _config() -> Config:
         raise _fail(f"Config error: {e}") from None
 
 
-def _repository(cfg: Config):
-    if cfg.supabase_url:
-        return SupabaseRepository(cfg.supabase_url, cfg.supabase_service_role_key)
-    try:
-        return SheetRepository(open_spreadsheet(cfg))
-    except SheetError as e:
-        raise _fail(f"Sheet error: {e}") from None
+def _repository(cfg: Config) -> SupabaseRepository:
+    return SupabaseRepository(cfg.supabase_url, cfg.supabase_service_role_key)
 
 
 def _load(repo):
@@ -48,16 +42,6 @@ def _load(repo):
         return repo.load()
     except StoreError as e:
         raise _fail(f"Store error: {e}") from None
-
-
-@app.command("init-sheet")
-def init_sheet_command() -> None:
-    """Create or repair the Posts and Accounts tabs (safe to re-run)."""
-    try:
-        init_sheet(open_spreadsheet(_config()))
-    except SheetError as e:
-        raise _fail(f"Sheet error: {e}") from None
-    typer.echo("Sheet ready: Posts and Accounts tabs have all columns.")
 
 
 @app.command("validate")
@@ -169,7 +153,7 @@ def publish(
     except StoreError as e:
         raise _fail(f"Store error: {e}") from None
     if not dry_run and hasattr(repo, "cleanup_media"):
-        repo.cleanup_media()
+        repo.cleanup_media(now)
     if hasattr(repo, "record_run") and not dry_run:
         counts = {k: len(getattr(report, k)) for k in ("posted", "partial", "failed", "missed")}
         repo.record_run(**counts, duration_ms=int((time.monotonic() - started) * 1000), dry_run=False)
@@ -196,7 +180,7 @@ def publish(
 
 @app.command()
 def doctor() -> None:
-    """Check config, sheet access, Meta tokens and the Telegram bot."""
+    """Check config, store access, Meta tokens and the Telegram bot."""
     cfg = _config()
     http = httpx.Client(timeout=30)
     problems = 0

@@ -28,7 +28,6 @@ SENT_BY_HAND = (
     "telegram"  # TikTok's ID when it went out through Telegram: still done, never auto-posted later
 )
 
-STATUSES = ("draft", "scheduled", "posting", "posted", "partial", "failed", "missed")
 MEDIA_TYPES = ("none", "image", "video")
 
 POST_COLUMNS = (
@@ -89,7 +88,7 @@ class Account:
 
 @dataclass
 class Post:
-    row: int  # 1-based sheet row number
+    row: int  # the post's number (posts.num)
     cells: dict[str, str]
 
     def get(self, col: str) -> str:
@@ -179,4 +178,4 @@ class PlatformError(Exception):
 
 
 class StoreError(Exception):
-    """The post store (Google Sheet or Supabase) can't be read or written."""
+    """The post store (Supabase) can't be read or written."""
