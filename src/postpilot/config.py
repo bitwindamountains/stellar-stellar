@@ -9,9 +9,6 @@ class ConfigError(Exception):
 
 @dataclass(frozen=True)
 class Config:
-    sheet_id: str
-    service_account_json: str
-    service_account_file: str
     meta_graph_version: str
     telegram_bot_token: str
     telegram_chat_id: str
@@ -41,12 +38,7 @@ def _hour(value: str) -> int | None:
 def load_config(env: Mapping[str, str] | None = None) -> Config:
     env = os.environ if env is None else env
     missing = [] if env.get("META_GRAPH_VERSION") else ["META_GRAPH_VERSION"]
-    if env.get("SUPABASE_URL"):  # Supabase replaces the Google Sheet
-        missing += [] if env.get("SUPABASE_SERVICE_ROLE_KEY") else ["SUPABASE_SERVICE_ROLE_KEY"]
-    else:
-        missing += [] if env.get("GOOGLE_SHEET_ID") else ["GOOGLE_SHEET_ID"]
-        if not env.get("GOOGLE_SERVICE_ACCOUNT_JSON") and not env.get("GOOGLE_SERVICE_ACCOUNT_FILE"):
-            missing.append("GOOGLE_SERVICE_ACCOUNT_JSON or GOOGLE_SERVICE_ACCOUNT_FILE")
+    missing += [name for name in ("SUPABASE_URL", "SUPABASE_SERVICE_ROLE_KEY") if not env.get(name)]
     if missing:
         raise ConfigError("Missing settings: " + ", ".join(missing))
 
@@ -60,9 +52,6 @@ def load_config(env: Mapping[str, str] | None = None) -> Config:
         return value
 
     return Config(
-        sheet_id=env.get("GOOGLE_SHEET_ID", ""),
-        service_account_json=env.get("GOOGLE_SERVICE_ACCOUNT_JSON", ""),
-        service_account_file=env.get("GOOGLE_SERVICE_ACCOUNT_FILE", ""),
         meta_graph_version=env["META_GRAPH_VERSION"],
         telegram_bot_token=env.get("TELEGRAM_BOT_TOKEN", ""),
         telegram_chat_id=env.get("TELEGRAM_CHAT_ID", ""),
@@ -70,8 +59,8 @@ def load_config(env: Mapping[str, str] | None = None) -> Config:
         max_posts_per_run=num("PP_MAX_POSTS_PER_RUN", 10),
         max_attempts=num("PP_MAX_ATTEMPTS", 3),
         stale_posting_minutes=num("PP_STALE_POSTING_MINUTES", 30),
-        supabase_url=env.get("SUPABASE_URL", ""),
-        supabase_service_role_key=env.get("SUPABASE_SERVICE_ROLE_KEY", ""),
+        supabase_url=env["SUPABASE_URL"],
+        supabase_service_role_key=env["SUPABASE_SERVICE_ROLE_KEY"],
         web_app_url=env.get("WEB_APP_URL", "").rstrip("/"),
         nudge_hour=_hour(env.get("PP_NUDGE_HOUR") or "16"),
         env=env,

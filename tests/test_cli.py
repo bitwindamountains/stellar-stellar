@@ -8,16 +8,19 @@ from postpilot import cli
 from postpilot.cli import app
 from postpilot.runner import Report
 
-ENV = {"GOOGLE_SHEET_ID": "s", "GOOGLE_SERVICE_ACCOUNT_FILE": "f", "META_GRAPH_VERSION": "v23.0"}
+ENV = {
+    "SUPABASE_URL": "https://x.supabase.co",
+    "SUPABASE_SERVICE_ROLE_KEY": "k",
+    "META_GRAPH_VERSION": "v23.0",
+}
 ACCOUNTS = [{"account": "main", "fb_page_id": "PAGE", "ig_user_id": "IG", "token_env": "T"}]
 
 
 def invoke(monkeypatch, args, repo=None, env=ENV):
     for k in (
-        "GOOGLE_SHEET_ID",
+        "SUPABASE_URL",
         "META_GRAPH_VERSION",
-        "GOOGLE_SERVICE_ACCOUNT_JSON",
-        "GOOGLE_SERVICE_ACCOUNT_FILE",
+        "SUPABASE_SERVICE_ROLE_KEY",
     ):
         monkeypatch.delenv(k, raising=False)
     for k, v in env.items():
@@ -30,13 +33,13 @@ def invoke(monkeypatch, args, repo=None, env=ENV):
 def test_help_lists_commands():
     result = CliRunner().invoke(app, ["--help"])
     assert result.exit_code == 0
-    for name in ("init-sheet", "validate", "publish", "doctor"):
+    for name in ("validate", "publish", "doctor"):
         assert name in result.output
 
 
 def test_missing_config_exits_2(monkeypatch):
     result = invoke(monkeypatch, ["publish", "--dry-run"], env={})
-    assert result.exit_code == 2 and "GOOGLE_SHEET_ID" in result.output
+    assert result.exit_code == 2 and "SUPABASE_URL" in result.output
 
 
 def test_validate_writes_errors_and_clears_fixed_rows(monkeypatch):
@@ -322,7 +325,7 @@ class CleanupRepo(FakeRepository):
         super().__init__(*a)
         self.cleaned = []
 
-    def cleanup_media(self):
+    def cleanup_media(self, now):
         self.cleaned.append(True)
 
 

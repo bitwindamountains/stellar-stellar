@@ -1,8 +1,16 @@
 # PostPilot progress
 
-_Last updated: 2026-11-05_
+_Last updated: 2026-11-06_
 
 ## Where things stand
+**Audit fixes (branch `fix/audit-2026-11-06`, 2026-11-06)**: a repo audit found posts going out hours late (GitHub's
+schedule ran every 4-10 h; the 10-minute timer had no token; one post already `missed`). Fixed: `dispatch_due()` is
+now the only thing that starts the workflow early ("Post now" calls it over RPC, so the GitHub token lives only in
+Vault) and stops poking GitHub 3 h past due (migration `20261106000000`, applied; `dispatch` v8 deployed). Uploads of
+automatic-only posts are now cleaned up too, a week after posting (a Post again draft may still use them). The Google Sheet store and `gspread` are gone. `pg_net` moved to the
+`extensions` schema (migration `20261106000100`, applied). **Needs you**: put the GitHub token in Vault (On-time
+posting below) and turn on leaked-password protection (Auth → Providers → Email) if your plan has it.
+
 Everything is merged to `main` (PRs #1–#17) and the web app is live. TikTok works in Sandbox: Connect works, and two
 real uploads returned `SEND_TO_USER_INBOX`, but no draft showed up in the TikTok app. So the production review (drafts
 only: Login Kit, `user.info.basic`, `video.upload`) was submitted on 2026-10-29. Site verification file, `/terms` and
@@ -23,9 +31,9 @@ affiliate links.
 
 | Part | State |
 |---|---|
-| Publisher (Python, GitHub Actions every 30 min) | Done. 293 tests. FB, IG (posts + Reels), X (text + video) automatic; TikTok to drafts. |
+| Publisher (Python, GitHub Actions every 30 min) | Done. 284 tests. FB, IG (posts + Reels), X (text + video) automatic; TikTok to drafts. |
 | Supabase schema + RLS | Applied to project `wsclesrylegjsyfxaamr` (private, own project); RLS verified with simulated users. |
-| `dispatch` function (instant Post now) | Deployed (v2), rejects anyone not signed in. Needs `GITHUB_TOKEN`/`GITHUB_REPO` secrets. |
+| `dispatch` function (instant Post now) | Deployed (v8), rejects anyone not signed in, calls `dispatch_due()`. No secrets of its own. |
 | Web app (PWA) | Done. 98 tests. Live on Cloudflare Workers. |
 | GitHub repo | `bitwindamountains/PostPilot`, private. Secret set: `SUPABASE_URL`. |
 
@@ -61,7 +69,7 @@ YouTube Shorts and the FB profile stay by hand (Telegram + handoff page).
   FB Reels also need a vertical clip at least 540 px wide (checked only when the browser reads the size).
   The measured length and size are saved with the post (`video_seconds`, `video_width`, `video_height`, migration
   `20261105000000_video_meta.sql`, applied), so the publisher re-checks the same limits before posting. Edit and
-  Post again keep them; Sheet rows and pasted links have none and go unchecked.
+  Post again keep them; pasted links have none and go unchecked.
 - **Never twice**: a FB Reel that was accepted but is still processing (or failed processing) keeps its ID and is
   marked failed for a check. "Repost only what failed" on the post's detail page clears just those platforms and
   requeues.
@@ -89,7 +97,7 @@ YouTube Shorts and the FB profile stay by hand (Telegram + handoff page).
 - GitHub variables set: `META_GRAPH_VERSION=v23.0`, `WEB_APP_URL`. Scheduled publish runs are on; a dry run on main
   read the live database cleanly.
 - Still to set: Supabase Edge Function secret `WEB_APP_URL` (needed for Connect), the platform app secrets, and
-  optionally `GITHUB_TOKEN`/`GITHUB_REPO` for instant Post now (otherwise posts go out within 30 minutes).
+  the GitHub token in Vault (On-time posting below).
 
 ## Go-live checklist (needs you)
 1. Supabase: Authentication → turn off public sign-ups; Users → Add user (email + password, auto-confirm).
@@ -97,8 +105,7 @@ YouTube Shorts and the FB profile stay by hand (Telegram + handoff page).
    - Secrets: `SUPABASE_SERVICE_ROLE_KEY`, `TELEGRAM_BOT_TOKEN`, `TELEGRAM_CHAT_ID`, one `META_TOKEN_*` per
      account (and a matching line in `publish.yml`).
    - Variables: `META_GRAPH_VERSION`, `WEB_APP_URL` (after deploy).
-3. Instant Post now: fine-grained GitHub token (this repo, Actions read/write) → Supabase Edge Function secrets
-   `GITHUB_TOKEN` and `GITHUB_REPO` = `bitwindamountains/PostPilot`.
+3. On time + instant Post now: the GitHub token in Vault (On-time posting below).
 4. Deploy `web/` to Cloudflare Pages (root `web`, build `npm run build`, output `dist`, the two `VITE_` values);
    add the URL in Supabase → Authentication → URL Configuration.
 5. Run the `publish` workflow manually (dry run by default), then one real post.
@@ -140,19 +147,19 @@ Design: `docs/superpowers/specs/2026-10-30-first-comment-and-stats-design.md`; p
   replacements for retired metrics); a wrong name only leaves that number blank.
 
 ## On-time posting (needs you)
-GitHub's 30-minute schedule really runs every 4–7 hours. Migration `20261030000000_dispatch_due.sql` adds a
+GitHub's 30-minute schedule really runs every 4–10 hours, and a post more than 3 hours late is marked missed. Migration `20261030000000_dispatch_due.sql` adds a
 Supabase cron job that starts the publish workflow every 10 minutes while a post is due, and a `nudges` table so the
 4 pm Telegram nudge goes out once a day on the first run after 4 pm. To switch the cron job on, put a fine-grained
 GitHub token (this repo, "Actions: read and write") in Vault, in the Supabase SQL editor:
 `select vault.create_secret('<token>', 'postpilot_github_token');`
+"Post now" uses the same token (the `dispatch` function calls `dispatch_due()`). Check after the next due post:
+`gh run list --workflow publish.yml` shows a `workflow_dispatch` run within about 10 minutes.
 
 ## Not yet verified for real
 Email/password sign-in, uploads, publisher reads/writes against live Supabase, Post now triggering a run,
 Android share target, PNG→JPEG conversion on upload, the 4 pm nudge, copy buttons on a phone.
 
 ## Known limits / later
-- Google Sheet backend: claim can't be conditional (Sheets has no conditional writes).
-- Automatic-only posts that are never handed off keep their uploads in storage (`cleanup_media` needs
-  `assist_done_at`).
+- Uploads of deleted posts and abandoned drafts are never cleaned up (the sweep only sees finished rows).
 - Big X video uploads aren't bounded by the run deadline (each chunk has its own 300 s timeout).
 - Not built: feed autopilot (RSS/YouTube → posts), insights, AI captions, calendar view.

@@ -228,5 +228,5 @@ def test_video_length_and_reel_shape_mirror_the_web():
     )
     wide = errors(platforms="facebook", **video, video_width="1920", video_height="1080")
     assert "Facebook Reels need a vertical video at least 540 px wide: this one is 1920×1080" in wide
-    # Not measured (Sheet rows, pasted links): no length or shape check.
+    # Not measured (pasted links): no length or shape check.
     assert errors(platforms="facebook,instagram", **video) == []
