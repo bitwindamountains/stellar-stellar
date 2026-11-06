@@ -327,7 +327,7 @@ export default function Composer({ num, day }: { num?: number; day?: string }) {
 
   // Copies the content into a fresh draft; the new rows get their own IDs, so it really posts again.
   function postAgain() {
-    // An upload is removed once its by-hand post is marked done (see Handoff), so don't copy a dead link.
+    // An upload is removed once the post is finished (publisher cleanup), so don't copy a dead link.
     const gone = rows.some(mediaWasRemoved)
     saveDraft({
       targets, caption, firstComment, variants, link, mode: 'now', publishAt: '',
@@ -335,7 +335,7 @@ export default function Composer({ num, day }: { num?: number; day?: string }) {
       mediaUrl: gone ? '' : mediaUrl,
       coverUrl: gone ? '' : coverUrl,
       ...(gone ? NO_VIDEO_META : meta),
-      note: gone ? 'The original file was removed after you posted it by hand. Add it again.' : undefined,
+      note: gone ? 'The original file was removed after the post went out. Add it again.' : undefined,
     })
     go('/new')
   }

@@ -42,7 +42,7 @@ export async function repostFailed(post: Post): Promise<string | null> {
 /** Copies a post (all its account rows) into a fresh "now" draft and opens New post; nothing posts until Save. */
 export function startPostAgain(rows: Post[]): void {
   const lead = rows[0]
-  // An upload is removed once its by-hand post is marked done (see Handoff), so don't copy a dead link.
+  // An upload is removed once the post is finished (publisher cleanup), so don't copy a dead link.
   const gone = rows.some(mediaWasRemoved)
   saveDraft({
     targets: Object.fromEntries(rows.map((r) => [r.account_id, r.platforms])),
@@ -52,7 +52,7 @@ export function startPostAgain(rows: Post[]): void {
     mediaUrl: gone ? '' : lead.media_urls[0] ?? '',
     coverUrl: gone ? '' : lead.cover_url ?? '',
     ...(gone ? {} : { videoSeconds: lead.video_seconds ?? null, videoWidth: lead.video_width ?? null, videoHeight: lead.video_height ?? null }),
-    note: gone ? 'The original file was removed after you posted it by hand. Add it again.' : undefined,
+    note: gone ? 'The original file was removed after the post went out. Add it again.' : undefined,
   })
   go('/new')
 }
