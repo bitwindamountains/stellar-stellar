@@ -1,11 +1,31 @@
 from dataclasses import replace
 
 from postpilot.models import ACCOUNT_COLUMNS, COMMENT_COLUMN, POST_COLUMNS, Account, Post
-from postpilot.sheet import accounts_from_values, posts_from_values
+
+
+def _cells(values: list[list[str]], required: tuple[str, ...]) -> list[tuple[int, dict[str, str]]]:
+    """Header row + data rows -> (row number, {column: value}); blank rows skipped."""
+    header = [h.strip() for h in values[0]]
+    missing = [c for c in required if c not in header]
+    assert not missing, f"fixture is missing column(s) {missing}"
+    rows = []
+    for number, row in enumerate(values[1:], start=2):
+        if any(v.strip() for v in row):
+            rows.append((number, dict(zip(header, row + [""] * (len(header) - len(row)), strict=False))))
+    return rows
+
+
+def posts_from_values(values: list[list[str]], required: tuple[str, ...] = POST_COLUMNS) -> list[Post]:
+    return [Post(row=n, cells=cells) for n, cells in _cells(values, required)]
+
+
+def accounts_from_values(values: list[list[str]]) -> dict[str, Account]:
+    accounts = (Account.from_cells(cells) for _, cells in _cells(values, ACCOUNT_COLUMNS))
+    return {a.name: a for a in accounts if a.name}
 
 
 class FakeRepository:
-    """In-memory Posts/Accounts tabs that go through the same parsing as the real sheet."""
+    """In-memory posts and accounts, shaped like the rows SupabaseRepository hands the runner."""
 
     def __init__(
         self,

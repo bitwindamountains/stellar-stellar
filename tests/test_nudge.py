@@ -5,7 +5,11 @@ import pytest
 from postpilot.config import ConfigError, load_config
 from postpilot.nudge import nudge_window
 
-BASE = {"GOOGLE_SHEET_ID": "s", "GOOGLE_SERVICE_ACCOUNT_FILE": "f", "META_GRAPH_VERSION": "v23.0"}
+BASE = {
+    "SUPABASE_URL": "https://x.supabase.co",
+    "SUPABASE_SERVICE_ROLE_KEY": "k",
+    "META_GRAPH_VERSION": "v23.0",
+}
 
 
 def test_window_runs_from_the_local_hour_to_midnight():

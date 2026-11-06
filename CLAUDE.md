@@ -3,9 +3,10 @@ Personal social posting: write once in a web/phone app, Facebook Page + Instagra
 Meta Graph API; personal FB profile, TikTok and YouTube go to Telegram + a phone handoff page to post by hand.
 
 - **Publisher** (`src/postpilot/`, Python): GitHub Actions every 30 min (`.github/workflows/publish.yml`).
-- **Store**: Supabase (`supabase/migrations/`) when `SUPABASE_URL` is set; the Google Sheet path is legacy.
+- **Store**: Supabase (`supabase/migrations/`).
 - **App** (`web/`, Vite + React + TS PWA): queue, composer, handoff, accounts. Hosted on Cloudflare (planned).
-- **dispatch** (`supabase/functions/dispatch/`): lets "Post now" start the publish workflow immediately.
+- **dispatch** (`supabase/functions/dispatch/`): "Post now" calls SQL `dispatch_due()`, the only thing that starts
+  the workflow early (also every 10 min via pg_cron); its GitHub token lives only in Vault (`postpilot_github_token`).
 
 Status and next steps: PROGRESS.md. Tasks + design decisions: tasks/plan.md. Ideas: docs/ideas/.
 Original blueprint: 04_PostPilot_Blueprint.md (where it disagrees with the plan, the plan wins).

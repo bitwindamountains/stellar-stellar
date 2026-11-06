@@ -138,7 +138,7 @@ def validate(post: Post, accounts: dict[str, Account]) -> list[str]:
 
 
 def _video_errors(post: Post, platforms: list[str]) -> list[str]:
-    """Length and shape checks; skipped when the size wasn't measured (Sheet rows, pasted links)."""
+    """Length and shape checks; skipped when the size wasn't measured (pasted links)."""
     errors = []
     seconds, w, h = (_number(post.get(c)) for c in ("video_seconds", "video_width", "video_height"))
     if seconds is not None:

@@ -13,7 +13,7 @@ INTEGERS = ("attempts",)
 
 
 class SupabaseRepository:
-    """Posts and accounts over Supabase's REST API, shaped like sheet rows so the runner stays unchanged.
+    """Posts and accounts over Supabase's REST API, as text cells so the runner stays store-agnostic.
 
     Uses the service-role key (bypasses RLS). The key travels in headers only, never in URLs or errors.
     """
