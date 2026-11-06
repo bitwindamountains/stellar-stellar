@@ -5,7 +5,7 @@ import { go } from './route'
 import { supabase } from './supabase'
 import type { Post } from './types'
 
-/** Ask the publisher to run now. Without the dispatch function deployed, the next 30-minute run picks it up. */
+/** Ask the publisher to run now (via dispatch_due). Without the GitHub token in Vault, the next scheduled run picks it up. */
 export async function publishSoon(): Promise<void> {
   await supabase.functions.invoke('dispatch').catch(() => undefined)
 }

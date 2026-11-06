@@ -1,6 +1,10 @@
-// Starts the GitHub "publish" workflow right away, so "Post now" doesn't wait for the 30-minute schedule.
+// "Post now": asks the database's dispatch_due() to start the GitHub "publish" workflow right away, instead of
+// waiting for the schedule. dispatch_due() owns the GitHub token (Vault: 'postpilot_github_token') and only starts a
+// run when a post is due; without the token it does nothing and the scheduled run publishes the post.
 // Deploy with JWT verification on; the function also checks for a real signed-in user (see below).
-// Secrets: GITHUB_TOKEN (fine-grained, this repo only, "Actions: read and write"), GITHUB_REPO ("owner/name").
+
+const SUPABASE_URL = Deno.env.get('SUPABASE_URL') ?? ''
+const SERVICE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
 
 const cors = {
   'Access-Control-Allow-Origin': '*',
@@ -15,7 +19,7 @@ function reply(body: Record<string, unknown>, status = 200): Response {
 async function isSignedInUser(req: Request): Promise<boolean> {
   const auth = req.headers.get('Authorization') ?? ''
   if (!auth.startsWith('Bearer ')) return false
-  const res = await fetch(`${Deno.env.get('SUPABASE_URL')}/auth/v1/user`, {
+  const res = await fetch(`${SUPABASE_URL}/auth/v1/user`, {
     headers: { Authorization: auth, apikey: Deno.env.get('SUPABASE_ANON_KEY') ?? '' },
   })
   if (!res.ok) return false
@@ -26,20 +30,11 @@ async function isSignedInUser(req: Request): Promise<boolean> {
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: cors })
   if (!(await isSignedInUser(req))) return reply({ dispatched: false, reason: 'sign in required' }, 401)
-  const token = Deno.env.get('GITHUB_TOKEN')
-  const repo = Deno.env.get('GITHUB_REPO')
-  // Not set up yet is not an error: the scheduled run still publishes the post.
-  if (!token || !repo) return reply({ dispatched: false, reason: 'not configured' })
-
-  const res = await fetch(`https://api.github.com/repos/${repo}/actions/workflows/publish.yml/dispatches`, {
+  const res = await fetch(`${SUPABASE_URL}/rest/v1/rpc/dispatch_due`, {
     method: 'POST',
-    headers: {
-      Authorization: `Bearer ${token}`,
-      Accept: 'application/vnd.github+json',
-      'User-Agent': 'postpilot-dispatch',
-    },
-    body: JSON.stringify({ ref: 'main', inputs: { dry_run: 'false' } }),
-  })
-  // Never echo GitHub's response body: keep the token's scope and repo details out of the browser.
-  return res.status === 204 ? reply({ dispatched: true }) : reply({ dispatched: false, status: res.status }, 502)
+    headers: { apikey: SERVICE_KEY, Authorization: `Bearer ${SERVICE_KEY}`, 'Content-Type': 'application/json' },
+    body: '{}',
+  }).catch(() => null)
+  // Never echo the upstream body to the browser.
+  return res?.ok ? reply({ dispatched: true }) : reply({ dispatched: false }, 502)
 })
