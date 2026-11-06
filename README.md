@@ -1,4 +1,5 @@
 # PostPilot
+Shown to users (and on TikTok) as **Stellar Stellar**; code, repo and storage keys keep the PostPilot name.
 
 Write a post once in the web/phone app. A GitHub Action publishes due posts to your Facebook Pages, Instagram and
 X, sends TikTok videos to your drafts, writes back the post links, and never double-posts. Posts for your personal

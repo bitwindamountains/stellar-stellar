@@ -34,7 +34,7 @@ export default function SignIn() {
       <Asteroids />
       <div className="tray rise" style={{ width: 'min(440px, 100%)' }}>
         <form className="core" onSubmit={submit} style={{ gap: 24 }}>
-          <span style={{ display: 'flex', alignItems: 'center', gap: 10, fontWeight: 600 }}><Logo />PostPilot</span>
+          <span style={{ display: 'flex', alignItems: 'center', gap: 10, fontWeight: 600 }}><Logo />Stellar Stellar</span>
           <div className="hero" style={{ gap: 10 }}>
             <h1 style={{ fontSize: 40 }}>Sign in</h1>
             <p style={{ fontSize: 15 }}>{mode === 'password' ? 'With the password set in Supabase.' : "We'll email you a sign-in link."}</p>
