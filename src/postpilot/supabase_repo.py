@@ -141,10 +141,11 @@ class SupabaseRepository:
         )
 
     def cleanup_media(self) -> None:
-        """Delete our uploads that only finished posts (posted, handed off by hand) still use, then drop the
-        dead links. Every run sweeps, so a failed delete is retried. Any failure is skipped, never raised."""
+        """Delete our uploads that only finished posts (posted, nothing left to do by hand) still use, then
+        drop the dead links. Every run sweeps, so a failed delete is retried. Any failure is skipped, never
+        raised."""
         prefix = f"{self.url}/storage/v1/object/public/media/"
-        select = "num,media_urls,cover_url,status,assist_done_at"
+        select = "num,media_urls,cover_url,status,assist_done_at,tg_message_id"
         try:
             # ponytail: rows linking only to outside files stay in this sweep for good; fine for one person.
             rows = self._request(
@@ -153,8 +154,9 @@ class SupabaseRepository:
                 params={
                     "select": select,
                     "status": "eq.posted",
-                    "assist_done_at": "not.is.null",
-                    "or": "(media_urls.neq.{},cover_url.neq.)",
+                    # Handed off, or nothing went to Telegram; and it links to at least one file.
+                    "and": "(or(assist_done_at.not.is.null,tg_message_id.eq.),"
+                    "or(media_urls.neq.{},cover_url.neq.))",
                 },
             )
             own = sorted({u for r in rows for u in _links(r) if u.startswith(prefix)})
@@ -222,8 +224,10 @@ def _links(row: dict) -> list[str]:
 
 
 def _finished(row: dict) -> bool:
-    """Posted and handed off: it needs its files no more, so it must not keep them alive."""
-    return row.get("status") == "posted" and bool(row.get("assist_done_at"))
+    """Posted, and handed off or never sent by hand: it needs its files no more, so it must not keep them
+    alive."""
+    handed_off = bool(row.get("assist_done_at")) or not row.get("tg_message_id")
+    return row.get("status") == "posted" and handed_off
 
 
 def _to_cells(row: dict, accounts: dict[str, Account]) -> dict[str, str]:

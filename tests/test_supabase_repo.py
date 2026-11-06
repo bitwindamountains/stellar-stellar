@@ -314,12 +314,55 @@ def test_cleanup_deletes_only_own_uploads_of_finished_handed_off_rows():
     r, calls = cleanup_repo()
     r.cleanup_media()
     sweep = calls[0]
-    assert sweep.url.params["status"] == "eq.posted" and sweep.url.params["assist_done_at"] == "not.is.null"
+    assert sweep.url.params["status"] == "eq.posted" and "assist_done_at" not in sweep.url.params
+    assert sweep.url.params["and"] == (
+        "(or(assist_done_at.not.is.null,tg_message_id.eq.),or(media_urls.neq.{},cover_url.neq.))"
+    )
     delete = next(c for c in calls if c.method == "DELETE")
     assert json.loads(delete.content) == {"prefixes": ["u/a.mp4", "u/c.jpg"]}
     patch = next(c for c in calls if c.method == "PATCH")
     assert patch.url.params["status"] == "eq.posted"
     assert json.loads(patch.content) == {"media_urls": ["https://elsewhere/b.mp4"], "cover_url": ""}
+
+
+def test_cleanup_deletes_uploads_of_an_automatic_only_posted_row():
+    row = {
+        "num": 1,
+        "media_urls": [MEDIA + "u/a.jpg"],
+        "cover_url": "",
+        "status": "posted",
+        "assist_done_at": None,
+        "tg_message_id": "",
+    }
+
+    def handler(request):
+        if request.url.path.endswith("/storage/v1/object/media"):
+            return httpx.Response(200, json=[])
+        if request.method == "GET":
+            return httpx.Response(200, json=[row])
+        return httpx.Response(204)
+
+    r, calls = repo(handler)
+    r.cleanup_media()
+    delete = next(c for c in calls if c.method == "DELETE")
+    assert json.loads(delete.content) == {"prefixes": ["u/a.jpg"]}
+    patches = {c.url.params["num"]: json.loads(c.content) for c in calls if c.method == "PATCH"}
+    assert patches == {"eq.1": {"media_urls": []}}
+
+
+def test_cleanup_keeps_a_tiktok_draft_until_handed_off():
+    draft = {
+        "num": 2,
+        "media_urls": [MEDIA + "u/a.mp4"],
+        "cover_url": "",
+        "status": "posted",
+        "assist_done_at": None,
+        "tg_message_id": "55",
+    }
+    r, calls = cleanup_repo(users=[draft])
+    r.cleanup_media()
+    delete = next(c for c in calls if c.method == "DELETE")
+    assert "u/a.mp4" not in json.loads(delete.content)["prefixes"]
 
 
 def test_cleanup_failed_delete_keeps_links():
@@ -332,7 +375,13 @@ def test_cleanup_keeps_a_file_an_unfinished_row_still_uses():
     # A group row or Post again copy that hasn't posted yet, or posted but isn't handed off yet.
     for user in (
         {"num": 2, "media_urls": [MEDIA + "u/a.mp4"], "cover_url": None},
-        {"num": 2, "media_urls": [MEDIA + "u/a.mp4"], "cover_url": "", "status": "posted"},
+        {
+            "num": 2,
+            "media_urls": [MEDIA + "u/a.mp4"],
+            "cover_url": "",
+            "status": "posted",
+            "tg_message_id": "9",
+        },
     ):
         r, calls = cleanup_repo(users=[user])
         r.cleanup_media()
