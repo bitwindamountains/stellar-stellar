@@ -131,13 +131,13 @@ export default function Accounts() {
                     <li key={a.id}>
                       <button type="button" className="row simple acct" aria-current={editing === a.id} onClick={() => edit(a)}
                         style={{ width: '100%', border: 0, background: 'transparent', textAlign: 'left', cursor: 'pointer' }}>
-                        <span style={{ flex: '1 1 200px', display: 'flex', flexDirection: 'column', gap: 6 }}>
+                        <span style={{ flex: '1 1 0', minWidth: 0, display: 'flex', flexDirection: 'column', gap: 6 }}>
                           <span style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 16, fontWeight: 600 }}>
                             {a.name}<span className="chip assist editing">Editing</span>
                           </span>
                           <span className="mono">{a.timezone}{a.token_env ? ` · ${a.token_env}` : ''}</span>
                         </span>
-                        <span style={{ display: 'flex', gap: 6 }}>
+                        <span style={{ display: 'flex', gap: 6, flex: 'none' }}>{/* badges stay beside the name, however many */}
                           {logins.length ? logins.map((l) => <span key={l} className="chip done">{l}</span>) : <span className="mono">By hand only</span>}
                         </span>
                       </button>
