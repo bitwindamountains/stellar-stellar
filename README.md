@@ -78,7 +78,7 @@ A real `publish` on your laptop needs `--local`; pause the GitHub schedule first
    A Page token in a GitHub secret named by the account's `token_env` (e.g. `META_TOKEN_MAIN`) also works for Meta.
 4. **Telegram**: create a bot with @BotFather (gives `TELEGRAM_BOT_TOKEN`), send it a message, then read your chat
    id from `https://api.telegram.org/bot<token>/getUpdates`.
-5. **GitHub**: use a **private** repo. Add secrets `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `TELEGRAM_BOT_TOKEN`,
+5. **GitHub**: if you run your own copy, a private repo keeps its workflow logs private. Add secrets `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `TELEGRAM_BOT_TOKEN`,
    `TELEGRAM_CHAT_ID` (and any `META_TOKEN_*`, also listed in `.github/workflows/publish.yml`), and variables
    `META_GRAPH_VERSION` and `WEB_APP_URL`. The service-role key bypasses all access rules: keep it only in GitHub
    secrets, never in `web/`. Run the `publish` workflow manually (dry run is the default), then let it run on its own.
