@@ -45,7 +45,7 @@ affiliate links.
 | Supabase schema + RLS | Applied to project `wsclesrylegjsyfxaamr` (private, own project); RLS verified with simulated users. |
 | `dispatch` function (instant Post now) | Deployed (v8), rejects anyone not signed in, calls `dispatch_due()`. No secrets of its own. |
 | Web app (PWA) | Done. 98 tests. Live on Cloudflare Workers. |
-| GitHub repo | `bitwindamountains/PostPilot`, private. Secret set: `SUPABASE_URL`. |
+| GitHub repo | `bitwindamountains/stellar-stellar` (renamed from PostPilot on 2026-11-28; `dispatch_due` updated), public. Secret set: `SUPABASE_URL`. |
 
 ## Done
 - **Phases 0–5**: publisher (FB text/link/photo, IG image), Telegram handoff, validation, dry run, doctor, CI.
