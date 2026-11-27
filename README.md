@@ -1,8 +1,8 @@
-# Stellar Stellar (PostPilot)
+# Stellar Stellar
 
-[![CI](https://github.com/bitwindamountains/PostPilot/actions/workflows/ci.yml/badge.svg)](https://github.com/bitwindamountains/PostPilot/actions/workflows/ci.yml)
+[![CI](https://github.com/bitwindamountains/stellar-stellar/actions/workflows/ci.yml/badge.svg)](https://github.com/bitwindamountains/stellar-stellar/actions/workflows/ci.yml)
 
-Write a social post once and it goes out on schedule to Facebook Pages and Instagram, Reels included. Posts for platforms that don't let apps publish (a personal Facebook profile, YouTube, Shopee and TikTok) arrive on your phone through Telegram at post time, with the media and caption ready to share. The app is shown to users as **Stellar Stellar**; the code, repository and storage keys keep the name PostPilot.
+Write a social post once and it goes out on schedule to Facebook Pages and Instagram, Reels included. Posts for platforms that don't let apps publish (a personal Facebook profile, YouTube, Shopee and TikTok) arrive on your phone through Telegram at post time, with the media and caption ready to share. The code, the `postpilot` command and the storage keys still use its earlier name, PostPilot.
 
 ![Today: what needs you and what goes out today](docs/images/today.webp)
 
