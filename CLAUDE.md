@@ -40,4 +40,5 @@ Original blueprint: docs/dev-notes/blueprint.md (where it disagrees with the pla
 - Don't add dependencies without asking.
 - Scripted file edits on this Windows machine: read/write with `encoding="utf-8"`, and write edit scripts with the
   Write tool (heredocs mangle `\n` escapes).
-- Work on a branch, open a PR, wait for CI; Codex reviews PRs (comment `@codex review` to trigger).
+- Work on a branch, open a PR, wait for CI. The Claude action (`.github/workflows/claude-review.yml`) reviews every PR
+  automatically; comment `@claude <request>` for follow-ups. Codex can still review (`@codex review`).
