@@ -9,8 +9,8 @@ Meta Graph API; personal FB profile, TikTok and YouTube go to Telegram + a phone
 - **dispatch** (`supabase/functions/dispatch/`): "Post now" calls SQL `dispatch_due()`, the only thing that starts
   the workflow early (also every 10 min via pg_cron); its GitHub token lives only in Vault (`postpilot_github_token`).
 
-Status and next steps: PROGRESS.md. Tasks + design decisions: tasks/plan.md. Ideas: docs/ideas/.
-Original blueprint: 04_PostPilot_Blueprint.md (where it disagrees with the plan, the plan wins).
+Status and next steps: docs/dev-notes/PROGRESS.md. Tasks + design decisions: docs/dev-notes/tasks/plan.md. Ideas: docs/dev-notes/ideas/.
+Original blueprint: docs/dev-notes/blueprint.md (where it disagrees with the plan, the plan wins).
 
 ## Commands (uv is installed as a Python module on this machine; elsewhere plain `uv`)
 - Publisher: `python -m uv sync` · `python -m uv run pytest -q` · `python -m uv run ruff check . && python -m uv run ruff format .`
